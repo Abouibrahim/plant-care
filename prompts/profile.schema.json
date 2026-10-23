@@ -1,0 +1,133 @@
+{
+  "type": "object",
+  "properties": {
+    "scientific_name": { "type": "string" },
+    "cultivar": { "type": "string" },
+    "common_names": {
+      "type": "object",
+      "properties": {
+        "en": { "type": "string" },
+        "fr": { "type": "string" },
+        "ar": { "type": "string" },
+        "ar_latin": { "type": "string" }
+      },
+      "required": ["en", "fr", "ar", "ar_latin"],
+      "additionalProperties": false
+    },
+    "plant_type": { "type": "string", "enum": ["tree", "shrub", "herb", "climber", "groundcover", "grass", "succulent", "other"] },
+    "lifecycle": { "type": "string", "enum": ["perennial", "biennial", "annual"] },
+    "foliage": { "type": "string", "enum": ["evergreen", "deciduous", "semi_deciduous", "not_applicable"] },
+    "layer": { "type": "string", "enum": ["canopy", "sub_canopy", "shrub", "herbaceous", "groundcover", "root", "climber"] },
+    "site_fit": {
+      "type": "object",
+      "properties": {
+        "rating": { "type": "string", "enum": ["good", "acceptable", "poor"] },
+        "note": { "type": "string" }
+      },
+      "required": ["rating", "note"],
+      "additionalProperties": false
+    },
+    "water": {
+      "type": "object",
+      "properties": {
+        "need": { "type": "string", "enum": ["low", "medium", "high"] },
+        "drought_tolerance": { "type": "string", "enum": ["low", "medium", "high"] },
+        "stress_signs": { "type": "string" },
+        "overwatering_signs": { "type": "string" },
+        "summary": { "type": "string" }
+      },
+      "required": ["need", "drought_tolerance", "stress_signs", "overwatering_signs", "summary"],
+      "additionalProperties": false
+    },
+    "sun": {
+      "type": "object",
+      "properties": {
+        "exposure": { "type": "string", "enum": ["full_sun", "part_shade", "shade"] },
+        "heat_tolerance": { "type": "string", "enum": ["low", "medium", "high"] },
+        "summer_shade_needed": { "type": "boolean" },
+        "note": { "type": "string" }
+      },
+      "required": ["exposure", "heat_tolerance", "summer_shade_needed", "note"],
+      "additionalProperties": false
+    },
+    "salinity_tolerance": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string", "enum": ["sensitive", "moderate", "tolerant"] },
+        "note": { "type": "string" }
+      },
+      "required": ["level", "note"],
+      "additionalProperties": false
+    },
+    "climate_note": { "type": "string" },
+    "care_calendar": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string", "enum": ["water", "prune", "feed", "mulch", "harvest", "scout", "propagate", "protect"] },
+          "months": { "type": "array", "items": { "type": "integer" } },
+          "every_days": { "type": "integer" },
+          "litres": { "type": "number" },
+          "age": { "type": "string", "enum": ["establishment", "mature", "any"] },
+          "lead_days": { "type": "integer" },
+          "title": { "type": "string" },
+          "instruction": { "type": "string" }
+        },
+        "required": ["type", "months", "every_days", "litres", "age", "lead_days", "title", "instruction"],
+        "additionalProperties": false
+      }
+    },
+    "pests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name_en": { "type": "string" },
+          "name_fr": { "type": "string" },
+          "months": { "type": "array", "items": { "type": "integer" } },
+          "symptoms": { "type": "string" },
+          "organic_treatment": { "type": "string" },
+          "prevention": { "type": "string" }
+        },
+        "required": ["name_en", "name_fr", "months", "symptoms", "organic_treatment", "prevention"],
+        "additionalProperties": false
+      }
+    },
+    "companions": {
+      "type": "object",
+      "properties": {
+        "good": { "type": "array", "items": { "type": "string" } },
+        "bad": { "type": "array", "items": { "type": "string" } },
+        "root_warnings": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["good", "bad", "root_warnings"],
+      "additionalProperties": false
+    },
+    "uses": {
+      "type": "object",
+      "properties": {
+        "edible_parts": { "type": "string" },
+        "preparation": { "type": "string" },
+        "storage": { "type": "string" },
+        "harvest_cues": { "type": "string" }
+      },
+      "required": ["edible_parts", "preparation", "storage", "harvest_cues"],
+      "additionalProperties": false
+    },
+    "toxicity": {
+      "type": "object",
+      "properties": {
+        "humans": { "type": "string", "enum": ["none", "mild", "moderate", "severe"] },
+        "chickens": { "type": "string", "enum": ["none", "mild", "moderate", "severe"] },
+        "goats": { "type": "string", "enum": ["none", "mild", "moderate", "severe"] },
+        "dogs_cats": { "type": "string", "enum": ["none", "mild", "moderate", "severe"] },
+        "note": { "type": "string" }
+      },
+      "required": ["humans", "chickens", "goats", "dogs_cats", "note"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["scientific_name", "cultivar", "common_names", "plant_type", "lifecycle", "foliage", "layer", "site_fit", "water", "sun", "salinity_tolerance", "climate_note", "care_calendar", "pests", "companions", "uses", "toxicity"],
+  "additionalProperties": false
+}

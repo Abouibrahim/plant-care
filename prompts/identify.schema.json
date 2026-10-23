@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scientific_name": { "type": "string" },
+          "cultivar": { "type": "string" },
+          "common_names": {
+            "type": "object",
+            "properties": {
+              "en": { "type": "string" },
+              "fr": { "type": "string" },
+              "ar": { "type": "string" },
+              "ar_latin": { "type": "string" }
+            },
+            "required": ["en", "fr", "ar", "ar_latin"],
+            "additionalProperties": false
+          },
+          "confidence": { "type": "number" },
+          "evidence": { "type": "string" }
+        },
+        "required": ["scientific_name", "cultivar", "common_names", "confidence", "evidence"],
+        "additionalProperties": false
+      }
+    },
+    "plant_type": { "type": "string", "enum": ["tree", "shrub", "herb", "climber", "groundcover", "grass", "succulent", "other"] },
+    "lifecycle": { "type": "string", "enum": ["perennial", "biennial", "annual"] },
+    "foliage": { "type": "string", "enum": ["evergreen", "deciduous", "semi_deciduous", "not_applicable"] },
+    "layer": { "type": "string", "enum": ["canopy", "sub_canopy", "shrub", "herbaceous", "groundcover", "root", "climber"] },
+    "photo_advice": { "type": "string" }
+  },
+  "required": ["candidates", "plant_type", "lifecycle", "foliage", "layer", "photo_advice"],
+  "additionalProperties": false
+}

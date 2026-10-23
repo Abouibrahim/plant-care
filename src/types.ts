@@ -1,0 +1,202 @@
+// Shared types for the browser app and the Vercel functions.
+// They mirror prompts/*.schema.json and supabase/schema.sql; keep the three in step.
+
+export type Site = "backyard" | "farm";
+export const SITES: Site[] = ["backyard", "farm"];
+
+export type PlantSource = "nursery" | "seed" | "cutting" | "graft" | "existing";
+export const PLANT_SOURCES: PlantSource[] = ["nursery", "seed", "cutting", "graft", "existing"];
+
+export type PhotoKind = "identify" | "journal" | "problem";
+export type TaskType = "water" | "prune" | "feed" | "mulch" | "harvest" | "scout" | "propagate" | "protect";
+export type TaskStatus = "pending" | "done" | "skipped" | "snoozed";
+
+export type PlantType = "tree" | "shrub" | "herb" | "climber" | "groundcover" | "grass" | "succulent" | "other";
+export type Lifecycle = "perennial" | "biennial" | "annual";
+export type Foliage = "evergreen" | "deciduous" | "semi_deciduous" | "not_applicable";
+export type Layer = "canopy" | "sub_canopy" | "shrub" | "herbaceous" | "groundcover" | "root" | "climber";
+export type Level = "low" | "medium" | "high";
+export type ToxicityLevel = "none" | "mild" | "moderate" | "severe";
+
+export interface CommonNames {
+  en: string;
+  fr: string;
+  ar: string;
+  ar_latin: string;
+}
+
+/** One image as sent to /api/identify: already resized by the client. */
+export interface ImagePayload {
+  media_type: "image/jpeg" | "image/png" | "image/webp";
+  data: string; // base64, no data: prefix
+}
+
+/** Token usage appended to every function response that called Claude. */
+export interface Usage {
+  model: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
+}
+
+// ---- identify ---------------------------------------------------------------
+
+export interface Candidate {
+  scientific_name: string; // "unknown" when nothing usable is in the photo
+  cultivar: string;
+  common_names: CommonNames;
+  confidence: number; // 0..1
+  evidence: string;
+}
+
+export interface IdentifyResult {
+  candidates: Candidate[];
+  plant_type: PlantType;
+  lifecycle: Lifecycle;
+  foliage: Foliage;
+  layer: Layer;
+  photo_advice: string;
+}
+
+export interface IdentifyRequest {
+  images: ImagePayload[]; // 1 or 2
+  site?: Site;
+}
+
+export type IdentifyResponse = (IdentifyResult & Usage) | ({ refusal: string } & Usage);
+
+export function isRefusal<T extends object>(r: T | ({ refusal: string } & Usage)): r is { refusal: string } & Usage {
+  return typeof (r as { refusal?: unknown }).refusal === "string";
+}
+
+// ---- species profile -------------------------------------------------------
+
+export interface CareRule {
+  type: TaskType;
+  months: number[]; // 1..12
+  every_days: number; // water only, else 0
+  litres: number; // water only, else 0
+  age: "establishment" | "mature" | "any";
+  lead_days: number;
+  title: string;
+  instruction: string;
+}
+
+export interface Pest {
+  name_en: string;
+  name_fr: string;
+  months: number[];
+  symptoms: string;
+  organic_treatment: string;
+  prevention: string;
+}
+
+/** Exactly what prompts/profile.schema.json returns. */
+export interface SpeciesProfile {
+  scientific_name: string;
+  cultivar: string;
+  common_names: CommonNames;
+  plant_type: PlantType;
+  lifecycle: Lifecycle;
+  foliage: Foliage;
+  layer: Layer;
+  site_fit: { rating: "good" | "acceptable" | "poor"; note: string };
+  water: { need: Level; drought_tolerance: Level; stress_signs: string; overwatering_signs: string; summary: string };
+  sun: { exposure: "full_sun" | "part_shade" | "shade"; heat_tolerance: Level; summer_shade_needed: boolean; note: string };
+  salinity_tolerance: { level: "sensitive" | "moderate" | "tolerant"; note: string };
+  climate_note: string;
+  care_calendar: CareRule[];
+  pests: Pest[];
+  companions: { good: string[]; bad: string[]; root_warnings: string[] };
+  uses: { edible_parts: string; preparation: string; storage: string; harvest_cues: string };
+  toxicity: { humans: ToxicityLevel; chickens: ToxicityLevel; goats: ToxicityLevel; dogs_cats: ToxicityLevel; note: string };
+}
+
+/** Profile fields the user may edit on the review screen; kept on regeneration. */
+export type SpeciesEditableField = keyof SpeciesProfile;
+
+/** A row of the species table. */
+export interface Species extends SpeciesProfile {
+  id: string;
+  generated_by: string | null;
+  generated_at: string | null;
+  confirmed: boolean;
+  user_edits: Partial<SpeciesProfile>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileRequest {
+  /** From a confirmed candidate. */
+  scientific_name?: string;
+  cultivar?: string;
+  /** From the "type a name" path: common or scientific, as typed. */
+  name?: string;
+  /** Optional context passed through to Claude. */
+  common_names?: CommonNames;
+  site?: Site;
+  /** Regenerate an existing profile, keeping the fields listed in user_edits. */
+  regenerate_species_id?: string;
+}
+
+export interface ProfileResponse extends Usage {
+  species: Species;
+  /** true when Claude wrote the profile in this call; false when the row already existed. */
+  created: boolean;
+}
+
+export type ProfileApiResponse = ProfileResponse | ({ refusal: string } & Usage);
+
+// ---- plants, photos, tasks ---------------------------------------------------
+
+export interface Plant {
+  id: string;
+  species_id: string;
+  tag: string;
+  quantity: number;
+  site: Site;
+  zone: string;
+  lat: number | null;
+  lng: number | null;
+  planted_on: string | null; // YYYY-MM-DD
+  source: PlantSource;
+  rootstock: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PlantInsert = Omit<Plant, "id" | "created_at" | "updated_at">;
+
+export interface PlantWithSpecies extends Plant {
+  species: Species;
+}
+
+export interface Photo {
+  id: string;
+  plant_id: string;
+  taken_at: string;
+  storage_path: string;
+  kind: PhotoKind;
+  ai_result: unknown | null;
+  note: string;
+}
+
+export type PhotoInsert = Omit<Photo, "id">;
+
+export interface Task {
+  id: string;
+  plant_id: string;
+  type: TaskType;
+  rule_key: string;
+  due_on: string;
+  window_end: string | null;
+  title: string;
+  instruction: string;
+  status: TaskStatus;
+  acted_at: string | null;
+  note: string;
+  created_at: string;
+}
+
+export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
