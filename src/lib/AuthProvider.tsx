@@ -34,7 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return error ? error.message : null;
       },
       async signOut() {
-        await supabase.auth.signOut();
+        // Local scope clears the stored session without a server round-trip; one user, one device.
+        // Offline with an expired token the call can still fail, so the app state is cleared regardless
+        // and the Login screen shows; a stale token left in storage cannot be refreshed anyway.
+        await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+        setSession(null);
       },
     }),
     [session, loading],

@@ -1,6 +1,7 @@
 // Photo preparation in the browser: read EXIF GPS first (the resize strips it),
 // then draw to a canvas at 1,280 px on the long edge and export JPEG at 0.85.
 import exifr from "exifr";
+import { t } from "../i18n";
 import type { ImagePayload } from "../types";
 
 export const MAX_EDGE = 1280;
@@ -68,7 +69,7 @@ async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.onerror = () => reject(new Error(t.errors.readFailed));
     reader.onload = () => {
       const result = String(reader.result);
       resolve(result.slice(result.indexOf(",") + 1));
@@ -90,12 +91,12 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas is not available");
+  if (!ctx) throw new Error(t.errors.canvas);
   ctx.drawImage(bitmap, 0, 0, width, height);
   if ("close" in bitmap) bitmap.close();
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("JPEG encoding failed"))), "image/jpeg", JPEG_QUALITY);
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error(t.errors.encode))), "image/jpeg", JPEG_QUALITY);
   });
   const data = await blobToBase64(blob);
 

@@ -25,6 +25,8 @@ interface Props {
 
 export function RecordForm({ initial, onChange, onSubmit, submitLabel, submitting = false, canSubmit = true, children }: Props) {
   const [values, setValues] = useState<RecordValues>(initial);
+  // The quantity is typed as text so the field can be emptied before a new number is entered.
+  const [quantityText, setQuantityText] = useState(String(initial.quantity));
   const [zones, setZones] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const zoneListId = useId();
@@ -54,7 +56,11 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
       return;
     }
     setError(null);
-    await onSubmit({ ...values, tag: values.tag.trim(), zone: values.zone.trim(), rootstock: values.rootstock.trim() });
+    // The field may be empty when the keyboard's Go key submits before a blur: read what is typed.
+    const typed = parseInt(quantityText, 10);
+    const quantity = typed >= 1 ? typed : 1;
+    setQuantityText(String(quantity));
+    await onSubmit({ ...values, quantity, tag: values.tag.trim(), zone: values.zone.trim(), rootstock: values.rootstock.trim() });
   }
 
   return (
@@ -71,8 +77,18 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
             type="number"
             min={1}
             inputMode="numeric"
-            value={values.quantity}
-            onChange={(e) => update({ quantity: Math.max(1, Number(e.target.value) || 1) })}
+            value={quantityText}
+            onChange={(e) => {
+              setQuantityText(e.target.value);
+              const n = parseInt(e.target.value, 10);
+              if (n >= 1) update({ quantity: n });
+            }}
+            onBlur={() => {
+              const n = parseInt(quantityText, 10);
+              const quantity = n >= 1 ? n : 1;
+              setQuantityText(String(quantity));
+              update({ quantity });
+            }}
           />
         </label>
         <label className="field">

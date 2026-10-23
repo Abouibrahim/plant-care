@@ -1,8 +1,8 @@
 // POST /api/identify  { images: [{ media_type, data }], site? }  ->  IdentifyResult + usage
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude";
-import { handleError, sendError, verifyUser } from "./_supabase";
-import type { IdentifyRequest, IdentifyResult, ImagePayload } from "../src/types";
+import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
+import { handleError, sendError, verifyUser } from "./_supabase.js";
+import type { IdentifyRequest, IdentifyResult, ImagePayload } from "../src/types.js";
 
 const MEDIA_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 // ~2 MB decoded. The client resizes to 1,280 px, so real payloads are far smaller.
@@ -23,14 +23,15 @@ function parseImages(body: unknown): ImagePayload[] | string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (req.method !== "POST") {
-    sendError(res, 405, "Method not allowed");
-    return;
-  }
   try {
+    // The bearer check comes first: any request without a valid token is a 401, whatever the method.
     const user = await verifyUser(req);
     if (!user) {
       sendError(res, 401, "Unauthorized");
+      return;
+    }
+    if (req.method !== "POST") {
+      sendError(res, 405, "Method not allowed");
       return;
     }
     const images = parseImages(req.body);
@@ -50,6 +51,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       schema: readSchema("identify.schema.json"),
       content: imagesThenText(images, text),
       maxTokens: 2048,
+      // Identification is perception, not planning: low effort keeps thinking short so the
+      // 2,048-token budget is for the JSON (see docs/DECISIONS.md).
+      effort: "low",
     });
 
     if (!result.ok) {

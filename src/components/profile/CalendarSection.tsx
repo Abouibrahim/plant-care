@@ -22,10 +22,18 @@ function ruleApplies(rule: CareRule, ageMonths: number | null): boolean {
   return rule.age === stage;
 }
 
+/** First listed month, 13 when the rule names none, so unscheduled rules sort last. */
+function firstMonth(rule: CareRule): number {
+  return rule.months.length > 0 ? Math.min(...rule.months) : 13;
+}
+
 function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
   return (
     <div className="card" style={applies ? undefined : { opacity: 0.5 }}>
-      <strong>{rule.title}</strong>
+      <div className="row between" style={{ alignItems: "flex-start" }}>
+        <strong className="grow">{rule.title}</strong>
+        <span className="pill accent">{t.enums.task_type[rule.type]}</span>
+      </div>
       <MonthGrid months={rule.months} />
       <div>
         <span className="pill">{t.enums.age[rule.age]}</span>
@@ -52,25 +60,24 @@ function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
 }
 
 /**
- * Care rules grouped by task type, each with its month grid and pills.
+ * Care rules listed by month (first month, then task type), each with its month grid and pills.
  * With plantedOn (null = mature) the rules that do not apply at the plant's age are dimmed.
  */
 export function CalendarSection({ species, plantedOn }: { species: SpeciesProfile; plantedOn?: string | null }) {
   const rules = species.care_calendar ?? [];
   const age = plantedOn === undefined ? undefined : ageInMonths(plantedOn, new Date());
-  const groups = ORDER.map((type) => ({ type, rules: rules.filter((r) => r.type === type) })).filter((g) => g.rules.length > 0);
+  const ordered = [...rules].sort((a, b) => firstMonth(a) - firstMonth(b) || ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
 
   return (
     <section className="section">
       <h2>{t.species.sections.calendar}</h2>
-      {groups.length === 0 && <p className="muted">{t.species.calendarEmpty}</p>}
-      {groups.map((group) => (
-        <div key={group.type}>
-          <h3>{t.enums.task_type[group.type]}</h3>
-          {group.rules.map((rule, i) => (
-            <RuleCard key={`${rule.age}:${rule.months.join("-")}:${i}`} rule={rule} applies={age === undefined || ruleApplies(rule, age)} />
-          ))}
-        </div>
+      {ordered.length === 0 && <p className="muted">{t.species.calendarEmpty}</p>}
+      {ordered.map((rule, i) => (
+        <RuleCard
+          key={`${rule.type}:${rule.age}:${rule.months.join("-")}:${i}`}
+          rule={rule}
+          applies={age === undefined || ruleApplies(rule, age)}
+        />
       ))}
       <p className="muted small">{t.plant.tasksLater}</p>
     </section>

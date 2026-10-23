@@ -19,13 +19,15 @@ interface Props {
   onCancel(): void;
   /** Muted footnote under the content. */
   hint?: string;
+  /** True while the screen runs an action (confirm, regenerate) that must not race an edit. */
+  disabled?: boolean;
   children: ReactNode;
 }
 
-export function SectionCard({ title, species, targets, editing, onEdit, onSaved, onCancel, hint, children }: Props) {
+export function SectionCard({ title, species, targets, editing, onEdit, onSaved, onCancel, hint, disabled = false, children }: Props) {
   const active = targets.find((x) => x.id === editing) ?? null;
   // One editor at a time: other cards' Edit buttons wait until it is saved or cancelled.
-  const locked = editing !== null && active === null;
+  const locked = disabled || (editing !== null && active === null);
   const single = targets.length === 1 ? targets[0] : null;
 
   return (

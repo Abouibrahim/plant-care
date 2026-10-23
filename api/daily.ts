@@ -1,7 +1,7 @@
 // Cron at 05:00 UTC (06:00 Tunis). Phase 1 only checks the secret so the cron entry is valid;
 // task expansion and the push digest arrive in Phase 2 (reminder engine in CLAUDE.md).
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { bearerToken, sendError } from "./_supabase";
+import { bearerToken, sendError } from "./_supabase.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const secret = process.env.CRON_SECRET;

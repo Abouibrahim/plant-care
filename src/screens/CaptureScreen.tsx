@@ -8,7 +8,7 @@ import { emptyRecord, RecordForm, type RecordValues } from "../components/Record
 import { Spinner } from "../components/Spinner";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
-import { insertPhoto, insertPlant, photoPath, updatePlant, uploadPhoto } from "../lib/db";
+import { deleteSpeciesIfUnused, insertPhoto, insertPlant, photoPath, updatePlant, uploadPhoto } from "../lib/db";
 import { prepareImage, type PreparedImage } from "../lib/image";
 import {
   isRefusal,
@@ -76,6 +76,10 @@ function freshProgress(): SaveProgress {
   return { plant: null, uploaded: new Map(), rows: new Set() };
 }
 
+function isUnknown(c: Candidate): boolean {
+  return c.scientific_name.trim().toLowerCase() === "unknown";
+}
+
 function choiceLabel(choice: Choice): string {
   if (choice.kind === "typed") return choice.name;
   return choice.candidate.common_names.en || choice.candidate.scientific_name;
@@ -129,12 +133,28 @@ export function CaptureScreen() {
   // Every preview object URL created on this screen; revoked on reset, save and unmount.
   const urlsRef = useRef(new Set<string>());
   const saveRef = useRef<SaveProgress>(freshProgress());
+  // Species rows this capture created that no plant uses yet. They are deleted only when the
+  // capture is abandoned (Start over, leaving the screen): a profile request of this capture may
+  // still be answered with one of them, so deleting earlier could leave the form with a dead id.
+  const createdRef = useRef(new Set<string>());
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     const urls = urlsRef.current;
+    const run = runRef;
+    const seq = profileSeqRef;
+    const created = createdRef.current;
+    const mounted = mountedRef;
+    mounted.current = true;
     return () => {
+      // Drop every in-flight result (including a late navigate from save) once the screen is gone.
+      mounted.current = false;
+      run.current += 1;
+      seq.current += 1;
       for (const u of urls) URL.revokeObjectURL(u);
       urls.clear();
+      for (const id of created) void deleteSpeciesIfUnused(id).catch(() => undefined);
+      created.clear();
     };
   }, []);
 
@@ -145,7 +165,9 @@ export function CaptureScreen() {
     [result],
   );
   const top: Candidate | null = sorted.length > 0 ? sorted[0] : null;
-  const unknown = result !== null && (top === null || top.scientific_name.trim().toLowerCase() === "unknown");
+  const unknown = result !== null && (top === null || isUnknown(top));
+  // An "unknown" entry below a real candidate is advice, not something to confirm.
+  const known = useMemo(() => sorted.filter((c) => !isUnknown(c)), [sorted]);
   const lowConfidence = result !== null && !unknown && top !== null && top.confidence < LOW_CONFIDENCE && images.length === 1;
   const busy = phase === "preparing" || phase === "identifying" || phase === "saving";
   const firstGps = images.length > 0 ? images[0].gps : null;
@@ -162,9 +184,16 @@ export function CaptureScreen() {
     urlsRef.current.clear();
   }
 
+  /** Deletes the species rows this capture created that no plant ended up using. */
+  function discardCreatedSpecies() {
+    for (const id of createdRef.current) void deleteSpeciesIfUnused(id).catch(() => undefined);
+    createdRef.current.clear();
+  }
+
   function startOver() {
     runRef.current += 1;
     profileSeqRef.current += 1;
+    discardCreatedSpecies();
     revokeAll();
     saveRef.current = freshProgress();
     setImages([]);
@@ -258,7 +287,18 @@ export function CaptureScreen() {
     setProfile({ status: "pending" });
     api.profile(req).then(
       (res) => {
-        if (runRef.current !== run || profileSeqRef.current !== seq) return;
+        const stale = runRef.current !== run || profileSeqRef.current !== seq;
+        if (!isRefusal(res) && res.created) {
+          if (runRef.current === run) {
+            // Still this capture (even after Pick another): keep it until the capture ends.
+            createdRef.current.add(res.species.id);
+          } else if (mountedRef.current) {
+            // Start over already drained the set: nothing of this capture will use the row.
+            void deleteSpeciesIfUnused(res.species.id).catch(() => undefined);
+          }
+          // After unmount the row is left alone; the species screen offers Delete for unused profiles.
+        }
+        if (stale) return;
         setProfile(isRefusal(res) ? { status: "failed", message: res.refusal } : { status: "ready", response: res });
       },
       (err: unknown) => {
@@ -292,7 +332,7 @@ export function CaptureScreen() {
   }
 
   function pickAnother() {
-    profileSeqRef.current += 1; // drop the in-flight profile answer
+    profileSeqRef.current += 1; // drop the in-flight profile answer; created rows stay until the capture ends
     setChoice(null);
     setProfileReq(null);
     setProfile({ status: "pending" });
@@ -320,6 +360,7 @@ export function CaptureScreen() {
       const row = { ...values, species_id: species.id };
       const plant = progress.plant ? await updatePlant(progress.plant.id, row) : await insertPlant(row);
       progress.plant = plant;
+      createdRef.current.delete(species.id); // in use now; any other row created here is still an orphan
       setPlantSaved(true);
 
       // Storage paths are keyed by timestamp: keep them distinct even for a burst of photos.
@@ -412,6 +453,11 @@ export function CaptureScreen() {
 
       {phase === "preparing" && <Spinner label={t.capture.preparing} />}
       {phase === "identifying" && <Spinner label={t.capture.identifying} />}
+      {(phase === "preparing" || phase === "identifying") && (
+        <button type="button" className="link block" style={{ marginTop: 8 }} onClick={startOver}>
+          {t.capture.startOver}
+        </button>
+      )}
 
       {error && <Banner kind="error">{error}</Banner>}
 
@@ -466,7 +512,7 @@ export function CaptureScreen() {
               {images.length === 2 && <p className="small muted">{t.capture.secondPhotoAdded}</p>}
 
               <h2>{t.capture.candidates}</h2>
-              {sorted.map((c, i) => (
+              {known.map((c, i) => (
                 <CandidateCard
                   key={`${i}-${c.scientific_name}-${c.cultivar}`}
                   candidate={c}

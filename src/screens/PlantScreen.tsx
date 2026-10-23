@@ -113,7 +113,11 @@ export function PlantScreen() {
     try {
       const prepared = await prepareImage(file);
       URL.revokeObjectURL(prepared.previewUrl);
-      const takenAt = prepared.takenAt ? new Date(prepared.takenAt) : new Date();
+      let takenAt = prepared.takenAt ? new Date(prepared.takenAt) : new Date();
+      if (Number.isNaN(takenAt.getTime())) takenAt = new Date();
+      // Storage keys are timestamps: step past any photo of this plant already stored at that millisecond.
+      const existing = new Set((loaded?.photos ?? []).map((p) => p.storage_path));
+      while (existing.has(photoPath(plant.id, takenAt))) takenAt = new Date(takenAt.getTime() + 1);
       const storage_path = photoPath(plant.id, takenAt);
       await uploadPhoto(storage_path, prepared.blob);
       await insertPhoto({
@@ -278,7 +282,6 @@ export function PlantScreen() {
       {tab === "needs" && <NeedsSection species={species} />}
       {tab === "calendar" && (
         <>
-          <p className="muted small">{t.plant.tasksLater}</p>
           <CalendarSection species={species} plantedOn={plant.planted_on} />
         </>
       )}

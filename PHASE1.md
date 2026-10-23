@@ -5,25 +5,25 @@ Done when Mohamed can photograph a tree at the farm on his Android phone, confir
 ## Setup (Mohamed does the parts marked ★)
 
 - [ ] ★ Supabase project created; URL, anon key and service-role key noted.
-- [ ] ★ `supabase/schema.sql` run in the Supabase SQL editor; bucket `photos` created, private.
+- [ ] ★ `supabase/schema.sql` run in the Supabase SQL editor (it creates the tables, the private bucket `photos` and its storage policy).
 - [ ] ★ One user created in Supabase Auth (email + password).
 - [ ] ★ Claude API key created at platform.claude.com.
 - [ ] ★ Vercel project created from the GitHub repo; environment variables from `.env.example` filled in the Vercel dashboard (Production and Preview).
-- [ ] `.env.local` present locally with the same names (never committed).
+- [x] `.env.local` present locally with the same names (never committed); values still to fill.
 
 ## Build
 
-- [ ] Vite + React + TypeScript scaffold, `vite-plugin-pwa` with manifest (name "Plant Care", standalone, portrait, icons 192 and 512), `vercel.json` with the cron entry.
-- [ ] Supabase client in `src/lib/supabase.ts`; login screen; session kept in local storage; every API call sends the access token.
-- [ ] `api/_claude.ts` and `api/_supabase.ts` with `verifyUser`.
-- [ ] `api/identify.ts`: 1–2 images → candidates JSON from `prompts/identify.md` + `identify.schema.json`.
-- [ ] Capture screen: camera or gallery → EXIF GPS (`exifr`) → resize to 1,280 px JPEG 0.85 on a canvas → POST identify → candidates list with confidence bars and evidence → Confirm, pick another, or type a name → second-photo prompt when top confidence < 0.6.
-- [ ] Record form: tag, quantity (default 1), site (backyard / farm), zone (free text with recent values suggested), planted on (date, optional), source, rootstock (optional); GPS pre-filled when found.
-- [ ] Save: upload the photo to `photos/{plant_id}/{timestamp}.jpg`, insert `plants` and `photos` rows (`kind = identify`, `ai_result` = the candidates JSON).
-- [ ] `api/profile.ts`: if no `species` row matches `lower(scientific_name)` + cultivar, call Claude with `prompts/profile.md` + `profile.schema.json`, insert with `confirmed = false`; else return the existing row.
-- [ ] Profile review screen: all profile sections readable, "AI-written, confirm" banner, Confirm button sets `confirmed = true`; field edits go to `user_edits`.
-- [ ] Plant screen with tabs Needs, Calendar (rules listed by month; tasks come in Phase 2), Health (pests by month), Guild and uses (toxicity badge), Journal (photos newest first).
-- [ ] Plants screen: cards with photo, tag, species common name, site and zone; filter by site; search by tag or name.
+- [x] Vite + React + TypeScript scaffold, `vite-plugin-pwa` with manifest (name "Plant Care", standalone, portrait, icons 192 and 512), `vercel.json` with the cron entry.
+- [x] Supabase client in `src/lib/supabase.ts`; login screen; session kept in local storage; every API call sends the access token.
+- [x] `api/_claude.ts` and `api/_supabase.ts` with `verifyUser`.
+- [x] `api/identify.ts`: 1–2 images → candidates JSON from `prompts/identify.md` + `identify.schema.json`.
+- [x] Capture screen: camera or gallery → EXIF GPS (`exifr`) → resize to 1,280 px JPEG 0.85 on a canvas → POST identify → candidates list with confidence bars and evidence → Confirm, pick another, or type a name → second-photo prompt when top confidence < 0.6.
+- [x] Record form: tag, quantity (default 1), site (backyard / farm), zone (free text with recent values suggested), planted on (date, optional), source, rootstock (optional); GPS pre-filled when found.
+- [x] Save: upload the photo to `photos/{plant_id}/{timestamp}.jpg`, insert `plants` and `photos` rows (`kind = identify`, `ai_result` = the candidates JSON).
+- [x] `api/profile.ts`: if no `species` row matches `lower(scientific_name)` + cultivar, call Claude with `prompts/profile.md` + `profile.schema.json`, insert with `confirmed = false`; else return the existing row.
+- [x] Profile review screen: all profile sections readable, "AI-written, confirm" banner, Confirm button sets `confirmed = true`; field edits go to `user_edits`.
+- [x] Plant screen with tabs Needs, Calendar (rules listed by month; tasks come in Phase 2), Health (pests by month), Guild and uses (toxicity badge), Journal (photos newest first).
+- [x] Plants screen: cards with photo, tag, species common name, site and zone; filter by site; search by tag or name.
 - [ ] Deployed to Vercel; installed on the phone from Chrome ("Add to Home screen").
 
 ## Acceptance tests (run on the phone, on the deployed URL)

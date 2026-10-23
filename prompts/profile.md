@@ -1,6 +1,7 @@
 Task: write the species profile for the plant named in the user message, for this grower's sites, and return JSON that matches the profile schema. The profile is stored once and reused for every plant of this species, so write it for the species at this site, not for one individual.
 
 Rules
+- scientific_name: the accepted binomial only, Genus species, with no author citation, no hybrid sign and no rank below species unless the grower named one; cultivar only when the grower named one, otherwise an empty string.
 - site_fit: rate how well the species suits Cap Bon dryland conditions with partial saline well water (good, acceptable, poor) and say why in one sentence. A poor fit is still profiled; the grower decides.
 - water: need, drought tolerance, the first visible signs of water stress and of overwatering, and a two-sentence summary. Schedules go in care_calendar, not here.
 - sun: exposure, heat tolerance, whether young plants need afternoon shade in summer, and a note.

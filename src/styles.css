@@ -301,8 +301,8 @@ button.big {
 }
 .btn.small,
 button.small {
-  min-height: 40px;
-  padding: 6px 12px;
+  min-height: var(--tap);
+  padding: 8px 12px;
   font-size: 0.9rem;
 }
 .btn.link,
@@ -310,8 +310,8 @@ button.link {
   border: none;
   background: none;
   color: var(--accent);
-  padding: 4px 6px;
-  min-height: 36px;
+  padding: 4px 8px;
+  min-height: var(--tap);
 }
 
 label.field {
@@ -381,7 +381,7 @@ input[type="checkbox"] {
   background: var(--surface);
   border-radius: 999px;
   padding: 8px 14px;
-  min-height: 40px;
+  min-height: var(--tap);
   font-weight: 500;
 }
 .chip.active {
@@ -419,21 +419,30 @@ input[type="checkbox"] {
 
 .tabs {
   display: flex;
-  gap: 4px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 2px;
   border-bottom: 1px solid var(--border);
   margin: 0 -16px 14px;
-  padding: 0 16px;
-  scrollbar-width: none;
+  padding: 0 8px;
 }
 .tabs button {
+  flex: 1 1 auto;
   border: none;
   border-bottom: 3px solid transparent;
   border-radius: 0;
   background: none;
   white-space: nowrap;
+  padding: 10px 8px;
+  font-size: 0.95rem;
   color: var(--muted);
   font-weight: 500;
+}
+
+.update-banner {
+  position: sticky;
+  top: 8px;
+  z-index: 12;
+  margin: 8px 16px 0;
 }
 .tabs button.active {
   color: var(--accent);

@@ -33,7 +33,7 @@ function writeFilter(filter: Filter) {
 function matchesQuery(plant: PlantWithSpecies, q: string): boolean {
   if (!q) return true;
   const names = plant.species?.common_names;
-  const fields = [plant.tag, plant.zone, names?.en, names?.fr, names?.ar_latin, plant.species?.scientific_name];
+  const fields = [plant.tag, plant.zone, names?.en, names?.fr, names?.ar, names?.ar_latin, plant.species?.scientific_name];
   return fields.some((f) => (f ?? "").toLowerCase().includes(q));
 }
 

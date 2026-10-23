@@ -6,14 +6,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": a new version never reloads the page on its own (a reload mid-capture would lose
+      // the photo); Layout shows a small "Reload" banner instead.
+      registerType: "prompt",
       includeAssets: ["icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png"],
       manifest: {
         name: "Plant Care",
         short_name: "Plant Care",
         description: "Identify plants and keep their care calendar for the backyard and the farm.",
         theme_color: "#2f6b3a",
-        background_color: "#101511",
+        background_color: "#f6f7f3",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",

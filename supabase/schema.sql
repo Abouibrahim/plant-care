@@ -123,6 +123,16 @@ create policy owner_all on photos             for all to authenticated using (tr
 create policy owner_all on tasks              for all to authenticated using (true) with check (true);
 create policy owner_all on push_subscriptions for all to authenticated using (true) with check (true);
 
--- Storage: create a private bucket named "photos" in the dashboard, then:
--- create policy "owner photos" on storage.objects for all to authenticated
---   using (bucket_id = 'photos') with check (bucket_id = 'photos');
+-- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
+-- read through signed URLs and delete in it. Both are safe to re-run, and the policy never
+-- aborts the script: if the editor may not write storage policies, a notice says to add the
+-- same policy from Storage -> Policies (bucket_id = 'photos', all operations).
+insert into storage.buckets (id, name, public) values ('photos', 'photos', false)
+  on conflict (id) do nothing;
+do $$ begin
+  create policy "owner photos" on storage.objects for all to authenticated
+    using (bucket_id = 'photos') with check (bucket_id = 'photos');
+exception
+  when duplicate_object then null;
+  when insufficient_privilege then raise notice 'Add the "owner photos" policy from Storage -> Policies';
+end $$;

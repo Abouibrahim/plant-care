@@ -4,11 +4,9 @@
 //   { regenerate_species_id }                              rewrite, keeping user_edits
 // Returns { species, created, ...usage }. Claude is called only when no species row matches.
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { callJson, readPrompt, readSchema } from "./_claude";
-import { handleError, sendError, serviceClient, verifyUser } from "./_supabase";
-import type { ProfileRequest, Species, SpeciesProfile, Usage } from "../src/types";
-
-const NO_USAGE: Usage = { model: null, input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+import { callJson, readPrompt, readSchema, ZERO_USAGE } from "./_claude.js";
+import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import type { ProfileRequest, Species, SpeciesProfile } from "../src/types.js";
 
 /** ilike without wildcards is a case-insensitive equality once the LIKE metacharacters are escaped. */
 function likeLiteral(s: string): string {
@@ -18,6 +16,25 @@ function likeLiteral(s: string): string {
 /** Quotes a value for PostgREST's or() filter syntax, where commas and dots are separators. */
 function quoted(s: string): string {
   return '"' + s.replace(/"/g, '\\"') + '"';
+}
+
+/**
+ * The species key is the bare binomial: whitespace collapsed, quoted cultivar names and the
+ * hybrid sign dropped, author citation removed ("Olea europaea L." -> "Olea europaea").
+ * Lower-case ranks (subsp., var.) stay; a hybrid formula ("Prunus dulcis × Prunus persica")
+ * keeps both parents so it never collapses into one of them.
+ */
+export function normalizeScientificName(raw: string): string {
+  let s = raw
+    .replace(/['‘’"][^'‘’"]*['‘’"]/g, " ") // 'Pendula', "Black Mission"
+    .replace(/\s+/g, " ")
+    .trim();
+  const formula = /^(\S+ \S+) [×xX] ([A-Z]\S* \S+)/u.exec(s);
+  if (formula) return `${formula[1]} × ${formula[2]}`;
+  s = s.replace(/^×\s*/u, "").replace(/\s×\s*/gu, " ").replace(/\s[xX]\s/g, " ");
+  const tokens = s.split(" ").filter((t) => t.length > 0);
+  if (tokens.length > 2 && /^[A-Z(]/.test(tokens[2])) return tokens.slice(0, 2).join(" ");
+  return tokens.join(" ");
 }
 
 async function findByScientificName(scientific: string, cultivar: string): Promise<Species | null> {
@@ -32,6 +49,33 @@ async function findByScientificName(scientific: string, cultivar: string): Promi
   return (data as Species | null) ?? null;
 }
 
+async function findAnyCultivar(scientific: string): Promise<Species | null> {
+  const { data, error } = await serviceClient()
+    .from("species")
+    .select("*")
+    .ilike("scientific_name", likeLiteral(scientific))
+    .order("confirmed", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Species | null) ?? null;
+}
+
+/**
+ * Exact (name, cultivar) first; then the species-level row; then any row of the species.
+ * One profile per species keeps the second olive free, whatever cultivar identify guessed.
+ */
+async function findSpecies(scientific: string, cultivar: string): Promise<Species | null> {
+  const exact = await findByScientificName(scientific, cultivar);
+  if (exact) return exact;
+  if (cultivar) {
+    const speciesLevel = await findByScientificName(scientific, "");
+    if (speciesLevel) return speciesLevel;
+  }
+  return findAnyCultivar(scientific);
+}
+
 async function findByAnyName(name: string): Promise<Species | null> {
   const lit = quoted(likeLiteral(name));
   const { data, error } = await serviceClient()
@@ -42,6 +86,7 @@ async function findByAnyName(name: string): Promise<Species | null> {
         `scientific_name.ilike.${lit}`,
         `common_names->>en.ilike.${lit}`,
         `common_names->>fr.ilike.${lit}`,
+        `common_names->>ar.ilike.${lit}`,
         `common_names->>ar_latin.ilike.${lit}`,
       ].join(","),
     )
@@ -58,6 +103,7 @@ function writeProfile(text: string) {
     schema: readSchema("profile.schema.json"),
     content: [{ type: "text", text }],
     maxTokens: 6000,
+    effort: "medium",
   });
 }
 
@@ -81,14 +127,15 @@ function describe(body: ProfileRequest): string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
-  if (req.method !== "POST") {
-    sendError(res, 405, "Method not allowed");
-    return;
-  }
   try {
+    // The bearer check comes first: any request without a valid token is a 401, whatever the method.
     const user = await verifyUser(req);
     if (!user) {
       sendError(res, 401, "Unauthorized");
+      return;
+    }
+    if (req.method !== "POST") {
+      sendError(res, 405, "Method not allowed");
       return;
     }
     const body = (req.body ?? {}) as ProfileRequest;
@@ -110,15 +157,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         res.status(200).json({ refusal: result.refusal, ...result.usage });
         return;
       }
+      // Re-read the edits: the user may have saved a field while Claude was writing.
+      const { data: latest, error: latestErr } = await db.from("species").select("user_edits").eq("id", row.id).maybeSingle();
+      if (latestErr) throw latestErr;
+      const userEdits = ((latest as { user_edits?: Partial<SpeciesProfile> } | null)?.user_edits ?? row.user_edits) as Partial<SpeciesProfile>;
       const merged: SpeciesProfile = {
         ...result.data,
-        ...row.user_edits,
+        ...userEdits,
         scientific_name: row.scientific_name,
         cultivar: row.cultivar,
       };
       const { data: updated, error: updErr } = await db
         .from("species")
-        .update({ ...merged, generated_by: result.usage.model, generated_at: new Date().toISOString() })
+        .update({
+          ...merged,
+          generated_by: result.usage.model,
+          generated_at: new Date().toISOString(),
+          // Freshly written text has not been reviewed: back to "AI-written, confirm".
+          confirmed: false,
+        })
         .eq("id", row.id)
         .select("*")
         .single();
@@ -128,9 +185,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     }
 
     // --- look it up first: a matching row costs no Claude call ----------------
-    const scientific = body.scientific_name?.trim() ?? "";
-    const cultivar = body.cultivar?.trim() ?? "";
-    const typed = body.name?.trim() ?? "";
+    const scientific = normalizeScientificName(body.scientific_name ?? "");
+    const cultivar = body.cultivar?.replace(/\s+/g, " ").trim() ?? "";
+    const typed = body.name?.replace(/\s+/g, " ").trim() ?? "";
     if (!scientific && !typed) {
       sendError(res, 400, "Send scientific_name or name");
       return;
@@ -140,14 +197,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    const existing = scientific ? await findByScientificName(scientific, cultivar) : await findByAnyName(typed);
+    const existing = scientific ? await findSpecies(scientific, cultivar) : await findByAnyName(typed);
     if (existing) {
-      res.status(200).json({ species: existing, created: false, ...NO_USAGE });
+      res.status(200).json({ species: existing, created: false, ...ZERO_USAGE });
       return;
     }
 
     // --- write it ---------------------------------------------------------------
-    const result = await writeProfile(describe(body));
+    const result = await writeProfile(describe({ ...body, scientific_name: scientific || undefined, cultivar }));
     if (!result.ok) {
       res.status(200).json({ refusal: result.refusal, ...result.usage });
       return;
@@ -157,10 +214,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       // The confirmed name stays the key even if Claude normalised it differently.
       profile.scientific_name = scientific;
       profile.cultivar = cultivar;
+    } else {
+      profile.scientific_name = normalizeScientificName(profile.scientific_name);
+      profile.cultivar = profile.cultivar.replace(/\s+/g, " ").trim();
     }
 
     // A parallel request may have inserted the same species meanwhile.
-    const race = await findByScientificName(profile.scientific_name, profile.cultivar);
+    const race = await findSpecies(profile.scientific_name, profile.cultivar);
     if (race) {
       res.status(200).json({ species: race, created: false, ...result.usage });
       return;

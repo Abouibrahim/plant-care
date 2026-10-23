@@ -2,7 +2,7 @@
 // Keep keys grouped by screen; functions take the values they interpolate.
 
 export const en = {
-  app: { name: "Plant Care" },
+  app: { name: "Plant Care", updateReady: "A new version is ready.", reload: "Reload" },
 
   nav: {
     today: "Today",
@@ -130,7 +130,7 @@ export const en = {
       needs: "Needs",
       calendar: "Calendar",
       health: "Health",
-      guild: "Guild and uses",
+      guild: "Guild",
       journal: "Journal",
     },
     editRecord: "Edit record",
@@ -231,6 +231,10 @@ export const en = {
     growthForm: { plant_type: "Plant type", lifecycle: "Lifecycle", foliage: "Foliage", layer: "Layer" },
     ruleNotForAge: "Does not apply at this plant's age",
     calendarEmpty: "No care rules in this profile yet",
+    delete: "Delete this profile",
+    deleteNote: "No plant uses this profile. Deleting it frees the name for a fresh identification.",
+    deleteConfirm: "Delete this species profile? No plant uses it.",
+    deleteInUse: "A plant uses this profile; it cannot be deleted.",
   },
 
   settings: {
@@ -252,6 +256,10 @@ export const en = {
     unauthorized: "Signed out. Sign in again.",
     notFound: "Not found",
     tooLarge: "The photo is too large",
+    canvas: "This browser cannot resize photos",
+    encode: "The photo could not be encoded as JPEG",
+    readFailed: "The photo could not be read",
+    noData: "The database returned nothing",
   },
 
   enums: {

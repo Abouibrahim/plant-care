@@ -4,7 +4,7 @@
   "functions": {
     "api/*.ts": {
       "includeFiles": "prompts/**",
-      "maxDuration": 120
+      "maxDuration": 300
     }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }]

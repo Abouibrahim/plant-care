@@ -8,7 +8,7 @@ React + Vite + TypeScript PWA on Vercel, serverless functions under `api/`, Clau
 
 ## One-time setup (Mohamed)
 
-1. **Supabase**: create a project. In the SQL editor run `supabase/schema.sql`. In Storage create a private bucket named `photos`, then run the storage policy from the comment at the end of `schema.sql`. In Authentication create one user with email and password.
+1. **Supabase**: create a project. In the SQL editor run `supabase/schema.sql` once (it creates the tables, the private bucket `photos` and its storage policy). If the run ends with a notice about the "owner photos" policy, add that policy from Storage → Policies: bucket `photos`, all operations for authenticated users, expression `bucket_id = 'photos'`. In Authentication create one user with email and password.
 2. **Claude**: create an API key at platform.claude.com.
 3. **Vercel**: create a project from this repository. Add the environment variables named in `.env.example` (Production and Preview): `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `CRON_SECRET` (any long random string). The VAPID keys are for Phase 3.
 4. **Locally**: copy `.env.example` to `.env.local` and fill the same names. `.env.local` is git-ignored.

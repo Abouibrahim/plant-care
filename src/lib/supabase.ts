@@ -1,7 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// A blank value (an unfilled .env.local) counts as missing, like an unset variable.
+const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim() || undefined;
+const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim() || undefined;
 
 /** False until Mohamed sets the two VITE_ keys; the Login screen explains what is missing. */
 export const supabaseConfigured = Boolean(url && anonKey);

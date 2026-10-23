@@ -1,13 +1,13 @@
 // Species profile review: read every section, confirm the AI-written profile,
 // edit single fields (kept on regeneration) or regenerate the whole profile from Claude.
 import { Fragment, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
-import { confirmSpecies, getSpecies } from "../lib/db";
+import { confirmSpecies, deleteSpeciesIfUnused, getSpecies, speciesPlantCounts } from "../lib/db";
 import { isRefusal, type Species } from "../types";
 import { GUILD_TARGETS, IDENTITY_TARGETS, NEEDS_TARGETS, type EditTarget } from "./species/fields";
 import { SectionCard } from "./species/SectionCard";
@@ -18,7 +18,7 @@ type LoadState =
   | { status: "missing" }
   | { status: "ready"; species: Species };
 
-type Action = "confirm" | "regenerate";
+type Action = "confirm" | "regenerate" | "delete";
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -90,6 +90,8 @@ function SpeciesView({ id }: { id: string }) {
   const [busy, setBusy] = useState<Action | null>(null);
   const [actionError, setActionError] = useState<{ action: Action; message: string } | null>(null);
   const [usage, setUsage] = useState<{ input: number; output: number } | null>(null);
+  const [plantCount, setPlantCount] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     let active = true;
@@ -100,6 +102,11 @@ function SpeciesView({ id }: { id: string }) {
       .catch((err: unknown) => {
         if (active) setState({ status: "error", message: describeError(err) });
       });
+    speciesPlantCounts()
+      .then((counts) => {
+        if (active) setPlantCount(counts.get(id) ?? 0);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -152,6 +159,25 @@ function SpeciesView({ id }: { id: string }) {
     }
   }
 
+  async function remove() {
+    if (busy || editing !== null) return;
+    if (!window.confirm(t.species.deleteConfirm)) return;
+    setBusy("delete");
+    setActionError(null);
+    try {
+      const deleted = await deleteSpeciesIfUnused(id);
+      if (deleted) {
+        navigate("/species", { replace: true });
+        return;
+      }
+      setActionError({ action: "delete", message: t.species.deleteInUse });
+    } catch (err) {
+      setActionError({ action: "delete", message: describeError(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const doneLink = plantId ? (
     <Link to={`/plants/${plantId}`} className="btn block">
       {t.common.done}
@@ -187,7 +213,15 @@ function SpeciesView({ id }: { id: string }) {
   }
 
   const s = state.species;
-  const cardProps = { species: s, editing, onEdit: startEdit, onSaved: saved, onCancel: () => setEditing(null) };
+  const cardProps = {
+    species: s,
+    editing,
+    onEdit: startEdit,
+    onSaved: saved,
+    onCancel: () => setEditing(null),
+    // No field edits while Claude rewrites the profile: the answer would overwrite them.
+    disabled: busy !== null,
+  };
 
   return (
     <div className="screen">
@@ -241,6 +275,16 @@ function SpeciesView({ id }: { id: string }) {
         {actionError?.action === "regenerate" && <Banner kind="error">{actionError.message}</Banner>}
         {usage && <span className="small muted">{t.capture.usage(usage.input, usage.output)}</span>}
       </div>
+
+      {plantCount === 0 && (
+        <div className="card stack">
+          <button type="button" className="danger block" disabled={busy !== null || editing !== null} onClick={remove}>
+            {t.species.delete}
+          </button>
+          <span className="small muted">{t.species.deleteNote}</span>
+          {actionError?.action === "delete" && <Banner kind="error">{actionError.message}</Banner>}
+        </div>
+      )}
 
       {doneLink}
     </div>

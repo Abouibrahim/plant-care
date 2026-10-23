@@ -1,5 +1,6 @@
 // Typed access to the four tables and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
+import { t } from "../i18n";
 import type {
   Photo,
   PhotoInsert,
@@ -18,7 +19,7 @@ interface Result<T> {
 
 function must<T>(r: Result<T>): T {
   if (r.error) throw new Error(r.error.message);
-  if (r.data === null || r.data === undefined) throw new Error("No data returned");
+  if (r.data === null || r.data === undefined) throw new Error(t.errors.noData);
   return r.data;
 }
 
@@ -137,6 +138,22 @@ export async function speciesPlantCounts(): Promise<Map<string, number>> {
     counts.set(species_id, (counts.get(species_id) ?? 0) + 1);
   }
   return counts;
+}
+
+/**
+ * Removes a species row that no plant uses (an abandoned capture, a mis-tap on Confirm).
+ * Returns false when a plant references it; the foreign key is the final guard.
+ */
+export async function deleteSpeciesIfUnused(id: string): Promise<boolean> {
+  const { count, error } = await supabase.from("plants").select("id", { count: "exact", head: true }).eq("species_id", id);
+  if (error) throw new Error(error.message);
+  if ((count ?? 0) > 0) return false;
+  const { error: delErr } = await supabase.from("species").delete().eq("id", id);
+  if (delErr) {
+    if (delErr.code === "23503") return false;
+    throw new Error(delErr.message);
+  }
+  return true;
 }
 
 export async function confirmSpecies(id: string): Promise<Species> {
