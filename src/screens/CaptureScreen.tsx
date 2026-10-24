@@ -6,6 +6,7 @@ import { Banner } from "../components/Banner";
 import { LOW_CONFIDENCE } from "../components/ConfidenceBar";
 import { emptyRecord, RecordForm, type RecordValues } from "../components/RecordForm";
 import { Spinner } from "../components/Spinner";
+import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
 import { deleteSpeciesIfUnused, insertPhoto, insertPlant, photoPath, updatePlant, uploadPhoto } from "../lib/db";
@@ -438,7 +439,7 @@ export function CaptureScreen() {
                 disabled={busy}
                 onClick={() => changeSite(s)}
               >
-                {t.site[s]}
+                <SiteLabel site={s} size={18} />
               </button>
             ))}
           </div>

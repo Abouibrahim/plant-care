@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent } from "react";
+import { Camera, Images } from "lucide-react";
 
 interface Props {
   label: string;
@@ -9,9 +10,10 @@ interface Props {
   onFile: (file: File) => void;
 }
 
-/** A large button in front of a hidden <input type="file"> that yields one image. */
+/** A large button in front of a hidden <input type="file"> that yields one image; a camera or gallery icon leads the label. */
 export function PhotoButton({ label, camera, className = "", disabled = false, onFile }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const Icon = camera ? Camera : Images;
 
   function onChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -22,6 +24,7 @@ export function PhotoButton({ label, camera, className = "", disabled = false, o
   return (
     <>
       <button type="button" className={className} disabled={disabled} onClick={() => inputRef.current?.click()}>
+        <Icon size={22} strokeWidth={2} aria-hidden />
         {label}
       </button>
       <input

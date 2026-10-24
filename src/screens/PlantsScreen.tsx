@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { MapPin, Search, Sprout } from "lucide-react";
 import { t } from "../i18n";
 import { latestPhotos, listPlants } from "../lib/db";
 import { Banner } from "../components/Banner";
 import { PhotoImg } from "../components/PhotoImg";
 import { Spinner } from "../components/Spinner";
+import { SiteLabel } from "../components/TypeIcon";
 import { SITES, type Photo, type PlantWithSpecies, type Site } from "../types";
 
 type Filter = "all" | Site;
@@ -85,10 +87,7 @@ export function PlantsScreen() {
   const visible = plants.filter((p) => (filter === "all" || p.site === filter) && matchesQuery(p, q));
   const filtering = filter !== "all" || q !== "";
 
-  const filters: Array<{ value: Filter; label: string }> = [
-    { value: "all", label: t.common.all },
-    ...SITES.map((s) => ({ value: s, label: t.site[s] })),
-  ];
+  const filters: Filter[] = ["all", ...SITES];
 
   return (
     <div className="screen">
@@ -96,27 +95,29 @@ export function PlantsScreen() {
         <h1>{t.plants.title}</h1>
       </div>
 
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={t.plants.searchPlaceholder}
-        aria-label={t.common.search}
-        autoComplete="off"
-        enterKeyHint="search"
-        style={{ marginBottom: 12 }}
-      />
+      <div className="input-icon" style={{ marginBottom: 12 }}>
+        <Search size={20} aria-hidden />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t.plants.searchPlaceholder}
+          aria-label={t.common.search}
+          autoComplete="off"
+          enterKeyHint="search"
+        />
+      </div>
 
       <div className="chips" role="group" aria-label={t.record.site}>
         {filters.map((f) => (
           <button
             type="button"
-            key={f.value}
-            className={`chip ${filter === f.value ? "active" : ""}`}
-            aria-pressed={filter === f.value}
-            onClick={() => chooseFilter(f.value)}
+            key={f}
+            className={`chip ${filter === f ? "active" : ""}`}
+            aria-pressed={filter === f}
+            onClick={() => chooseFilter(f)}
           >
-            {f.label}
+            {f === "all" ? t.common.all : <SiteLabel site={f} />}
           </button>
         ))}
       </div>
@@ -137,7 +138,14 @@ export function PlantsScreen() {
           <Spinner label={t.common.loading} />
         </div>
       ) : plants.length === 0 ? (
-        !error && <div className="center muted">{t.plants.empty}</div>
+        !error && (
+          <div className="center muted empty-state">
+            <span className="head-icon" aria-hidden>
+              <Sprout size={24} />
+            </span>
+            <p>{t.plants.empty}</p>
+          </div>
+        )
       ) : visible.length === 0 ? (
         <div className="center muted">{filtering ? t.plants.emptyFiltered : t.plants.empty}</div>
       ) : (
@@ -154,8 +162,15 @@ export function PlantsScreen() {
                 <div>{p.species?.common_names.en}</div>
                 <div className="italic muted small">{p.species?.scientific_name}</div>
                 <div style={{ marginTop: 4 }}>
-                  <span className="pill">{t.site[p.site]}</span>
-                  {p.zone.trim() !== "" ? <span className="pill">{p.zone}</span> : null}
+                  <span className="pill">
+                    <SiteLabel site={p.site} size={14} />
+                  </span>
+                  {p.zone.trim() !== "" ? (
+                    <span className="pill">
+                      <MapPin size={14} aria-hidden />
+                      {p.zone}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </Link>

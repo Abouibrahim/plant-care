@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { BookOpen, CircleCheck, Leaf, Sprout, TriangleAlert } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { t } from "../i18n";
@@ -52,8 +53,11 @@ export function SpeciesListScreen() {
       )}
 
       {state.kind === "ready" && state.species.length === 0 && (
-        <div className="card">
-          <p className="muted">{t.species.libraryEmpty}</p>
+        <div className="center muted empty-state">
+          <span className="head-icon" aria-hidden>
+            <BookOpen size={24} />
+          </span>
+          <p>{t.species.libraryEmpty}</p>
         </div>
       )}
 
@@ -66,22 +70,31 @@ export function SpeciesListScreen() {
 function SpeciesCard({ species, count }: { species: Species; count: number }) {
   const name = species.common_names.en || species.scientific_name;
   return (
-    <Link to={`/species/${species.id}`} className="card tappable">
-      <div style={{ fontWeight: 600 }}>{name}</div>
-      <div className="muted">
-        <span className="italic">{species.scientific_name}</span>
-        {species.cultivar && <span>{` '${species.cultivar}'`}</span>}
-      </div>
-      {species.common_names.ar && (
-        <div>
-          <span className="arabic">{species.common_names.ar}</span>
+    <Link to={`/species/${species.id}`} className="card tappable row" style={{ alignItems: "flex-start" }}>
+      <span className="head-icon" aria-hidden>
+        <Leaf size={22} />
+      </span>
+      <div className="grow">
+        <div style={{ fontWeight: 600 }}>{name}</div>
+        <div className="muted">
+          <span className="italic">{species.scientific_name}</span>
+          {species.cultivar && <span>{` '${species.cultivar}'`}</span>}
         </div>
-      )}
-      <div style={{ marginTop: 6 }}>
-        <span className="pill">{t.species.plantsUsing(count)}</span>
-        <span className={`pill ${species.confirmed ? "ok" : "warn"}`}>
-          {species.confirmed ? t.species.confirmed : t.species.unconfirmed}
-        </span>
+        {species.common_names.ar && (
+          <div>
+            <span className="arabic">{species.common_names.ar}</span>
+          </div>
+        )}
+        <div style={{ marginTop: 6 }}>
+          <span className="pill">
+            <Sprout size={14} aria-hidden />
+            {t.species.plantsUsing(count)}
+          </span>
+          <span className={`pill ${species.confirmed ? "ok" : "warn"}`}>
+            {species.confirmed ? <CircleCheck size={14} aria-hidden /> : <TriangleAlert size={14} aria-hidden />}
+            {species.confirmed ? t.species.confirmed : t.species.unconfirmed}
+          </span>
+        </div>
       </div>
     </Link>
   );

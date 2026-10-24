@@ -1,6 +1,21 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import {
+  Bell,
+  CircleUser,
+  Download,
+  Info,
+  Languages,
+  LogOut,
+  MapPin,
+  Plus,
+  Smartphone,
+  Sprout,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
+import { SiteLabel } from "../components/TypeIcon";
 import { lang, LANGS, storeLang, t, type Lang } from "../i18n";
 import { useAuth } from "../lib/auth-context";
 import { emptyZones, loadZones, recentZones, saveZones, SettingsUnavailable } from "../lib/db";
@@ -11,6 +26,19 @@ import { APP_VERSION } from "../version";
 
 function message(err: unknown): string {
   return err instanceof Error && err.message ? err.message : t.errors.generic;
+}
+
+/** A card heading: the section's icon on a tinted tile, the title, and anything at the right end. */
+function CardHead({ icon: Icon, tone = "", title, children }: { icon: LucideIcon; tone?: string; title: string; children?: ReactNode }) {
+  return (
+    <div className="card-head">
+      <span className={`head-icon ${tone}`} aria-hidden>
+        <Icon size={22} />
+      </span>
+      <h2>{title}</h2>
+      {children}
+    </div>
+  );
 }
 
 /** Turn the digest on or off on this phone, with the reason when it cannot be turned on. */
@@ -67,13 +95,10 @@ function RemindersCard() {
 
   return (
     <div className="card">
-      <div className="row between">
-        <h2 style={{ margin: 0 }}>{s.title}</h2>
+      <CardHead icon={Bell} tone="sun" title={s.title}>
         {state && <span className={`pill ${pill}`}>{label[state]}</span>}
-      </div>
-      <p className="small" style={{ marginTop: 8 }}>
-        {s.body}
-      </p>
+      </CardHead>
+      <p className="small">{s.body}</p>
       {state === null ? (
         <Spinner label={t.common.loading} />
       ) : (
@@ -110,7 +135,7 @@ function LanguageCard() {
 
   return (
     <div className="card">
-      <h2>{s.title}</h2>
+      <CardHead icon={Languages} tone="water" title={s.title} />
       <p className="small">{s.body}</p>
       <div className="segmented" role="radiogroup" aria-label={s.title}>
         {LANGS.map((l) => (
@@ -209,7 +234,7 @@ function ZonesCard() {
 
   return (
     <div className="card">
-      <h2>{Z.title}</h2>
+      <CardHead icon={MapPin} tone="soil" title={Z.title} />
       <p className="small">{Z.body}</p>
       {missing && <Banner kind="warn">{Z.missingTable}</Banner>}
       {!missing && zones === null && !error && <Spinner label={t.common.loading} />}
@@ -220,7 +245,9 @@ function ZonesCard() {
           const suggestions = used[site].filter((z) => !listed.some((l) => l.toLowerCase() === z.toLowerCase()));
           return (
             <section key={site} className="stack" style={{ marginTop: 12, gap: 8 }}>
-              <h3 style={{ margin: 0 }}>{t.site[site]}</h3>
+              <h3 style={{ margin: 0 }}>
+                <SiteLabel site={site} size={18} />
+              </h3>
               {listed.length === 0 ? (
                 <span className="small muted">{Z.empty}</span>
               ) : (
@@ -235,6 +262,7 @@ function ZonesCard() {
                         aria-label={Z.remove(zone)}
                         onClick={() => void save(site, listed.filter((z) => z !== zone))}
                       >
+                        <X size={16} aria-hidden />
                         {t.common.remove}
                       </button>
                     </li>
@@ -247,7 +275,8 @@ function ZonesCard() {
                   <div className="chips" style={{ marginTop: 6, marginBottom: 0 }}>
                     {suggestions.map((zone) => (
                       <button type="button" key={zone} className="chip" disabled={saving} onClick={() => add(site, zone)}>
-                        + {zone}
+                        <Plus size={16} aria-hidden />
+                        {zone}
                       </button>
                     ))}
                   </div>
@@ -265,6 +294,7 @@ function ZonesCard() {
                   onChange={(e) => setDrafts((d) => ({ ...d, [site]: e.target.value }))}
                 />
                 <button type="submit" className="small" disabled={saving || drafts[site].trim() === ""}>
+                  <Plus size={16} aria-hidden />
                   {Z.add}
                 </button>
               </form>
@@ -299,14 +329,28 @@ function ExportCard() {
 
   return (
     <div className="card">
-      <h2>{s.title}</h2>
+      <CardHead icon={Download} tone="plum" title={s.title} />
       <p className="small">{s.body}</p>
       <div className="row" style={{ marginBottom: note ? 10 : 0 }}>
         <button type="button" className="grow" disabled={busy !== null} onClick={() => void run("plants")}>
-          {busy === "plants" ? <Spinner label={s.working} /> : s.plants}
+          {busy === "plants" ? (
+            <Spinner label={s.working} />
+          ) : (
+            <>
+              <Download size={18} aria-hidden />
+              {s.plants}
+            </>
+          )}
         </button>
         <button type="button" className="grow" disabled={busy !== null} onClick={() => void run("tasks")}>
-          {busy === "tasks" ? <Spinner label={s.working} /> : s.tasks}
+          {busy === "tasks" ? (
+            <Spinner label={s.working} />
+          ) : (
+            <>
+              <Download size={18} aria-hidden />
+              {s.tasks}
+            </>
+          )}
         </button>
       </div>
       {note && <Banner kind={note.kind}>{note.text}</Banner>}
@@ -338,25 +382,38 @@ export function SettingsScreen() {
       <ExportCard />
 
       <div className="card">
-        <p className="muted small">{t.settings.signedInAs}</p>
-        <p style={{ wordBreak: "break-all" }}>{session?.user.email ?? t.common.unknown}</p>
+        <div className="card-head">
+          <span className="head-icon" aria-hidden>
+            <CircleUser size={22} />
+          </span>
+          <div className="grow">
+            <p className="muted small" style={{ margin: 0 }}>
+              {t.settings.signedInAs}
+            </p>
+            <p style={{ wordBreak: "break-all", margin: 0 }}>{session?.user.email ?? t.common.unknown}</p>
+          </div>
+        </div>
         <button type="button" className="danger block" onClick={handleSignOut} disabled={signingOut}>
+          <LogOut size={18} aria-hidden />
           {t.settings.signOut}
         </button>
       </div>
 
       <div className="card">
-        <h2>{t.settings.installTitle}</h2>
+        <CardHead icon={Smartphone} tone="berry" title={t.settings.installTitle} />
         <p>{t.settings.installBody}</p>
       </div>
 
       <div className="card">
-        <h2>{t.settings.phaseTitle}</h2>
+        <CardHead icon={Sprout} title={t.settings.phaseTitle} />
         <p>{t.settings.phaseBody}</p>
       </div>
 
       <div className="card row between">
-        <span className="muted">{t.settings.version}</span>
+        <span className="muted site-label">
+          <Info size={18} aria-hidden />
+          {t.settings.version}
+        </span>
         <span>{APP_VERSION}</span>
       </div>
     </div>

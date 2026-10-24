@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
+import { BookOpen, Camera, Settings, Sprout, Sun, type LucideIcon } from "lucide-react";
 import { t } from "../i18n";
 import { localIsoDate } from "../lib/dates";
 import { countDueTasks, TASKS_CHANGED } from "../lib/db";
 
-const tabs = [
-  { to: "/", label: t.nav.today, icon: "☀" },
-  { to: "/plants", label: t.nav.plants, icon: "🌿" },
-  { to: "/species", label: t.nav.species, icon: "📖" },
-  { to: "/settings", label: t.nav.settings, icon: "⚙" },
+interface Tab {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+/** Two tabs either side of the camera button in the middle of the bar. */
+const LEFT_TABS: Tab[] = [
+  { to: "/", label: t.nav.today, icon: Sun },
+  { to: "/plants", label: t.nav.plants, icon: Sprout },
+];
+const RIGHT_TABS: Tab[] = [
+  { to: "/species", label: t.nav.species, icon: BookOpen },
+  { to: "/settings", label: t.nav.settings, icon: Settings },
 ];
 
 /** Registers the service worker; when a new build is waiting, offers a reload instead of forcing one. */
@@ -72,31 +82,34 @@ function useDueCount(pathname: string): number {
 
 export function Layout() {
   const { pathname } = useLocation();
-  const onCapture = pathname.startsWith("/capture");
   const due = useDueCount(pathname);
+
+  const tabLink = (tab: Tab) => {
+    const Icon = tab.icon;
+    return (
+      <NavLink key={tab.to} to={tab.to} end={tab.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
+        <span className="nav-icon" aria-hidden>
+          <Icon size={22} strokeWidth={2} />
+          {tab.to === "/" && due > 0 && <span className="badge">{due > 99 ? "99+" : due}</span>}
+        </span>
+        <span className="nav-label">{tab.label}</span>
+        {tab.to === "/" && due > 0 && <span className="visually-hidden">{t.nav.dueBadge(due)}</span>}
+      </NavLink>
+    );
+  };
+
   return (
     <>
       <UpdateBanner />
       <Outlet />
-      {!onCapture && (
-        <NavLink to="/capture" className="fab" aria-label={t.nav.capture}>
-          📷
-        </NavLink>
-      )}
       <nav className="nav">
-        {tabs.map((tab) => (
-          <NavLink key={tab.to} to={tab.to} end={tab.to === "/"} className={({ isActive }) => (isActive ? "active" : "")}>
-            <span className="icon" aria-hidden>
-              {tab.icon}
-            </span>
-            {tab.label}
-            {tab.to === "/" && due > 0 && (
-              <span className="badge" aria-label={t.nav.dueBadge(due)}>
-                {due > 99 ? "99+" : due}
-              </span>
-            )}
-          </NavLink>
-        ))}
+        {LEFT_TABS.map(tabLink)}
+        <NavLink to="/capture" className={({ isActive }) => `nav-capture ${isActive ? "active" : ""}`} aria-label={t.nav.capture}>
+          <span className="capture-btn" aria-hidden>
+            <Camera size={26} strokeWidth={2} />
+          </span>
+        </NavLink>
+        {RIGHT_TABS.map(tabLink)}
       </nav>
     </>
   );

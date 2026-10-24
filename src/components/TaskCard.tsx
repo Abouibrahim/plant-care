@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { AlarmClock, Check, X } from "lucide-react";
 import { t } from "../i18n";
 import { toLocalDate } from "../lib/dates";
 import { Spinner } from "./Spinner";
+import { TypePill } from "./TypeIcon";
 import type { Task } from "../types";
 
 export type TaskAction = { kind: "done" } | { kind: "skip"; reason: string } | { kind: "snooze"; days: number };
@@ -79,7 +81,7 @@ export function TaskCard({ task, today, plant, busy = false, onAct }: Props) {
     <>
       <div className="row between" style={{ alignItems: "flex-start" }}>
         <strong className="grow">{task.title}</strong>
-        <span className="pill accent">{t.enums.task_type[task.type]}</span>
+        <TypePill type={task.type} />
       </div>
       {plant && (
         <div className="small">
@@ -109,12 +111,21 @@ export function TaskCard({ task, today, plant, busy = false, onAct }: Props) {
       {mode === "idle" && (
         <div className="task-actions">
           <button type="button" className="primary small" disabled={busy} onClick={() => onAct({ kind: "done" })}>
-            {busy ? <Spinner /> : t.today.done}
+            {busy ? (
+              <Spinner />
+            ) : (
+              <>
+                <Check size={18} strokeWidth={2.5} aria-hidden />
+                {t.today.done}
+              </>
+            )}
           </button>
           <button type="button" className="small" disabled={busy} onClick={() => setMode("skip")}>
+            <X size={18} aria-hidden />
             {t.today.skip}
           </button>
           <button type="button" className="small" disabled={busy} onClick={() => setMode("snooze")}>
+            <AlarmClock size={18} aria-hidden />
             {t.today.snooze}
           </button>
         </div>

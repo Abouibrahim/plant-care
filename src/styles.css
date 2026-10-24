@@ -193,8 +193,10 @@ p {
   height: calc(var(--nav-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  background: var(--surface);
+  grid-template-columns: repeat(5, 1fr);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border);
   z-index: 10;
 }
@@ -204,24 +206,34 @@ p {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   text-decoration: none;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   min-height: var(--tap);
 }
-.nav a.active {
-  color: var(--accent);
-  font-weight: 600;
+.nav-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 32px;
+  border-radius: 999px;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
-.nav a .icon {
-  font-size: 1.3rem;
-  line-height: 1;
+.nav a.active {
+  color: var(--text);
+  font-weight: 700;
+}
+.nav a.active .nav-icon {
+  background: var(--sage);
+  color: var(--sage-text);
 }
 .nav .badge {
   position: absolute;
-  top: 6px;
-  left: calc(50% + 6px);
+  top: -5px;
+  right: 2px;
   min-width: 20px;
   height: 20px;
   padding: 0 6px;
@@ -234,23 +246,38 @@ p {
   text-align: center;
   box-shadow: 0 0 0 2px var(--surface);
 }
-
-.fab {
-  position: fixed;
-  right: 16px;
-  bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-text);
+.nav a.nav-capture {
+  justify-content: flex-start;
+}
+.capture-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.8rem;
-  text-decoration: none;
-  box-shadow: var(--shadow-lift);
-  z-index: 11;
+  width: 62px;
+  height: 62px;
+  margin-top: -22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 0 0 5px var(--bg), var(--shadow-lift);
+  transition: transform 0.15s ease;
+}
+.nav a.nav-capture:active .capture-btn {
+  transform: scale(0.93);
+}
+.nav a.nav-capture.active .capture-btn {
+  background: var(--sage);
+  color: var(--sage-text);
+  box-shadow: 0 0 0 5px var(--bg), 0 0 0 7px var(--accent);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 /* ---- surfaces ------------------------------------------------------------ */
@@ -269,6 +296,9 @@ p {
   color: inherit;
   text-decoration: none;
   transition: transform 0.12s ease, background-color 0.12s ease;
+}
+.card.tappable.row {
+  display: flex;
 }
 .card.tappable:active {
   background: var(--surface-2);
@@ -525,6 +555,121 @@ input[type="checkbox"] {
   color: var(--ok);
 }
 
+/* ---- icons ---------------------------------------------------------------- */
+
+.t-water {
+  --tc: var(--c-water);
+  --tc-soft: var(--c-water-soft);
+}
+.t-prune {
+  --tc: var(--c-prune);
+  --tc-soft: var(--c-prune-soft);
+}
+.t-feed {
+  --tc: var(--c-feed);
+  --tc-soft: var(--c-feed-soft);
+}
+.t-mulch {
+  --tc: var(--c-mulch);
+  --tc-soft: var(--c-mulch-soft);
+}
+.t-harvest {
+  --tc: var(--c-harvest);
+  --tc-soft: var(--c-harvest-soft);
+}
+.t-scout {
+  --tc: var(--c-scout);
+  --tc-soft: var(--c-scout-soft);
+}
+.t-propagate {
+  --tc: var(--c-propagate);
+  --tc-soft: var(--c-propagate-soft);
+}
+.t-protect {
+  --tc: var(--c-protect);
+  --tc-soft: var(--c-protect-soft);
+}
+.type-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: var(--tc-soft);
+  color: var(--tc);
+}
+.pill.type-pill {
+  background: var(--tc-soft);
+  color: var(--tc);
+}
+.site-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.input-icon {
+  position: relative;
+}
+.input-icon > svg {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+.input-icon > input {
+  padding-left: 44px;
+}
+button.icon-btn,
+.btn.icon-btn {
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  flex-shrink: 0;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.card-head h2 {
+  flex: 1;
+  margin: 0;
+}
+.head-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--ok);
+}
+.head-icon.sun {
+  background: var(--c-harvest-soft);
+  color: var(--c-harvest);
+}
+.head-icon.water {
+  background: var(--c-water-soft);
+  color: var(--c-water);
+}
+.head-icon.soil {
+  background: var(--c-mulch-soft);
+  color: var(--c-mulch);
+}
+.head-icon.berry {
+  background: var(--c-scout-soft);
+  color: var(--c-scout);
+}
+.head-icon.plum {
+  background: var(--c-prune-soft);
+  color: var(--c-prune);
+}
+
 .tabs {
   display: flex;
   gap: 6px;
@@ -582,7 +727,8 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  background: linear-gradient(135deg, var(--accent-soft), var(--surface-2));
+  color: var(--ok);
   font-size: 0.8rem;
 }
 .hero {
@@ -592,6 +738,45 @@ input[type="checkbox"] {
 .hero .photo {
   border-radius: 0 0 28px 28px;
   aspect-ratio: 4 / 3;
+}
+
+.hero-back {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 12px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-color: transparent;
+  box-shadow: var(--shadow-lift);
+  color: var(--text);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.action-grid > .btn,
+.action-grid > button {
+  justify-content: flex-start;
+  text-align: left;
+  line-height: 1.2;
+  padding-left: 14px;
+}
+.action-grid svg {
+  flex-shrink: 0;
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.empty-state .head-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
 }
 
 .confidence {

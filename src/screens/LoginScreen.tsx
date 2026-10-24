@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { LogIn, Sprout } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { t } from "../i18n";
 import { useAuth } from "../lib/auth-context";
@@ -30,7 +31,12 @@ export function LoginScreen() {
 
   return (
     <div className="screen" style={{ paddingTop: 48 }}>
-      <p className="muted small">{t.app.name}</p>
+      <div className="row" style={{ marginBottom: 16 }}>
+        <span className="head-icon" aria-hidden>
+          <Sprout size={24} />
+        </span>
+        <span className="muted">{t.app.name}</span>
+      </div>
       <h1>{t.login.title}</h1>
 
       {!configured ? (
@@ -75,6 +81,7 @@ export function LoginScreen() {
           )}
 
           <button type="submit" className="primary block big" disabled={pending}>
+            {!pending && <LogIn size={22} aria-hidden />}
             {pending ? t.login.signingIn : t.login.submit}
           </button>
         </form>

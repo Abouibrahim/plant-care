@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
+import { BookOpen, ChevronLeft, ImagePlus, MapPin, Pencil, Stethoscope, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { ageInMonths, localIsoDate, toLocalDate } from "../lib/dates";
@@ -23,10 +24,11 @@ import { Spinner } from "../components/Spinner";
 import { PhotoImg } from "../components/PhotoImg";
 import { RecordForm, type RecordValues } from "../components/RecordForm";
 import { TaskCard, type TaskAction } from "../components/TaskCard";
+import { SiteLabel, TypePill } from "../components/TypeIcon";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
 import { DiagnosePanel } from "./plant/DiagnosePanel";
 import { PastDiagnoses } from "./plant/PastDiagnoses";
-import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Task, TaskStatus } from "../types";
+import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Task, TaskStatus, TaskType } from "../types";
 
 /** The diagnosis panel: a new diagnosis, or a saved one reopened from the journal or the Health tab. */
 type DiagnoseState = { kind: "new" } | { kind: "open"; photo: Photo } | null;
@@ -215,8 +217,8 @@ export function PlantScreen() {
     return (
       <div className="screen">
         <div className="screen-header">
-          <Link to="/plants" className="btn small">
-            {t.common.back}
+          <Link to="/plants" className="btn icon-btn" aria-label={t.common.back}>
+            <ChevronLeft size={24} aria-hidden />
           </Link>
           <h1>{t.plant.title}</h1>
         </div>
@@ -248,18 +250,24 @@ export function PlantScreen() {
     <div className="screen">
       <div className="hero">
         <PhotoImg path={newest?.storage_path} alt={plant.tag} />
+        <Link to="/plants" className="btn icon-btn hero-back" aria-label={t.common.back}>
+          <ChevronLeft size={24} aria-hidden />
+        </Link>
       </div>
 
       <div className="screen-header">
-        <Link to="/plants" className="btn small">
-          {t.common.back}
-        </Link>
         <h1>{plant.tag}</h1>
       </div>
 
-      <p>
-        {t.plant.quantity(plant.quantity)} · {t.site[plant.site]}
-        {plant.zone && ` · ${plant.zone}`}
+      <p className="row wrap" style={{ gap: "4px 14px" }}>
+        <span>{t.plant.quantity(plant.quantity)}</span>
+        <SiteLabel site={plant.site} />
+        {plant.zone && (
+          <span className="site-label">
+            <MapPin size={16} aria-hidden />
+            {plant.zone}
+          </span>
+        )}
       </p>
 
       <div className="stack" style={{ gap: 2, marginBottom: 8 }}>
@@ -289,17 +297,21 @@ export function PlantScreen() {
           : t.plant.ageUnknown}
       </p>
 
-      <div className="row wrap" style={{ marginBottom: 12 }}>
+      <div className="action-grid">
         <button type="button" className="small" onClick={() => setEditing((v) => !v)} disabled={busy}>
+          {editing ? <X size={18} aria-hidden /> : <Pencil size={18} aria-hidden />}
           {editing ? t.common.cancel : t.plant.editRecord}
         </button>
         <button type="button" className="small" onClick={() => fileRef.current?.click()} disabled={busy}>
+          <ImagePlus size={18} aria-hidden />
           {t.plant.addJournalPhoto}
         </button>
         <Link to={`/species/${species.id}`} className="btn small">
+          <BookOpen size={18} aria-hidden />
           {t.plant.profileLink}
         </Link>
         <button type="button" className="small" onClick={() => setDiagnose({ kind: "new" })} disabled={busy}>
+          <Stethoscope size={18} aria-hidden />
           {t.plant.diagnose}
         </button>
         {uploading && <Spinner />}
@@ -447,7 +459,7 @@ function PhotoEntry({ entry, photo, tag, onOpenDiagnosis }: PhotoEntryProps) {
 }
 
 function TaskEntry({ entry }: { entry: JournalEntry }) {
-  const typeLabel = (t.enums.task_type as Record<string, string>)[entry.subtype] ?? entry.subtype;
+  const type = (entry.subtype in t.enums.task_type ? entry.subtype : null) as TaskType | null;
   const status = (entry.ref in TASK_STATUS_PILL ? entry.ref : "pending") as TaskStatus;
   return (
     <div className="card">
@@ -457,7 +469,7 @@ function TaskEntry({ entry }: { entry: JournalEntry }) {
           <div>{entry.text}</div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <span className="pill accent">{typeLabel}</span>
+          {type ? <TypePill type={type} /> : <span className="pill">{entry.subtype}</span>}
           <span className={TASK_STATUS_PILL[status]}>{t.enums.task_status[status]}</span>
         </div>
       </div>

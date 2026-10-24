@@ -23,6 +23,7 @@ import {
   type Usage,
 } from "../../types";
 import { PhotoButton } from "../capture/PhotoButton";
+import { X } from "lucide-react";
 import { DiagnosisCard } from "./DiagnosisCard";
 
 type Phase = "idle" | "preparing" | "sending" | "result";
@@ -193,8 +194,8 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     <div className="sheet" role="dialog" aria-modal="true" aria-label={t.diagnose.title}>
       <div className="screen">
         <div className="screen-header">
-          <button type="button" className="small" onClick={onClose} disabled={busy}>
-            {t.common.close}
+          <button type="button" className="icon-btn" onClick={onClose} disabled={busy} aria-label={t.common.close}>
+            <X size={22} aria-hidden />
           </button>
           <h1>{t.diagnose.title}</h1>
         </div>

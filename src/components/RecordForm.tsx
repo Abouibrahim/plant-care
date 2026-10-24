@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { t } from "../i18n";
+import { SiteLabel } from "./TypeIcon";
 import { emptyZones, loadZones, recentZones } from "../lib/db";
 import { PLANT_SOURCES, SITES, type PlantInsert, type PlantSource, type Site, type ZoneLists } from "../types";
 
@@ -127,7 +128,7 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
               className={values.site === s ? "active" : ""}
               onClick={() => update({ site: s })}
             >
-              {t.site[s]}
+              <SiteLabel site={s} size={18} />
             </button>
           ))}
         </div>

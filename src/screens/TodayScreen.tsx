@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { TaskCard, type TaskAction } from "../components/TaskCard";
@@ -130,7 +131,14 @@ export function TodayScreen() {
       <div className="screen-header">
         <h1>{t.today.title}</h1>
         <button type="button" className="small" onClick={() => void refresh()} disabled={refreshing}>
-          {refreshing ? <Spinner label={t.today.refreshing} /> : t.today.refresh}
+          {refreshing ? (
+            <Spinner label={t.today.refreshing} />
+          ) : (
+            <>
+              <RefreshCw size={18} aria-hidden />
+              {t.today.refresh}
+            </>
+          )}
         </button>
       </div>
       <p className="muted small">
