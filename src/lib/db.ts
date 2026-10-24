@@ -4,6 +4,7 @@ import { addDays } from "./dates";
 import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
+  SITES,
   type JournalEntry,
   type Photo,
   type PhotoInsert,
@@ -15,6 +16,7 @@ import {
   type SpeciesProfile,
   type Task,
   type TaskWithPlant,
+  type ZoneLists,
 } from "../types";
 
 interface Result<T> {
@@ -412,4 +414,76 @@ export async function listAllTasks(): Promise<TaskWithPlant[]> {
     out.push(...page);
     if (page.length < PAGE) return out;
   }
+}
+
+// ---- settings ---------------------------------------------------------------
+// Key/value rows of the `settings` table (Phase 5); the zone lists per site live under "zones".
+// Until the SQL that creates the table has been run, reads and writes fail with SettingsUnavailable,
+// which the Settings screen turns into the instruction to run it and the record form ignores.
+
+export class SettingsUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SettingsUnavailable";
+  }
+}
+
+/** PostgREST answers PGRST205 when a table is not in its schema cache; Postgres says 42P01. */
+function missingTable(error: { code?: string; message: string }): boolean {
+  if (error.code === "PGRST205" || error.code === "42P01") return true;
+  return /settings/.test(error.message) && /could not find|does not exist/i.test(error.message);
+}
+
+function settingsError(error: { code?: string; message: string }): Error {
+  return missingTable(error) ? new SettingsUnavailable(error.message) : new Error(error.message);
+}
+
+export async function getSetting<T>(key: string): Promise<T | null> {
+  const r = await supabase.from("settings").select("value").eq("key", key).maybeSingle();
+  if (r.error) throw settingsError(r.error);
+  return r.data ? (r.data.value as T) : null;
+}
+
+export async function setSetting<T>(key: string, value: T): Promise<void> {
+  const { error } = await supabase.from("settings").upsert({ key, value }, { onConflict: "key" });
+  if (error) throw settingsError(error);
+}
+
+export const ZONES_KEY = "zones";
+
+export function emptyZones(): ZoneLists {
+  return { backyard: [], farm: [] };
+}
+
+/** Trimmed, no blanks, no duplicates (case-insensitive), first spelling kept. */
+export function cleanZones(list: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of list) {
+    const zone = raw.trim();
+    const key = zone.toLowerCase();
+    if (zone && !seen.has(key)) {
+      seen.add(key);
+      out.push(zone);
+    }
+  }
+  return out;
+}
+
+/** The zone lists per site; a site missing from the row has none. */
+export async function loadZones(): Promise<ZoneLists> {
+  const raw = await getSetting<Partial<Record<Site, unknown>>>(ZONES_KEY);
+  const zones = emptyZones();
+  for (const site of SITES) {
+    const list = raw?.[site];
+    if (Array.isArray(list)) zones[site] = cleanZones(list.filter((z): z is string => typeof z === "string"));
+  }
+  return zones;
+}
+
+/** Writes the whole row; returns the lists as stored. */
+export async function saveZones(zones: ZoneLists): Promise<ZoneLists> {
+  const clean: ZoneLists = { backyard: cleanZones(zones.backyard), farm: cleanZones(zones.farm) };
+  await setSetting(ZONES_KEY, clean);
+  return clean;
 }

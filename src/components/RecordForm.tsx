@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { t } from "../i18n";
-import { recentZones } from "../lib/db";
-import { PLANT_SOURCES, SITES, type PlantInsert, type PlantSource, type Site } from "../types";
+import { emptyZones, loadZones, recentZones } from "../lib/db";
+import { PLANT_SOURCES, SITES, type PlantInsert, type PlantSource, type Site, type ZoneLists } from "../types";
 
 /** The user-editable part of a plant row; species_id is attached by the caller. */
 export type RecordValues = Omit<PlantInsert, "species_id">;
@@ -28,6 +28,7 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
   // The quantity is typed as text so the field can be emptied before a new number is entered.
   const [quantityText, setQuantityText] = useState(String(initial.quantity));
   const [zones, setZones] = useState<string[]>([]);
+  const [zoneLists, setZoneLists] = useState<ZoneLists>(emptyZones);
   const [error, setError] = useState<string | null>(null);
   const zoneListId = useId();
 
@@ -40,6 +41,17 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
       active = false;
     };
   }, [values.site]);
+
+  // The zone lists kept in Settings, read once; without the settings table (SQL not run yet) there are none.
+  useEffect(() => {
+    let active = true;
+    loadZones()
+      .then((lists) => active && setZoneLists(lists))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function update(patch: Partial<RecordValues>) {
     setValues((prev) => {
@@ -62,6 +74,10 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
     setQuantityText(String(quantity));
     await onSubmit({ ...values, quantity, tag: values.tag.trim(), zone: values.zone.trim(), rootstock: values.rootstock.trim() });
   }
+
+  // The site's listed zones come first, as chips and in the suggestion list; the recent values from plants follow.
+  const listed = zoneLists[values.site];
+  const suggestions = [...listed, ...zones.filter((z) => !listed.some((l) => l.toLowerCase() === z.toLowerCase()))];
 
   return (
     <form onSubmit={submit} className="stack">
@@ -117,15 +133,36 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
         </div>
       </div>
 
-      <label className="field">
-        <span>{t.record.zone}</span>
-        <input value={values.zone} list={zoneListId} onChange={(e) => update({ zone: e.target.value })} placeholder={t.record.zonePlaceholder} autoComplete="off" />
+      <div className="field" style={{ marginBottom: 12 }}>
+        <span className="small muted" style={{ display: "block", marginBottom: 4 }}>
+          {t.record.zone}
+        </span>
+        {listed.length > 0 && (
+          <div className="chips" role="group" aria-label={t.record.zoneList} style={{ marginBottom: 8 }}>
+            {listed.map((z) => {
+              const chosen = values.zone.trim().toLowerCase() === z.toLowerCase();
+              return (
+                <button type="button" key={z} className={`chip ${chosen ? "active" : ""}`} aria-pressed={chosen} onClick={() => update({ zone: z })}>
+                  {z}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <input
+          value={values.zone}
+          list={zoneListId}
+          aria-label={t.record.zone}
+          onChange={(e) => update({ zone: e.target.value })}
+          placeholder={t.record.zonePlaceholder}
+          autoComplete="off"
+        />
         <datalist id={zoneListId}>
-          {zones.map((z) => (
+          {suggestions.map((z) => (
             <option key={z} value={z} />
           ))}
         </datalist>
-      </label>
+      </div>
 
       <div className="field-row">
         <label className="field">

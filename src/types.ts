@@ -332,3 +332,8 @@ export interface DailyResponse extends ExpandResponse {
   digest_error?: string;
   dry_run: boolean;
 }
+
+// ---- settings ---------------------------------------------------------------
+
+/** The value of the `zones` row of the settings table: the zone names of each site, in display order. */
+export type ZoneLists = Record<Site, string[]>;

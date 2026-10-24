@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { lang, LANGS, storeLang, t, type Lang } from "../i18n";
 import { useAuth } from "../lib/auth-context";
+import { emptyZones, loadZones, recentZones, saveZones, SettingsUnavailable } from "../lib/db";
 import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
+import { SITES, type Site, type ZoneLists } from "../types";
 import { APP_VERSION } from "../version";
 
 function message(err: unknown): string {
@@ -134,6 +136,145 @@ function LanguageCard() {
   );
 }
 
+const Z = t.settings.zones;
+
+/**
+ * The zone lists of the two sites, saved as one row of the settings table on every change. Zones
+ * used on plants but not listed yet are offered as one-tap additions. Without the table (the ★ SQL
+ * of PHASE5.md not run yet) the card shows the instruction instead of the lists.
+ */
+function ZonesCard() {
+  const [zones, setZones] = useState<ZoneLists | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [used, setUsed] = useState<ZoneLists>(emptyZones);
+  const [drafts, setDrafts] = useState<Record<Site, string>>({ backyard: "", farm: "" });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadZones()
+      .then((lists) => {
+        if (active) setZones(lists);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof SettingsUnavailable) setMissing(true);
+        else setError(`${Z.loadFailed}: ${message(err)}`);
+      });
+    Promise.all(SITES.map((site) => recentZones(site)))
+      .then((lists) => {
+        if (!active) return;
+        const next = emptyZones();
+        SITES.forEach((site, i) => {
+          next[site] = lists[i] ?? [];
+        });
+        setUsed(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function save(site: Site, list: string[]) {
+    if (!zones || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setZones(await saveZones({ ...zones, [site]: list }));
+    } catch (err) {
+      setError(`${Z.saveFailed}: ${message(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function add(site: Site, raw: string) {
+    if (!zones) return;
+    const zone = raw.trim();
+    if (!zone) return;
+    if (zones[site].some((z) => z.toLowerCase() === zone.toLowerCase())) {
+      setError(Z.duplicate);
+      return;
+    }
+    setDrafts((d) => ({ ...d, [site]: "" }));
+    void save(site, [...zones[site], zone]);
+  }
+
+  function submitDraft(e: FormEvent, site: Site) {
+    e.preventDefault();
+    add(site, drafts[site]);
+  }
+
+  return (
+    <div className="card">
+      <h2>{Z.title}</h2>
+      <p className="small">{Z.body}</p>
+      {missing && <Banner kind="warn">{Z.missingTable}</Banner>}
+      {!missing && zones === null && !error && <Spinner label={t.common.loading} />}
+      {error && <Banner kind="error">{error}</Banner>}
+      {zones &&
+        SITES.map((site) => {
+          const listed = zones[site];
+          const suggestions = used[site].filter((z) => !listed.some((l) => l.toLowerCase() === z.toLowerCase()));
+          return (
+            <section key={site} className="stack" style={{ marginTop: 12, gap: 8 }}>
+              <h3 style={{ margin: 0 }}>{t.site[site]}</h3>
+              {listed.length === 0 ? (
+                <span className="small muted">{Z.empty}</span>
+              ) : (
+                <ul className="list-plain" style={{ paddingLeft: 0, listStyle: "none" }}>
+                  {listed.map((zone) => (
+                    <li key={zone} className="row between" style={{ minHeight: "var(--tap)" }}>
+                      <span className="grow">{zone}</span>
+                      <button
+                        type="button"
+                        className="small"
+                        disabled={saving}
+                        aria-label={Z.remove(zone)}
+                        onClick={() => void save(site, listed.filter((z) => z !== zone))}
+                      >
+                        {t.common.remove}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {suggestions.length > 0 && (
+                <div>
+                  <span className="small muted">{Z.fromPlants}</span>
+                  <div className="chips" style={{ marginTop: 6, marginBottom: 0 }}>
+                    {suggestions.map((zone) => (
+                      <button type="button" key={zone} className="chip" disabled={saving} onClick={() => add(site, zone)}>
+                        + {zone}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <form className="row" onSubmit={(e) => submitDraft(e, site)}>
+                <input
+                  className="grow"
+                  value={drafts[site]}
+                  placeholder={Z.placeholder}
+                  aria-label={`${t.site[site]}: ${Z.placeholder}`}
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  disabled={saving}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [site]: e.target.value }))}
+                />
+                <button type="submit" className="small" disabled={saving || drafts[site].trim() === ""}>
+                  {Z.add}
+                </button>
+              </form>
+            </section>
+          );
+        })}
+    </div>
+  );
+}
+
 type ExportKind = "plants" | "tasks";
 
 /** The two CSV downloads, with the row count and file name of the last one, or its error. */
@@ -193,6 +334,7 @@ export function SettingsScreen() {
 
       <RemindersCard />
       <LanguageCard />
+      <ZonesCard />
       <ExportCard />
 
       <div className="card">

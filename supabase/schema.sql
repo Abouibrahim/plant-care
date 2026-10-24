@@ -98,11 +98,20 @@ create table push_subscriptions (
   created_at timestamptz not null default now()
 );
 
+-- App settings as key/value rows (Phase 5). 'zones' holds {"backyard": [...], "farm": [...]}: the
+-- zone lists the record form offers first. The browser reads and writes it under RLS like the rest.
+create table settings (
+  key        text primary key,
+  value      jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 -- updated_at maintenance
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
 create trigger species_updated before update on species for each row execute function set_updated_at();
 create trigger plants_updated  before update on plants  for each row execute function set_updated_at();
+create trigger settings_updated before update on settings for each row execute function set_updated_at();
 
 -- Journal: photos, task actions and diagnoses in one dated stream per plant.
 create view journal as
@@ -118,12 +127,14 @@ alter table plants             enable row level security;
 alter table photos             enable row level security;
 alter table tasks              enable row level security;
 alter table push_subscriptions enable row level security;
+alter table settings           enable row level security;
 
 create policy owner_all on species            for all to authenticated using (true) with check (true);
 create policy owner_all on plants             for all to authenticated using (true) with check (true);
 create policy owner_all on photos             for all to authenticated using (true) with check (true);
 create policy owner_all on tasks              for all to authenticated using (true) with check (true);
 create policy owner_all on push_subscriptions for all to authenticated using (true) with check (true);
+create policy owner_all on settings           for all to authenticated using (true) with check (true);
 
 -- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
 -- read through signed URLs and delete in it. Both are safe to re-run, and the policy never
