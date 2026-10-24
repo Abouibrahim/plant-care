@@ -1,5 +1,6 @@
-// Cron at 05:00 UTC (06:00 Tunis): expands the care rules into tasks for the next 90 days, then sends
-// the push digest, one notification per site. Only Vercel's cron secret opens this route.
+// Cron at 05:00 UTC (06:00 Tunis): expands the care rules into tasks for the next 90 days, closes ended
+// windows and stale waterings, then sends the push digest, one notification per site. Only Vercel's
+// cron secret opens this route.
 // `?dry=1` composes the digest without sending it, for checks.
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runExpansion } from "./_tasks.js";
@@ -51,6 +52,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       plants: expansion.plants,
       created: expansion.created,
       removed: expansion.removed,
+      expired: expansion.expired,
+      superseded: expansion.superseded,
       tasks_created: expansion.created,
       tasks_removed: expansion.removed,
       pushes_sent: send.sent,

@@ -1,13 +1,24 @@
 // Task expansion: species care rules × plants → dated tasks for the next 90 days.
-// The reminder engine of CLAUDE.md, steps 1 to 4. `expandPlant` is pure; `runExpansion`
-// reads and writes through the service client. /api/daily and /api/expand both call it.
+// The reminder engine of CLAUDE.md, steps 1 to 4, plus the closing of ended windows and stale
+// waterings (docs/DECISIONS.md). `expandPlant` and `staleTasks` are pure; `runExpansion` reads and
+// writes through the service client. /api/daily and /api/expand both call it.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, ageInMonths, isoDate, lastDayOfMonth, parseIso, ruleApplies } from "../src/lib/dates.js";
-import { DIAGNOSIS_RULE_PREFIX, TASK_TYPES, type CareRule, type ExpandResponse, type TaskInsert } from "../src/types.js";
+import { en } from "../src/i18n/en.js";
+import {
+  DIAGNOSIS_RULE_PREFIX,
+  TASK_TYPES,
+  type CareRule,
+  type ExpandResponse,
+  type TaskInsert,
+  type TaskStatus,
+  type TaskType,
+} from "../src/types.js";
 
 export const HORIZON_DAYS = 90;
 const INSERT_CHUNK = 200;
 const DELETE_CHUNK = 100;
+const CLOSE_CHUNK = 100;
 
 export interface ExpansionPlant {
   id: string;
@@ -139,6 +150,61 @@ export function expandPlant(plant: ExpansionPlant, todayIso: string, horizonDays
   return { seeds, keys };
 }
 
+// ---- stale tasks ---------------------------------------------------------------
+
+/** The columns `staleTasks` reads. `status` is checked again inside, so any rows can be passed. */
+export interface StaleCandidate {
+  id: string;
+  plant_id: string;
+  type: TaskType;
+  rule_key: string;
+  due_on: string;
+  window_end: string | null;
+  status: TaskStatus;
+}
+
+export interface StaleTasks {
+  /** Pending window tasks whose window ended before today. */
+  expired: string[];
+  /** Pending waterings due on or before today with a newer one of the same plant and rule also due. */
+  superseded: string[];
+}
+
+/**
+ * Pending tasks the expansion closes as `skipped` (ids out; nothing is written here):
+ * - a window task (`window_end` set) whose window ended before today, so it leaves Today and the
+ *   digest but keeps its line in the plant's journal ("Window ended");
+ * - a periodic watering (`window_end` null) due on or before today when a later watering of the same
+ *   plant and `rule_key` is also due, so a week away leaves one overdue watering, the newest, not one
+ *   per interval ("Superseded by the next watering"). Waterings due after today are not looked at.
+ * Done, skipped and snoozed rows are never listed, nor the rows a diagnosis wrote (`rule_key` starting
+ * with `DIAGNOSIS_RULE_PREFIX`, the Phase 4 carve-out).
+ */
+export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTasks {
+  const expired: string[] = [];
+  const superseded: string[] = [];
+  const newestDue = new Map<string, StaleCandidate>();
+  for (const task of tasks) {
+    if (task.status !== "pending" || task.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) continue;
+    if (task.window_end !== null) {
+      if (task.window_end < todayIso) expired.push(task.id);
+      continue;
+    }
+    if (task.type !== "water" || task.due_on > todayIso) continue;
+    const group = `${task.plant_id}|${task.rule_key}`;
+    const newest = newestDue.get(group);
+    if (newest === undefined) {
+      newestDue.set(group, task);
+    } else if (task.due_on > newest.due_on) {
+      superseded.push(newest.id);
+      newestDue.set(group, task);
+    } else {
+      superseded.push(task.id);
+    }
+  }
+  return { expired, superseded };
+}
+
 interface PlantRow {
   id: string;
   planted_on: string | null;
@@ -164,10 +230,31 @@ function chunks<T>(items: T[], size: number): T[][] {
 }
 
 /**
+ * Closes tasks as `skipped` with `acted_at` set and a note. Only rows still pending change, so a task
+ * acted on from the phone between the read and this write keeps its status. Returns how many changed.
+ */
+async function closeTasks(db: SupabaseClient, ids: string[], note: string): Promise<number> {
+  let closed = 0;
+  const acted_at = new Date().toISOString();
+  for (const chunk of chunks(ids, CLOSE_CHUNK)) {
+    const { data, error } = await db
+      .from("tasks")
+      .update({ status: "skipped", acted_at, note })
+      .in("id", chunk)
+      .eq("status", "pending")
+      .select("id");
+    if (error) throw error;
+    closed += data?.length ?? 0;
+  }
+  return closed;
+}
+
+/**
  * Expands every plant (or one) for the next 90 days from `todayIso`, inserts the tasks that do not exist
  * yet (same plant_id, rule_key and due_on; the unique constraint is the final guard) and removes pending
  * tasks whose rule no longer applies: the rule left the calendar after a regeneration, or the plant
- * changed stage. Acted tasks (done, skipped, snoozed) are never touched.
+ * changed stage. Then it closes ended windows and stale waterings as `skipped` (see `staleTasks`).
+ * Acted tasks (done, skipped, snoozed) are never touched.
  */
 export async function runExpansion(db: SupabaseClient, todayIso: string, plantId?: string): Promise<ExpandResponse> {
   let plantQuery = db.from("plants").select("id, planted_on, species(care_calendar)");
@@ -233,5 +320,20 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
     if (delErr) throw delErr;
   }
 
-  return { plants: plants.length, created, removed: obsolete.length, today: todayIso };
+  // --- close ended windows and stale waterings -----------------------------------
+  // Read again after the delete so only rows still in the table are looked at; both rules concern
+  // tasks due on or before today, so later ones stay out of the query.
+  let staleQuery = db
+    .from("tasks")
+    .select("id, plant_id, type, rule_key, due_on, window_end, status")
+    .eq("status", "pending")
+    .lte("due_on", todayIso);
+  if (plantId) staleQuery = staleQuery.eq("plant_id", plantId);
+  const { data: staleRows, error: staleErr } = await staleQuery;
+  if (staleErr) throw staleErr;
+  const stale = staleTasks((staleRows ?? []) as StaleCandidate[], todayIso);
+  const expired = await closeTasks(db, stale.expired, en.expansion.windowEnded);
+  const superseded = await closeTasks(db, stale.superseded, en.expansion.superseded);
+
+  return { plants: plants.length, created, removed: obsolete.length, expired, superseded, today: todayIso };
 }
