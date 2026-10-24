@@ -1,7 +1,7 @@
 // POST /api/expand  { plant_id? }  ->  { plants, created, removed, expired, superseded, today }
 // The same expansion as the cron, on demand: the app calls it after a plant is saved and from the
 // Today screen, so new tasks do not wait for 06:00.
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { runExpansion } from "./_tasks.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import { isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";

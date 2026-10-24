@@ -1,5 +1,5 @@
 // POST /api/identify  { images: [{ media_type, data }], site? }  ->  IdentifyResult + usage
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
 import { parseImages } from "./_images.js";
 import { handleError, sendError, verifyUser } from "./_supabase.js";
