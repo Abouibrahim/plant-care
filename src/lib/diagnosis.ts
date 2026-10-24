@@ -7,6 +7,8 @@ import type { Diagnosis, LikelyCause, ProblemAiResult, Urgency } from "../types"
 export const PEST_SCOUT_LIKELIHOOD = 0.5;
 /** Longest follow-up the app schedules. */
 const MAX_REPHOTO_DAYS = 365;
+/** A cause in a task title is cut to this many characters. */
+const MAX_TITLE_CAUSE = 60;
 
 const URGENCIES = new Set<string>(["watch", "this_week", "today"]);
 const KINDS = new Set<string>(["pest", "disease", "nutrient", "water", "sun_heat", "salinity", "mechanical", "other"]);
@@ -70,10 +72,19 @@ export function rephotoDays(d: Diagnosis): number {
   return Number.isFinite(n) && n >= 1 ? Math.min(n, MAX_REPHOTO_DAYS) : 0;
 }
 
+/**
+ * A cause cut to a title-sized phrase: Claude writes "Natural early autumn leaf yellowing (deciduous
+ * senescence), made earlier by fruit load"; a task title and a digest line want the head of it.
+ */
+export function shortCause(cause: string): string {
+  const head = cause.split(/[,:;([]/)[0].trim() || cause.trim();
+  return head.length > MAX_TITLE_CAUSE ? `${head.slice(0, MAX_TITLE_CAUSE - 1).trimEnd()}…` : head;
+}
+
 /** Title and instruction of the re-photograph task for a plant, worded as a scout when a pest leads. */
 export function rephotoTask(d: Diagnosis, tag: string): { title: string; instruction: string } {
   const top = topCause(d);
-  const cause = top?.cause.trim() || t.plant.photoKinds.problem.toLowerCase();
+  const cause = shortCause(top?.cause ?? "") || t.plant.photoKinds.problem.toLowerCase();
   if (isPestScout(top)) {
     return { title: t.diagnose.scoutTitle(tag, cause), instruction: t.diagnose.scoutInstruction(cause) };
   }

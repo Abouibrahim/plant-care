@@ -5,7 +5,7 @@ import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { addDays, localIsoDate, toLocalDate } from "../../lib/dates";
 import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, treatedRuleKey } from "../../lib/db";
-import { isPestScout, rephotoDays, rephotoTask, sortedCauses, topCause, URGENCY_PILL } from "../../lib/diagnosis";
+import { isPestScout, rephotoDays, rephotoTask, shortCause, sortedCauses, topCause, URGENCY_PILL } from "../../lib/diagnosis";
 import type { Diagnosis, Task, Usage } from "../../types";
 
 const MAX_APPLIED = 200;
@@ -55,7 +55,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
       const row = await insertTreatedTask({
         plant_id: plant.id,
         photo_id: photoId,
-        title: s.treatTitle(plant.tag, top?.cause ?? t.plant.photoKinds.problem),
+        title: s.treatTitle(plant.tag, shortCause(top?.cause ?? "") || t.plant.photoKinds.problem),
         note: s.treatedNote(what),
         todayIso: today,
       });
