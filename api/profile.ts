@@ -3,7 +3,7 @@
 //   { name, site? }                                        a name typed by the user
 //   { regenerate_species_id }                              rewrite, keeping user_edits
 // Returns { species, created, ...usage }. Claude is called only when no species row matches.
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema, ZERO_USAGE } from "./_claude.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import type { ProfileRequest, Species, SpeciesProfile } from "../src/types.js";

@@ -1,7 +1,7 @@
 // POST /api/diagnose  { plant_id, images: [{ media_type, data }], note? }  ->  Diagnosis + usage
 // The problem photo is read against the plant's own context: its species profile, its age and
 // site, and what was done (or left undone) for it in the last 30 days.
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
 import { parseImages } from "./_images.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";

@@ -1,7 +1,7 @@
 // Service-role Supabase client for the Vercel functions, plus the bearer-token check
 // every route except /api/daily must run first. Never log key values.
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 
 export class ConfigError extends Error {
   constructor(name: string) {

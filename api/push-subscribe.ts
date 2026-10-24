@@ -2,7 +2,7 @@
 // POST /api/push-subscribe  { unsubscribe: true, endpoint }  ->  { ok, subscribed: false }
 // DELETE /api/push-subscribe { endpoint }                    ->  { ok, subscribed: false }
 // One row per browser, keyed by the push endpoint; the daily digest sends to every row.
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import type { PushSubscribeRequest, PushSubscribeResponse, PushSubscriptionJson } from "../src/types.js";
 

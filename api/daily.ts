@@ -1,7 +1,7 @@
 // Cron at 05:00 UTC (06:00 Tunis): expands the care rules into tasks for the next 90 days, then sends
 // the push digest, one notification per site. Only Vercel's cron secret opens this route.
 // `?dry=1` composes the digest without sending it, for checks.
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "./_http.js";
 import { runExpansion } from "./_tasks.js";
 import { composeDigest, loadDigestTasks, sendDigest, type SendResult } from "./_push.js";
 import { bearerToken, ConfigError, handleError, sendError, serviceClient } from "./_supabase.js";
