@@ -1,5 +1,6 @@
-// Every UI string lives here so a French toggle can follow in Phase 5.
-// Keep keys grouped by screen; functions take the values they interpolate.
+// Every UI string lives here; src/i18n/fr.ts mirrors it key for key and src/i18n/index.ts picks one.
+// Keep keys grouped by screen; functions take the values they interpolate. No `as const`: the
+// `Strings` type below must accept the French text, so every literal widens to `string`.
 
 export const en = {
   app: { name: "Plant Care", updateReady: "A new version is ready.", reload: "Reload" },
@@ -36,6 +37,9 @@ export const en = {
     month: "Month",
     today: "Today",
     noPhoto: "No photo",
+    add: "Add",
+    delete: "Delete",
+    remove: "Remove",
   },
 
   site: {
@@ -128,6 +132,7 @@ export const en = {
     site: "Site",
     zone: "Zone",
     zonePlaceholder: "e.g. north terrace",
+    zoneList: "Zones of this site",
     plantedOn: "Planted on",
     source: "Source",
     rootstock: "Rootstock",
@@ -317,12 +322,41 @@ export const en = {
       symptoms: "Symptoms",
       organic_treatment: "Organic treatment",
       prevention: "Prevention",
+      type: "Type",
+      title: "Title",
+      instruction: "Instruction",
+      name_en: "Name (English)",
+      name_fr: "Name (French)",
     },
     everyDays: (d: number) => (d === 1 ? "every day" : `every ${d} days`),
     litres: (l: number) => `${l} L`,
     leadDays: (d: number) => (d === 0 ? "no lead" : d === 1 ? "1 day before" : `${d} days before`),
     regenerateOnly: "The care calendar and the pests are rewritten by regenerating the profile.",
     growthForm: { plant_type: "Plant type", lifecycle: "Lifecycle", foliage: "Foliage", layer: "Layer" },
+    /** Hand editing of the care calendar and the pests; each list is saved as one block, kept on regeneration. */
+    addRule: "Add a rule",
+    newRule: "New rule",
+    editRule: "Edit this rule",
+    deleteRule: "Delete this rule",
+    deleteRuleConfirm: "Delete this care rule? Its pending tasks are removed at the next refresh.",
+    addPest: "Add a pest",
+    newPest: "New pest",
+    editPest: "Edit this pest",
+    deletePest: "Delete this pest",
+    deletePestConfirm: "Delete this pest from the profile?",
+    monthsRequired: "Pick at least one month",
+    titleRequired: "Give the rule a title",
+    nameRequired: "Give the pest a name",
+    listEditable: "Edit or add an entry here. Regenerating the profile rewrites the list only while it is untouched.",
+    listEdited: "Edited by you: a regeneration keeps this list as it is.",
+    tasksRefreshing: "Refreshing the tasks from the new calendar…",
+    tasksRefreshed: "Tasks refreshed",
+    tasksRefreshFailed: "The tasks follow the new calendar at the next refresh of Today.",
+    ruleForm: {
+      everyDays: "Days between waterings",
+      litres: "Litres per watering",
+      leadDays: "Days of warning before the window",
+    },
     ruleNotForAge: "Does not apply at this plant's age",
     calendarEmpty: "No care rules in this profile yet",
     delete: "Delete this profile",
@@ -338,9 +372,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 4",
+    phaseTitle: "Phase 5",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, and the diagnosis of problem photos with treatments logged and a re-photograph reminder. French, species editing and export follow in Phase 5.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, and now the French interface, CSV exports, the zone lists per site and hand editing of the care calendar and the pests.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon.",
@@ -362,8 +396,34 @@ export const en = {
       failed: "Reminders could not be turned on",
       stopFailed: "Reminders could not be turned off",
     },
-    language: "Language",
-    languageNote: "English for now; a French toggle follows in Phase 5.",
+    language: {
+      title: "Language",
+      body: "The language of the screens. The app reloads to apply the choice. Profile text written by Claude keeps the language it was written in.",
+      names: { en: "English", fr: "Français" },
+      saveFailed: "The choice could not be stored on this phone",
+    },
+    export: {
+      title: "Export",
+      body: "CSV files for Excel or Sheets, in UTF-8 with the Arabic names intact. Column names and values are the database's own, whatever the app language.",
+      plants: "Export plants",
+      tasks: "Export tasks",
+      working: "Preparing the file…",
+      saved: (n: number, file: string) => `${n === 1 ? "1 row" : `${n} rows`} saved as ${file}`,
+      failed: "The export failed",
+    },
+    zones: {
+      title: "Sites and zones",
+      body: "The zones of each site, offered first on the plant record form. Removing a zone here leaves the plants that use it unchanged.",
+      placeholder: "New zone",
+      add: "Add",
+      remove: (zone: string) => `Remove ${zone}`,
+      empty: "No zones listed yet",
+      fromPlants: "Used on plants, not listed yet:",
+      duplicate: "This zone is already listed",
+      missingTable: "The settings table does not exist yet. Run the SQL from the Setup section of PHASE5.md in the Supabase SQL editor, then come back.",
+      loadFailed: "The zones could not be loaded",
+      saveFailed: "The zones could not be saved",
+    },
   },
 
   /** Notes the expansion (api/_tasks.ts) writes on the tasks it closes; the journal shows them in place of the title. */
@@ -435,6 +495,7 @@ export const en = {
     months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
     monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   },
-} as const;
+};
 
+/** The shape every language table must have; `fr` is declared against it so a missing key fails the typecheck. */
 export type Strings = typeof en;
