@@ -6,7 +6,8 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist", "dev-dist", "node_modules", ".vercel"]),
+  // .claude holds the worktrees of other sessions, each a full checkout with its own config.
+  globalIgnores(["dist", "dev-dist", "node_modules", ".vercel", ".claude"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

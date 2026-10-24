@@ -351,7 +351,6 @@ export const en = {
     everyDays: (d: number) => (d === 1 ? "every day" : `every ${d} days`),
     litres: (l: number) => `${l} L`,
     leadDays: (d: number) => (d === 0 ? "no lead" : d === 1 ? "1 day before" : `${d} days before`),
-    regenerateOnly: "The care calendar and the pests are rewritten by regenerating the profile.",
     growthForm: { plant_type: "Plant type", lifecycle: "Lifecycle", foliage: "Foliage", layer: "Layer" },
     /** Hand editing of the care calendar and the pests; each list is saved as one block, kept on regeneration. */
     addRule: "Add a rule",
@@ -366,6 +365,8 @@ export const en = {
     deletePestConfirm: "Delete this pest from the profile?",
     monthsRequired: "Pick at least one month",
     titleRequired: "Give the rule a title",
+    everyDaysRequired: "Give the days between waterings",
+    duplicateRule: "Another rule already has this type, these months and this age. Change one of them.",
     nameRequired: "Give the pest a name",
     listEditable: "Edit or add an entry here. Regenerating the profile rewrites the list only while it is untouched.",
     listEdited: "Edited by you: a regeneration keeps this list as it is.",

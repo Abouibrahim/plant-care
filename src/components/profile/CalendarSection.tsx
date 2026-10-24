@@ -1,25 +1,24 @@
+import type { ReactNode } from "react";
 import { t } from "../../i18n";
 import { ageInMonths, localIsoDate, ruleApplies } from "../../lib/dates";
-import { TASK_TYPES, type CareRule, type SpeciesProfile } from "../../types";
+import type { CareRule, SpeciesProfile } from "../../types";
+import { TypePill } from "../TypeIcon";
 import { MonthGrid } from "./MonthGrid";
+import { orderRules } from "./order";
 
-/** First listed month, 13 when the rule names none, so unscheduled rules sort last. */
-function firstMonth(rule: CareRule): number {
-  return rule.months.length > 0 ? Math.min(...rule.months) : 13;
-}
-
-function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
+/** One care rule: title and type, month grid, age and watering pills, instruction. `actions` sits under the pills. */
+export function RuleCard({ rule, applies = true, actions }: { rule: CareRule; applies?: boolean; actions?: ReactNode }) {
   return (
     <div className="card" style={applies ? undefined : { opacity: 0.5 }}>
       <div className="row between" style={{ alignItems: "flex-start" }}>
         <strong className="grow">{rule.title}</strong>
-        <span className="pill accent">{t.enums.task_type[rule.type]}</span>
+        <TypePill type={rule.type} />
       </div>
       <MonthGrid months={rule.months} />
       <div>
         <span className="pill">{t.enums.age[rule.age]}</span>
-        {rule.type === "water" && rule.every_days > 0 && <span className="pill accent">{t.species.everyDays(rule.every_days)}</span>}
-        {rule.type === "water" && rule.litres > 0 && <span className="pill accent">{t.species.litres(rule.litres)}</span>}
+        {rule.type === "water" && rule.every_days > 0 && <span className="pill type-pill t-water">{t.species.everyDays(rule.every_days)}</span>}
+        {rule.type === "water" && rule.litres > 0 && <span className="pill type-pill t-water">{t.species.litres(rule.litres)}</span>}
         {rule.lead_days > 0 && (
           <span className="pill">
             {t.species.fields.lead_days} {t.species.leadDays(rule.lead_days)}
@@ -36,6 +35,7 @@ function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
           {t.species.ruleNotForAge}
         </p>
       )}
+      {actions && <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>{actions}</div>}
     </div>
   );
 }
@@ -47,18 +47,13 @@ function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
 export function CalendarSection({ species, plantedOn }: { species: SpeciesProfile; plantedOn?: string | null }) {
   const rules = species.care_calendar ?? [];
   const age = plantedOn === undefined ? undefined : ageInMonths(plantedOn, localIsoDate());
-  const ordered = [...rules].sort((a, b) => firstMonth(a) - firstMonth(b) || TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type));
 
   return (
     <section className="section">
       <h2>{t.species.sections.calendar}</h2>
-      {ordered.length === 0 && <p className="muted">{t.species.calendarEmpty}</p>}
-      {ordered.map((rule, i) => (
-        <RuleCard
-          key={`${rule.type}:${rule.age}:${rule.months.join("-")}:${i}`}
-          rule={rule}
-          applies={age === undefined || ruleApplies(rule, age)}
-        />
+      {rules.length === 0 && <p className="muted">{t.species.calendarEmpty}</p>}
+      {orderRules(rules).map((i) => (
+        <RuleCard key={i} rule={rules[i]} applies={age === undefined || ruleApplies(rules[i], age)} />
       ))}
     </section>
   );

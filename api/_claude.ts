@@ -8,7 +8,15 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Usage } from "../src/types.js";
 
-export const MODEL = "claude-sonnet-5-5";
+/** Anthropic's most capable generally available model. Thinking is always on; `effort` sets its depth. */
+export const MODEL = "claude-fable-5-1";
+
+/**
+ * Beta flag for `fallbacks: "default"`. When Fable's safety classifiers decline a request, the API
+ * re-runs it inside the same call on Anthropic's recommended fallback model, and `msg.model` names
+ * the model that answered. A refusal from the whole chain still ends with `stop_reason: "refusal"`.
+ */
+const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 /** Wall-clock budget of one invocation; vercel.json sets maxDuration 300 s. Lower both together. */
 export const FUNCTION_BUDGET_MS = 280_000;
@@ -63,14 +71,23 @@ export const ZERO_USAGE: Usage = {
   cache_creation_input_tokens: 0,
 };
 
-function usageOf(msg: Anthropic.Message): Usage {
+type TokenField = "input_tokens" | "output_tokens" | "cache_read_input_tokens" | "cache_creation_input_tokens";
+
+function usageOf(msg: Anthropic.Beta.BetaMessage): Usage {
+  const u = msg.usage;
+  // After a fallback, top-level usage covers only the attempt that answered; usage.iterations
+  // also lists the declined attempt, so the token totals come from there.
+  const attempts = (u.iterations ?? []).filter((it) => it.type === "message" || it.type === "fallback_message");
+  const fellBack = attempts.some((it) => it.type === "fallback_message");
+  const tokens = (field: TokenField): number =>
+    fellBack ? attempts.reduce((sum, it) => sum + it[field], 0) : (u[field] ?? 0);
   return {
     model: msg.model,
-    input_tokens: msg.usage.input_tokens,
-    output_tokens: msg.usage.output_tokens,
-    thinking_tokens: msg.usage.output_tokens_details?.thinking_tokens ?? 0,
-    cache_read_input_tokens: msg.usage.cache_read_input_tokens ?? 0,
-    cache_creation_input_tokens: msg.usage.cache_creation_input_tokens ?? 0,
+    input_tokens: tokens("input_tokens"),
+    output_tokens: tokens("output_tokens"),
+    thinking_tokens: u.output_tokens_details?.thinking_tokens ?? 0,
+    cache_read_input_tokens: tokens("cache_read_input_tokens"),
+    cache_creation_input_tokens: tokens("cache_creation_input_tokens"),
   };
 }
 
@@ -85,9 +102,9 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
-function textOf(msg: Anthropic.Message): string {
+function textOf(msg: Anthropic.Beta.BetaMessage): string {
   return msg.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
     .map((b) => b.text)
     .join("")
     .trim();
@@ -114,12 +131,12 @@ function retryAfterMs(err: unknown): number | null {
 /**
  * One structured-output call. Retries once with double max_tokens when the output is cut and
  * once on a transient API error, but only while the function budget allows it; returns the
- * refusal text when Claude declines; otherwise parses the first text block.
+ * refusal text when the model and its fallback both decline; otherwise parses the first text block.
  */
 export async function callJson<T>(opts: {
   rules: string;
   schema: Record<string, unknown>;
-  content: Anthropic.ContentBlockParam[];
+  content: Anthropic.Beta.BetaContentBlockParam[];
   maxTokens: number;
   effort?: Effort;
 }): Promise<CallResult<T>> {
@@ -134,9 +151,9 @@ export async function callJson<T>(opts: {
     if (remaining < MIN_ATTEMPT_MS) throw new Error("Not enough time left for the Claude call; try again");
     const started = Date.now();
 
-    let msg: Anthropic.Message;
+    let msg: Anthropic.Beta.BetaMessage;
     try {
-      msg = await anthropic.messages.create(
+      msg = await anthropic.beta.messages.create(
         {
           model: MODEL,
           max_tokens: maxTokens,
@@ -149,6 +166,8 @@ export async function callJson<T>(opts: {
             format: { type: "json_schema", schema: opts.schema },
             effort: opts.effort ?? "medium",
           },
+          betas: [FALLBACK_BETA],
+          fallbacks: "default",
         },
         { timeout: remaining, maxRetries: 0 },
       );
@@ -189,8 +208,8 @@ export async function callJson<T>(opts: {
 export function imagesThenText(
   images: Array<{ media_type: "image/jpeg" | "image/png" | "image/webp"; data: string }>,
   text: string,
-): Anthropic.ContentBlockParam[] {
-  const blocks: Anthropic.ContentBlockParam[] = [];
+): Anthropic.Beta.BetaContentBlockParam[] {
+  const blocks: Anthropic.Beta.BetaContentBlockParam[] = [];
   images.forEach((img, i) => {
     blocks.push({ type: "text", text: `Image ${i + 1}:` });
     blocks.push({ type: "image", source: { type: "base64", media_type: img.media_type, data: img.data } });

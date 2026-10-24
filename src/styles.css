@@ -1453,3 +1453,23 @@ button.card.tappable {
   border-radius: var(--radius);
   background: var(--surface);
 }
+
+/* ---- species editors -------------------------------------------------------- */
+
+.month-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.month-picker button {
+  min-height: var(--tap);
+  padding: 6px 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.month-picker button.on {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
