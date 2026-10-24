@@ -3,7 +3,7 @@
 // reads and writes through the service client. /api/daily and /api/expand both call it.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, ageInMonths, isoDate, lastDayOfMonth, parseIso, ruleApplies } from "../src/lib/dates.js";
-import { TASK_TYPES, type CareRule, type ExpandResponse, type TaskInsert } from "../src/types.js";
+import { DIAGNOSIS_RULE_PREFIX, TASK_TYPES, type CareRule, type ExpandResponse, type TaskInsert } from "../src/types.js";
 
 export const HORIZON_DAYS = 90;
 const INSERT_CHUNK = 200;
@@ -221,6 +221,9 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   if (pendingErr) throw pendingErr;
   const obsolete = ((pendingRows ?? []) as PendingRow[])
     .filter((r) => {
+      // Phase 4 carve-out: rows a diagnosis wrote (rule_key "diagnosis:<photo_id>", the
+      // re-photograph task) come from the app, not from a species rule; they are never obsolete here.
+      if (r.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) return false;
       const keys = keysByPlant.get(r.plant_id);
       return keys !== undefined && !keys.has(r.rule_key);
     })

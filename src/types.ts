@@ -73,6 +73,48 @@ export function isRefusal<T extends object>(r: T | ({ refusal: string } & Usage)
   return typeof (r as { refusal?: unknown }).refusal === "string";
 }
 
+// ---- diagnose ----------------------------------------------------------------
+
+export type CauseKind = "pest" | "disease" | "nutrient" | "water" | "sun_heat" | "salinity" | "mechanical" | "other";
+export type Urgency = "watch" | "this_week" | "today";
+
+export interface LikelyCause {
+  cause: string;
+  kind: CauseKind;
+  likelihood: number; // 0..1
+  evidence: string;
+}
+
+/** Exactly what prompts/diagnose.schema.json returns. */
+export interface Diagnosis {
+  summary: string;
+  likely_causes: LikelyCause[];
+  checks_to_do: string[];
+  organic_treatment: string;
+  prevention: string;
+  urgency: Urgency;
+  rephotograph_in_days: number;
+}
+
+export interface DiagnoseRequest {
+  plant_id: string;
+  images: ImagePayload[]; // 1 or 2
+  /** What the grower sees; optional. */
+  note?: string;
+}
+
+export type DiagnoseResponse = (Diagnosis & Usage) | ({ refusal: string } & Usage);
+
+/** photos.ai_result of a problem photo: the diagnosis, its usage and the grower's note. */
+export type ProblemAiResult = Diagnosis & Usage & { note: string };
+
+/**
+ * rule_key prefix of the task rows a diagnosis writes from the app (the treatment logged as a done
+ * `protect` row, the re-photograph as a pending `scout` row): `diagnosis:<photo_id>`. The expansion
+ * never removes them (api/_tasks.ts).
+ */
+export const DIAGNOSIS_RULE_PREFIX = "diagnosis:";
+
 // ---- species profile -------------------------------------------------------
 
 export interface CareRule {
