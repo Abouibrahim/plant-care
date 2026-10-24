@@ -1,5 +1,6 @@
 // Calls to the Vercel functions. Every call carries the Supabase access token.
 import { supabase } from "./supabase";
+import { notifyTasksChanged } from "./db";
 import type {
   ExpandRequest,
   ExpandResponse,
@@ -7,6 +8,8 @@ import type {
   IdentifyResponse,
   ProfileApiResponse,
   ProfileRequest,
+  PushSubscribeResponse,
+  PushSubscriptionJson,
 } from "../types";
 
 export class ApiError extends Error {
@@ -71,5 +74,15 @@ export const api = {
   identify: (req: IdentifyRequest) => callApi<IdentifyResponse>("identify", req),
   profile: (req: ProfileRequest) => callApi<ProfileApiResponse>("profile", req),
   /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
-  expand: (req: ExpandRequest = {}) => callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS),
+  expand: async (req: ExpandRequest = {}) => {
+    const r = await callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS);
+    if (r.created > 0 || r.removed > 0) notifyTasksChanged();
+    return r;
+  },
+  /** Stores this browser's push subscription for the daily digest. */
+  pushSubscribe: (subscription: PushSubscriptionJson) =>
+    callApi<PushSubscribeResponse>("push-subscribe", { subscription }, EXPAND_TIMEOUT_MS),
+  /** Removes it again. */
+  pushUnsubscribe: (endpoint: string) =>
+    callApi<PushSubscribeResponse>("push-subscribe", { unsubscribe: true, endpoint }, EXPAND_TIMEOUT_MS),
 };

@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { t } from "../i18n";
+import { localIsoDate } from "../lib/dates";
+import { countDueTasks, TASKS_CHANGED } from "../lib/db";
 
 const tabs = [
   { to: "/", label: t.nav.today, icon: "☀" },
@@ -26,9 +29,51 @@ function UpdateBanner() {
   );
 }
 
+/**
+ * Pending tasks due today or overdue, for the Today tab badge. Counted again on every navigation,
+ * when a task is acted on or an expansion ran (the TASKS_CHANGED event) and when the app comes back
+ * to the foreground, since the date may have turned. Mirrored to the app icon where the phone can.
+ */
+function useDueCount(pathname: string): number {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const load = () => {
+      countDueTasks(localIsoDate())
+        .then((n) => {
+          if (active) setCount(n);
+        })
+        .catch(() => {
+          // Offline or signed out: keep the last count rather than flashing zero.
+        });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    load();
+    window.addEventListener(TASKS_CHANGED, load);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.removeEventListener(TASKS_CHANGED, load);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!("setAppBadge" in navigator)) return;
+    const promise = count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge();
+    promise.catch(() => undefined);
+  }, [count]);
+
+  return count;
+}
+
 export function Layout() {
   const { pathname } = useLocation();
   const onCapture = pathname.startsWith("/capture");
+  const due = useDueCount(pathname);
   return (
     <>
       <UpdateBanner />
@@ -45,6 +90,11 @@ export function Layout() {
               {tab.icon}
             </span>
             {tab.label}
+            {tab.to === "/" && due > 0 && (
+              <span className="badge" aria-label={t.nav.dueBadge(due)}>
+                {due > 99 ? "99+" : due}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

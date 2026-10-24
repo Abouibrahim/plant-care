@@ -182,6 +182,24 @@ export async function updateSpeciesField<K extends keyof SpeciesProfile>(
 // ---- tasks ------------------------------------------------------------------
 // Rows are written by the expansion (api/_tasks.ts); the app only reads them and closes them.
 
+/** Fired on window whenever a task is acted on here or an expansion changed the table; the nav badge listens. */
+export const TASKS_CHANGED = "plantcare:tasks-changed";
+
+export function notifyTasksChanged(): void {
+  window.dispatchEvent(new Event(TASKS_CHANGED));
+}
+
+/** Pending tasks due on or before a day (YYYY-MM-DD): the Today tab badge. */
+export async function countDueTasks(untilIso: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .lte("due_on", untilIso);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 const TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone)";
 
 /** Pending tasks due on or before a day (YYYY-MM-DD), earliest first, each with its plant. */
@@ -226,7 +244,9 @@ async function closeTask(id: string, status: "done" | "skipped" | "snoozed", not
     .eq("id", id)
     .eq("status", "pending")
     .select("id");
-  return (must(r) as Array<{ id: string }>).length > 0;
+  const changed = (must(r) as Array<{ id: string }>).length > 0;
+  if (changed) notifyTasksChanged();
+  return changed;
 }
 
 export function completeTask(id: string): Promise<boolean> {

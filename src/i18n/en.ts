@@ -10,6 +10,7 @@ export const en = {
     capture: "Capture",
     species: "Species",
     settings: "Settings",
+    dueBadge: (n: number) => (n === 1 ? "1 task due" : `${n} tasks due`),
   },
 
   common: {
@@ -271,10 +272,40 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 2",
-    phaseBody: "Capture, identify, profile, and the task calendar with the Today screen. Push reminders follow in Phase 3.",
+    phaseTitle: "Phase 3",
+    phaseBody: "Capture, identify, profile, the task calendar with the Today screen, and push reminders. Diagnosis follows in Phase 4.",
+    reminders: {
+      title: "Reminders",
+      body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon.",
+      state: "Reminders",
+      on: "On",
+      off: "Off",
+      blocked: "Blocked",
+      unsupported: "Not available",
+      noKey: "Not configured",
+      turnOn: "Turn on",
+      turnOff: "Turn off",
+      working: "One moment…",
+      onHint: "This phone receives the digest. Tap Turn off to stop it.",
+      offHint: "Turn on to receive the digest on this phone. Chrome will ask for permission.",
+      blockedHint: "Notifications are blocked for this site. In Chrome: ⋮ → Site settings → Notifications → Allow, then come back.",
+      unsupportedHint: "This browser cannot receive Web Push. Open the app in Chrome, installed on the home screen.",
+      noKeyHint: "The push key is missing. Set VITE_VAPID_PUBLIC_KEY (see .env.example) and redeploy.",
+      denied: "Permission was not granted",
+      failed: "Reminders could not be turned on",
+      stopFailed: "Reminders could not be turned off",
+    },
     language: "Language",
     languageNote: "English for now; a French toggle follows in Phase 5.",
+  },
+
+  /** The push digest, composed on the server (api/_push.ts) from this same table. */
+  digest: {
+    title: (site: string, n: number) => `${site}: ${n === 1 ? "1 task" : `${n} tasks`}`,
+    line: (title: string, tag: string) => (tag ? `${title} · ${tag}` : title),
+    soon: (date: string, line: string) => `From ${date}: ${line}`,
+    more: (n: number) => `+${n} more`,
+    openUrl: "/",
   },
 
   errors: {

@@ -237,3 +237,46 @@ export interface ExpandResponse {
 }
 
 export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// ---- push -------------------------------------------------------------------
+
+/** What PushSubscription.toJSON() gives in the browser; the row keeps endpoint and keys. */
+export interface PushSubscriptionJson {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys: { p256dh: string; auth: string };
+}
+
+export type PushSubscribeRequest = { subscription: PushSubscriptionJson } | { unsubscribe: true; endpoint: string };
+
+export interface PushSubscribeResponse {
+  ok: true;
+  subscribed: boolean;
+}
+
+/** One notification of the digest: a site and its tasks for the day. */
+export interface DigestMessage {
+  site: Site;
+  title: string;
+  body: string;
+  /** Notification tag, one per site, so Farm and Backyard do not replace each other. */
+  tag: string;
+  /** Opened on tap. */
+  url: string;
+  /** Tasks in the message (title, body shows the first three). */
+  tasks: number;
+}
+
+export interface DailyResponse extends ExpandResponse {
+  ok: true;
+  tasks_created: number;
+  tasks_removed: number;
+  pushes_sent: number;
+  pushes_failed: number;
+  subscriptions: number;
+  subscriptions_dropped: number;
+  digest: DigestMessage[];
+  /** Set when subscriptions exist but the digest could not be sent (VAPID variables missing). */
+  digest_error?: string;
+  dry_run: boolean;
+}

@@ -30,6 +30,10 @@ export default defineConfig({
         // Never serve index.html for API calls, and never cache them.
         navigateFallbackDenylist: [/^\/api\//],
         globPatterns: ["**/*.{js,css,html,png,svg,woff2}"],
+        // The push and notification-click handlers (public/push-sw.js) join the generated worker
+        // through importScripts, so the worker stays generated and no second build is needed.
+        importScripts: ["push-sw.js"],
+        globIgnores: ["push-sw.js"],
       },
     }),
   ],
