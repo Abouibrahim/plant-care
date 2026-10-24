@@ -4,7 +4,7 @@ Phone-first PWA for one grower: photograph a plant at the backyard or at the far
 
 ## Stack
 
-React + Vite + TypeScript PWA on Vercel, serverless functions under `api/`, Claude API (`claude-sonnet-5-5`, structured outputs), Supabase (Postgres, Storage, Auth).
+React + Vite + TypeScript PWA on Vercel, serverless functions under `api/`, Claude API (`claude-fable-5-1`, the most capable model, with structured outputs and the server-side refusal fallback), Supabase (Postgres, Storage, Auth).
 
 ## One-time setup (Mohamed)
 

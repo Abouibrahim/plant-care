@@ -8,7 +8,7 @@ Read `docs/SPEC.md` first. It is the agreed design; this file turns it into work
 
 - **App**: React + Vite + TypeScript, installable PWA (`vite-plugin-pwa`), phone-first for Android Chrome. Camera through `<input type="file" accept="image/*" capture="environment">`.
 - **Hosting**: Vercel. Static app plus serverless functions under `api/` (Node runtime) plus one cron job, `vercel.json` → `{"crons":[{"path":"/api/daily","schedule":"0 5 * * *"}]}` (05:00 UTC = 06:00 Tunis; Tunisia has no daylight saving).
-- **AI**: Claude API, model `claude-sonnet-5-5`, structured outputs (`output_config.format` with `type: "json_schema"`), images as base64 blocks, prompt caching on the shared system prompt. SDK `@anthropic-ai/sdk`, current version (`output_config` is GA; no beta header).
+- **AI**: Claude API, model `claude-fable-5-1`, the most capable model (it replaced `claude-sonnet-5-5` on 2026-10-25 and supersedes the model named in the spec; see `docs/DECISIONS.md`), structured outputs (`output_config.format` with `type: "json_schema"`), images as base64 blocks, prompt caching on the shared system prompt, and the server-side refusal fallback (`fallbacks: "default"` through `client.beta.messages.create`). SDK `@anthropic-ai/sdk`, current version (`output_config` is GA; the one beta header is `server-side-fallback-2026-07-01`).
 - **Data**: Supabase. Postgres from `supabase/schema.sql`, a private Storage bucket `photos`, Auth with one email/password user. Functions use the service-role key; the browser uses the anon key behind RLS.
 - **Notifications**: Web Push with VAPID keys (`web-push` package), sent by `/api/daily`.
 - **Secrets**: only in Vercel environment variables and a local `.env.local` that is git-ignored. Names in `.env.example`. Never print, log or commit a key value. Mohamed adds the keys himself.
@@ -57,10 +57,10 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const SITE_CONTEXT = readFileSync(new URL("../prompts/system-context.md", import.meta.url), "utf8");
 
 export async function callJson(opts: {
-  rules: string; schema: object; content: Anthropic.ContentBlockParam[]; maxTokens: number;
+  rules: string; schema: object; content: Anthropic.Beta.BetaContentBlockParam[]; maxTokens: number;
 }) {
-  const msg = await client.messages.create({
-    model: "claude-sonnet-5-5",
+  const msg = await client.beta.messages.create({
+    model: "claude-fable-5-1",
     max_tokens: opts.maxTokens,
     system: [
       { type: "text", text: SITE_CONTEXT, cache_control: { type: "ephemeral" } },
@@ -68,6 +68,8 @@ export async function callJson(opts: {
     ],
     messages: [{ role: "user", content: opts.content }],
     output_config: { format: { type: "json_schema", schema: opts.schema } },
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
   });
   if (msg.stop_reason !== "end_turn") throw new Error(`stop_reason ${msg.stop_reason}`);
   const text = msg.content.find((b) => b.type === "text");
