@@ -34,7 +34,7 @@ Tests 1 and 2 assume the data of 24 Oct 2026: a mature persimmon in the backyard
 6. Edit the papaya record, set "Planted on" to 1 Jun 2026 → after the save (Refresh on Today if needed) the mature tasks of the papaya are gone and the establishment ones appear: "Shoulder-season watering, young papaya (8 L)" every 7 days from 1 Oct (next on 29 Oct) and "Guard young papaya from animals" due 1 Oct with window end 30 Nov. Clearing the date brings the mature set back.
 7. Signed out, `POST /api/expand` → 401; `GET /api/daily` without the secret → 401.
 
-Results (2026-10-24): test 1 passed from the server (first cron call: 9 tasks created, the rows listed above; second call: 0); test 7 passed for both routes (401 without credentials). Tests 2 to 6 wait for the phone.
+Results (2026-10-24): test 1 passed from the server (first cron call: 9 tasks created, the rows listed above; second call: 0); test 7 passed for both routes (401 without credentials). Test 2 checked read-only in the desktop browser on the deployed build: Farm (4) then Backyard (2), open windows first with "Open since … · until …", the 31 Oct watering with its weekday, the papaya's Calendar tab listing its five next tasks and its Journal tab loading from the view, no console errors. Tests 3 to 6 (Done, Skip, Snooze, the planting-date edit) wait for the phone.
 
 ## Usage check
 
