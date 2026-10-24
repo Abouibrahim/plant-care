@@ -374,3 +374,42 @@ export async function insertRephotoTask(input: {
   notifyTasksChanged();
   return r.data as Task;
 }
+
+// ---- export -----------------------------------------------------------------
+// The CSV exports (Settings) read whole tables. PostgREST answers at most 1,000 rows per request,
+// so the readers page through with range(); a single year of waterings passes that mark.
+
+const PAGE = 1000;
+
+/** Every plant with its species, oldest first, for the plants CSV. */
+export async function listAllPlants(): Promise<PlantWithSpecies[]> {
+  const out: PlantWithSpecies[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const r = await supabase
+      .from("plants")
+      .select("*, species(*)")
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    const page = must(r) as unknown as PlantWithSpecies[];
+    out.push(...page);
+    if (page.length < PAGE) return out;
+  }
+}
+
+/** Every task of every status, earliest due first, each with its plant's tag, site and zone, for the tasks CSV. */
+export async function listAllTasks(): Promise<TaskWithPlant[]> {
+  const out: TaskWithPlant[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const r = await supabase
+      .from("tasks")
+      .select(TASK_WITH_PLANT)
+      .order("due_on", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    const page = must(r) as unknown as TaskWithPlant[];
+    out.push(...page);
+    if (page.length < PAGE) return out;
+  }
+}

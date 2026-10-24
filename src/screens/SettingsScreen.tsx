@@ -3,6 +3,7 @@ import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { lang, LANGS, storeLang, t, type Lang } from "../i18n";
 import { useAuth } from "../lib/auth-context";
+import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
 import { APP_VERSION } from "../version";
 
@@ -133,6 +134,45 @@ function LanguageCard() {
   );
 }
 
+type ExportKind = "plants" | "tasks";
+
+/** The two CSV downloads, with the row count and file name of the last one, or its error. */
+function ExportCard() {
+  const s = t.settings.export;
+  const [busy, setBusy] = useState<ExportKind | null>(null);
+  const [note, setNote] = useState<{ kind: "info" | "error"; text: string } | null>(null);
+
+  async function run(kind: ExportKind) {
+    if (busy) return;
+    setBusy(kind);
+    setNote(null);
+    try {
+      const result: ExportResult = kind === "plants" ? await exportPlantsCsv() : await exportTasksCsv();
+      setNote({ kind: "info", text: s.saved(result.rows, result.filename) });
+    } catch (err) {
+      setNote({ kind: "error", text: `${s.failed}: ${message(err)}` });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>{s.title}</h2>
+      <p className="small">{s.body}</p>
+      <div className="row" style={{ marginBottom: note ? 10 : 0 }}>
+        <button type="button" className="grow" disabled={busy !== null} onClick={() => void run("plants")}>
+          {busy === "plants" ? <Spinner label={s.working} /> : s.plants}
+        </button>
+        <button type="button" className="grow" disabled={busy !== null} onClick={() => void run("tasks")}>
+          {busy === "tasks" ? <Spinner label={s.working} /> : s.tasks}
+        </button>
+      </div>
+      {note && <Banner kind={note.kind}>{note.text}</Banner>}
+    </div>
+  );
+}
+
 export function SettingsScreen() {
   const { session, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
@@ -153,6 +193,7 @@ export function SettingsScreen() {
 
       <RemindersCard />
       <LanguageCard />
+      <ExportCard />
 
       <div className="card">
         <p className="muted small">{t.settings.signedInAs}</p>
