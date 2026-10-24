@@ -1,44 +1,97 @@
-/* Plain, fast, phone-first. Dark mode follows the system. */
+/* Plain, fast, phone-first. Dark mode follows the system.
+ * The palette is a garden's: cream and forest grounds, leaf green for actions, sun and apricot for
+ * highlights, and one colour per task type (water, prune, feed…) with a soft tint for tiles. */
 
 :root {
-  --bg: #f6f7f3;
-  --surface: #ffffff;
-  --surface-2: #eef1ea;
-  --text: #17211a;
-  --muted: #5c6b60;
-  --border: #d6dcd3;
-  --accent: #2f6b3a;
+  --bg: #f6f2e8;
+  --surface: #fffdf8;
+  --surface-2: #f0eadb;
+  --text: #1c2b21;
+  --muted: #5f6a58;
+  --border: #e4dccb;
+  --accent: #2e7046;
   --accent-text: #ffffff;
-  --accent-soft: #dcebdd;
-  --warn: #9a6a00;
-  --warn-soft: #fff1cc;
-  --danger: #a4262c;
-  --danger-soft: #fde2e2;
-  --ok: #2f6b3a;
-  --ok-soft: #dcebdd;
-  --radius: 12px;
-  --nav-h: 64px;
+  --accent-soft: #dfeed6;
+  --sage: #d3e7c2;
+  --sage-text: #183323;
+  --sun: #f3b23c;
+  --apricot: #e9824f;
+  --warn: #9a5800;
+  --warn-soft: #fcebc7;
+  --danger: #b3263a;
+  --danger-soft: #fbe0e3;
+  --ok: #2e7046;
+  --ok-soft: #dfeed6;
+  --shadow: 0 1px 2px rgba(62, 48, 18, 0.06), 0 6px 18px rgba(62, 48, 18, 0.06);
+  --shadow-lift: 0 8px 24px rgba(31, 52, 34, 0.22);
+
+  /* task types: foreground and soft tint */
+  --c-water: #1f7fb8;
+  --c-water-soft: #ddeef8;
+  --c-prune: #7d4fb8;
+  --c-prune-soft: #ece3f7;
+  --c-feed: #b8620f;
+  --c-feed-soft: #fbe8d4;
+  --c-mulch: #8a5a35;
+  --c-mulch-soft: #f1e3d6;
+  --c-harvest: #a87a00;
+  --c-harvest-soft: #fbf0c8;
+  --c-scout: #b8334f;
+  --c-scout-soft: #f9dfe5;
+  --c-propagate: #2f8a45;
+  --c-propagate-soft: #dcf0dc;
+  --c-protect: #1d7f78;
+  --c-protect-soft: #d6efec;
+
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --nav-h: 68px;
   --tap: 48px;
   color-scheme: light dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101511;
-    --surface: #182019;
-    --surface-2: #202b22;
-    --text: #e9efe8;
-    --muted: #9fb0a2;
-    --border: #2c382e;
-    --accent: #6fbf7a;
-    --accent-text: #0d1a0f;
-    --accent-soft: #1f3a24;
-    --warn: #f0c457;
-    --warn-soft: #3a2f10;
-    --danger: #ff8a8a;
-    --danger-soft: #3f1a1c;
-    --ok: #6fbf7a;
-    --ok-soft: #1f3a24;
+    --bg: #111713;
+    --surface: #1a221c;
+    --surface-2: #243026;
+    --text: #edf2e6;
+    --muted: #a5b29f;
+    --border: #2d3a2f;
+    --accent: #b7d69f;
+    --accent-text: #11261a;
+    --accent-soft: #24392a;
+    --sage: #b7d69f;
+    --sage-text: #11261a;
+    --sun: #f6c35a;
+    --apricot: #f29a6e;
+    --warn: #f2c05a;
+    --warn-soft: #3a2e12;
+    --danger: #ff8f9c;
+    --danger-soft: #401c22;
+    --ok: #9fd48a;
+    --ok-soft: #22381f;
+    --shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+    --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+    --c-water: #7cc4ee;
+    --c-water-soft: #1b3442;
+    --c-prune: #c8a8f0;
+    --c-prune-soft: #30263f;
+    --c-feed: #f4a862;
+    --c-feed-soft: #3d2a17;
+    --c-mulch: #d6a985;
+    --c-mulch-soft: #362a20;
+    --c-harvest: #f2cd57;
+    --c-harvest-soft: #3a3216;
+    --c-scout: #f58aa0;
+    --c-scout-soft: #3e1f28;
+    --c-propagate: #93d69c;
+    --c-propagate-soft: #1e3a24;
+    --c-protect: #72d4ca;
+    --c-protect-soft: #173836;
   }
 }
 
@@ -52,10 +105,11 @@ body {
   padding: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   font-size: 17px;
   line-height: 1.4;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
@@ -73,17 +127,28 @@ h3 {
   margin: 0 0 8px;
   line-height: 1.2;
 }
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
 }
 h2 {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 h3 {
   font-size: 1.05rem;
 }
 p {
   margin: 0 0 8px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--sun);
+  outline-offset: 2px;
 }
 
 .muted {
@@ -104,7 +169,7 @@ p {
 /* ---- layout ---------------------------------------------------------------- */
 
 .screen {
-  padding: 16px 16px calc(var(--nav-h) + 24px + env(safe-area-inset-bottom));
+  padding: 16px 16px calc(var(--nav-h) + 32px + env(safe-area-inset-bottom));
   max-width: 720px;
   margin: 0 auto;
 }
@@ -134,6 +199,7 @@ p {
   z-index: 10;
 }
 .nav a {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -152,9 +218,6 @@ p {
   font-size: 1.3rem;
   line-height: 1;
 }
-.nav a {
-  position: relative;
-}
 .nav .badge {
   position: absolute;
   top: 6px;
@@ -163,7 +226,7 @@ p {
   height: 20px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--danger);
+  background: var(--apricot);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
@@ -186,7 +249,7 @@ p {
   justify-content: center;
   font-size: 1.8rem;
   text-decoration: none;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lift);
   z-index: 11;
 }
 
@@ -196,7 +259,8 @@ p {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  box-shadow: var(--shadow);
+  padding: 16px;
   margin-bottom: 12px;
 }
 .card.tappable {
@@ -204,9 +268,11 @@ p {
   display: block;
   color: inherit;
   text-decoration: none;
+  transition: transform 0.12s ease, background-color 0.12s ease;
 }
 .card.tappable:active {
   background: var(--surface-2);
+  transform: scale(0.99);
 }
 .card.selected {
   border-color: var(--accent);
@@ -235,29 +301,29 @@ p {
 }
 
 .banner {
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 12px 14px;
   margin-bottom: 12px;
   border: 1px solid transparent;
 }
 .banner.info {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .banner.warn {
   background: var(--warn-soft);
-  border-color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 .banner.error {
   background: var(--danger-soft);
-  border-color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
 }
 
 .section {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .section h2 {
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .kv {
   display: grid;
@@ -279,11 +345,11 @@ button,
 .btn {
   appearance: none;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text);
-  border-radius: 10px;
+  border-radius: 999px;
   min-height: var(--tap);
-  padding: 10px 16px;
+  padding: 10px 18px;
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -292,6 +358,11 @@ button,
   align-items: center;
   justify-content: center;
   gap: 8px;
+  transition: transform 0.1s ease, background-color 0.15s ease, filter 0.15s ease;
+}
+button:active:not(:disabled),
+.btn:active {
+  transform: scale(0.97);
 }
 button:disabled,
 .btn.disabled {
@@ -304,8 +375,13 @@ button.primary {
   color: var(--accent-text);
   border-color: var(--accent);
 }
+.btn.primary:active,
+button.primary:active:not(:disabled) {
+  filter: brightness(1.08);
+}
 .btn.danger,
 button.danger {
+  background: transparent;
   color: var(--danger);
   border-color: var(--danger);
 }
@@ -315,13 +391,13 @@ button.block {
 }
 .btn.big,
 button.big {
-  min-height: 72px;
+  min-height: 64px;
   font-size: 1.1rem;
 }
 .btn.small,
 button.small {
   min-height: var(--tap);
-  padding: 8px 12px;
+  padding: 8px 14px;
   font-size: 0.9rem;
 }
 .btn.link,
@@ -351,9 +427,17 @@ textarea {
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 14px;
   min-height: var(--tap);
-  padding: 10px 12px;
+  padding: 10px 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 textarea {
   min-height: 96px;
@@ -363,6 +447,7 @@ input[type="checkbox"] {
   width: 24px;
   height: 24px;
   min-height: 0;
+  accent-color: var(--accent);
 }
 .field-row {
   display: grid;
@@ -372,16 +457,18 @@ input[type="checkbox"] {
 
 .segmented {
   display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+  border-radius: 999px;
 }
 .segmented button {
   flex: 1;
   border: none;
-  border-radius: 0;
-  background: var(--surface);
+  background: transparent;
   font-weight: 500;
+  min-height: 42px;
 }
 .segmented button.active {
   background: var(--accent);
@@ -399,8 +486,8 @@ input[type="checkbox"] {
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 999px;
-  padding: 8px 14px;
-  min-height: var(--tap);
+  padding: 8px 16px;
+  min-height: 44px;
   font-weight: 500;
 }
 .chip.active {
@@ -410,7 +497,9 @@ input[type="checkbox"] {
 }
 
 .pill {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   border-radius: 999px;
   padding: 2px 10px;
   font-size: 0.8rem;
@@ -421,7 +510,7 @@ input[type="checkbox"] {
 }
 .pill.accent {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--ok);
 }
 .pill.warn {
   background: var(--warn-soft);
@@ -438,23 +527,31 @@ input[type="checkbox"] {
 
 .tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
   margin: 0 -16px 14px;
-  padding: 0 8px;
+  padding: 4px 16px;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
 }
 .tabs button {
-  flex: 1 1 auto;
-  border: none;
-  border-bottom: 3px solid transparent;
-  border-radius: 0;
-  background: none;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
   white-space: nowrap;
-  padding: 10px 8px;
+  min-height: 42px;
+  padding: 8px 16px;
   font-size: 0.95rem;
   color: var(--muted);
   font-weight: 500;
+}
+.tabs button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
 }
 
 .update-banner {
@@ -462,11 +559,6 @@ input[type="checkbox"] {
   top: 8px;
   z-index: 12;
   margin: 8px 16px 0;
-}
-.tabs button.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
 }
 
 /* ---- media ---------------------------------------------------------------- */
@@ -483,7 +575,7 @@ input[type="checkbox"] {
   width: 84px;
   height: 84px;
   aspect-ratio: 1;
-  border-radius: 10px;
+  border-radius: 16px;
   flex-shrink: 0;
 }
 .photo.placeholder {
@@ -495,10 +587,10 @@ input[type="checkbox"] {
 }
 .hero {
   position: relative;
-  margin: -16px -16px 12px;
+  margin: -16px -16px 14px;
 }
 .hero .photo {
-  border-radius: 0;
+  border-radius: 0 0 28px 28px;
   aspect-ratio: 4 / 3;
 }
 
@@ -510,10 +602,11 @@ input[type="checkbox"] {
 }
 .confidence > div {
   height: 100%;
-  background: var(--accent);
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--c-propagate), var(--accent));
 }
 .confidence.low > div {
-  background: var(--warn);
+  background: linear-gradient(90deg, var(--apricot), var(--sun));
 }
 
 .spinner {
@@ -542,7 +635,7 @@ input[type="checkbox"] {
   text-align: center;
   font-size: 0.7rem;
   padding: 4px 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--surface-2);
   color: var(--muted);
 }
@@ -563,7 +656,7 @@ input[type="checkbox"] {
   border-left: 4px solid var(--border);
 }
 .task.overdue {
-  border-left-color: var(--warn);
+  border-left-color: var(--apricot);
 }
 .task.due-today {
   border-left-color: var(--accent);
@@ -648,4 +741,6 @@ button.card.tappable {
   min-height: 0;
   font: inherit;
   line-height: 1.4;
+  border-radius: var(--radius);
+  background: var(--surface);
 }
