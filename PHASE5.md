@@ -19,7 +19,7 @@ Reference: the Phase 5 line of the build plan ("French and English UI, species l
   create policy owner_all on settings for all to authenticated using (true) with check (true);
   ```
 
-- [ ] ★ After the deploy, tap "Reload" on the update banner (or close and reopen the installed app) so the phone runs the 0.5.0 shell before the tests below.
+- [x] ★ After the deploy, tap "Reload" on the update banner (or close and reopen the installed app) so the phone runs the 0.5.0 shell before the tests below.
 - [x] Nothing else to create: the exports and the species editors use the tables and the keys already in place, and no new Claude call is made.
 
 ## Build
@@ -44,3 +44,5 @@ Reference: the Phase 5 line of the build plan ("French and English UI, species l
 Nothing new in this phase calls Claude; test 5 is one profile call, about 2,500 input and 2,500 output tokens, roughly 3 cents at Sonnet 5.5 prices ($2 and $10 per million tokens) and about 15 cents at Fable 5.1 prices ($10 and $50), the model `api/_claude.ts` names from commit `6183417` on.
 
 Results (2026-10-25, commits `1439005` to `bdd4dd5` deployed as `dpl_5f5q5WUa53N5KUCmaJS4pCCrWWvG`): typecheck, lint and build pass; the CSV helper was checked with a script (quoting of quotes, commas, line breaks and outer spaces, CRLF, the byte-order mark, an Arabic cell). In the desktop app's browser on the deployed build, with Mohamed's persisted sign-in and nothing saved: the update banner brought up 0.5.0; Settings shows Reminders, Language, Sites and zones, Export, and the Phase 5 card. The ★ SQL has been run: the zones card loads the two sites with empty lists and offers "Southwest", the zone already on a backyard plant. Français reloaded the app in French (Réglages, Rappels, Langue, Sites et zones, Jardin; the tabs Aujourd'hui, Plantes, Espèces, Réglages); the papaya's profile kept its English text under French labels; its care calendar showed "Ajouter une règle" and a "Modifier" on each rule, the young-papaya watering rule opened with water, establishment, April and October, every 7 days and 8 L, and Annuler closed it unchanged; "Ajouter un ravageur" opened an empty pest form, cancelled. Both exports ran with the download caught in the page rather than saved: the plants file had 2 rows with the Arabic names, the tasks file 11 rows with pending, done and skipped tasks, both starting with the byte-order mark and using CRLF; the card read "11 lignes enregistrées dans plant-care-tasks-2026-10-25.csv". English again restored the English screens. No console errors. Tests 1 to 6 on the phone wait for Mohamed; tests 4 and 5 change his real profiles, so a species he does not mind editing is the one to use.
+
+Phone results (2026-10-25): Mohamed ran tests 1 to 6 on the installed app at 0.5.0 and all six passed. Phase 5 is accepted, which completes the five phases of `docs/SPEC.md`.
