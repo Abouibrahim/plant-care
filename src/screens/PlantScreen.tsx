@@ -16,6 +16,7 @@ import {
   updatePlant,
   uploadPhoto,
 } from "../lib/db";
+import { problemResult, URGENCY_PILL } from "../lib/diagnosis";
 import { prepareImage } from "../lib/image";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
@@ -23,7 +24,12 @@ import { PhotoImg } from "../components/PhotoImg";
 import { RecordForm, type RecordValues } from "../components/RecordForm";
 import { TaskCard, type TaskAction } from "../components/TaskCard";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
+import { DiagnosePanel } from "./plant/DiagnosePanel";
+import { PastDiagnoses } from "./plant/PastDiagnoses";
 import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Task, TaskStatus } from "../types";
+
+/** The diagnosis panel: a new diagnosis, or a saved one reopened from the journal or the Health tab. */
+type DiagnoseState = { kind: "new" } | { kind: "open"; photo: Photo } | null;
 
 type TabKey = keyof typeof t.plant.tabs;
 const TABS: TabKey[] = ["needs", "calendar", "health", "guild", "journal"];
@@ -73,6 +79,7 @@ export function PlantScreen() {
   const [extrasError, setExtrasError] = useState<{ id: string; message: string } | null>(null);
   const [extrasKey, setExtrasKey] = useState(0);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [diagnose, setDiagnose] = useState<DiagnoseState>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -125,6 +132,11 @@ export function PlantScreen() {
 
   function reloadExtras() {
     setExtrasKey((k) => k + 1);
+  }
+
+  /** After a diagnosis wrote a photo or a task: photos, tasks and the journal again. */
+  function reloadAll() {
+    setReloadKey((k) => k + 1);
   }
 
   async function saveRecord(values: RecordValues) {
@@ -287,7 +299,7 @@ export function PlantScreen() {
         <Link to={`/species/${species.id}`} className="btn small">
           {t.plant.profileLink}
         </Link>
-        <button type="button" className="small" disabled>
+        <button type="button" className="small" onClick={() => setDiagnose({ kind: "new" })} disabled={busy}>
           {t.plant.diagnose}
         </button>
         {uploading && <Spinner />}
@@ -363,7 +375,12 @@ export function PlantScreen() {
           <CalendarSection species={species} plantedOn={plant.planted_on} />
         </>
       )}
-      {tab === "health" && <HealthSection species={species} />}
+      {tab === "health" && (
+        <>
+          <HealthSection species={species} />
+          <PastDiagnoses photos={photos} onOpen={(photo) => setDiagnose({ kind: "open", photo })} />
+        </>
+      )}
       {tab === "guild" && <GuildUsesSection species={species} />}
       {tab === "journal" && (
         <>
@@ -373,8 +390,20 @@ export function PlantScreen() {
               <Spinner label={t.common.loading} />
             </div>
           )}
-          {journal !== null && <Journal entries={journal} photos={photos} tag={plant.tag} />}
+          {journal !== null && (
+            <Journal entries={journal} photos={photos} tag={plant.tag} onOpenDiagnosis={(photo) => setDiagnose({ kind: "open", photo })} />
+          )}
         </>
+      )}
+
+      {diagnose && (
+        <DiagnosePanel
+          plant={plant}
+          photos={photos}
+          existing={diagnose.kind === "open" ? diagnose.photo : null}
+          onChanged={reloadAll}
+          onClose={() => setDiagnose(null)}
+        />
       )}
     </div>
   );
@@ -383,19 +412,35 @@ export function PlantScreen() {
 const PHOTO_KINDS = new Set<string>(["identify", "journal", "problem"]);
 const TASK_STATUS_PILL: Record<TaskStatus, string> = { pending: "pill", done: "pill ok", skipped: "pill warn", snoozed: "pill" };
 
-function PhotoEntry({ entry, photo, tag }: { entry: JournalEntry; photo: Photo | undefined; tag: string }) {
+interface PhotoEntryProps {
+  entry: JournalEntry;
+  photo: Photo | undefined;
+  tag: string;
+  onOpenDiagnosis: (photo: Photo) => void;
+}
+
+/** A photo in the journal; an identification shows its top candidate, a problem photo its diagnosis. */
+function PhotoEntry({ entry, photo, tag, onOpenDiagnosis }: PhotoEntryProps) {
   const kind = (PHOTO_KINDS.has(entry.subtype) ? entry.subtype : "journal") as PhotoKind;
   const kindLabel = t.plant.photoKinds[kind];
   const top = kind === "identify" ? topCandidateName(photo?.ai_result) : null;
+  const diagnosis = kind === "problem" ? problemResult(photo?.ai_result) : null;
   const pillClass = kind === "problem" ? "pill warn" : kind === "identify" ? "pill accent" : "pill";
   return (
-    <div className="card row">
+    <div className="card row" style={{ alignItems: "flex-start" }}>
       <PhotoImg path={entry.ref} alt={`${tag} · ${kindLabel}`} className="photo thumb" />
       <div className="grow">
         <div>{new Date(entry.at).toLocaleDateString()}</div>
         <span className={pillClass}>{kindLabel}</span>
+        {diagnosis && <span className={URGENCY_PILL[diagnosis.urgency]}>{t.diagnose.urgency[diagnosis.urgency]}</span>}
         {top && <div className="muted small italic">{top}</div>}
-        {entry.text && <div className="small">{entry.text}</div>}
+        {diagnosis && <div className="small clamp-2">{diagnosis.summary}</div>}
+        {entry.text && <div className={`small ${diagnosis ? "muted" : ""}`}>{entry.text}</div>}
+        {diagnosis && photo && (
+          <button type="button" className="link small" style={{ paddingLeft: 0 }} onClick={() => onOpenDiagnosis(photo)}>
+            {t.diagnose.open}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -420,8 +465,15 @@ function TaskEntry({ entry }: { entry: JournalEntry }) {
   );
 }
 
-/** Photos and acted tasks from the `journal` view, newest first; photos keep their identify candidate. */
-function Journal({ entries, photos, tag }: { entries: JournalEntry[]; photos: Photo[]; tag: string }) {
+interface JournalProps {
+  entries: JournalEntry[];
+  photos: Photo[];
+  tag: string;
+  onOpenDiagnosis: (photo: Photo) => void;
+}
+
+/** Photos and acted tasks from the `journal` view, newest first; photos keep their identify candidate or diagnosis. */
+function Journal({ entries, photos, tag, onOpenDiagnosis }: JournalProps) {
   if (entries.length === 0) {
     return <p className="center muted">{t.plant.journalEmpty}</p>;
   }
@@ -431,7 +483,7 @@ function Journal({ entries, photos, tag }: { entries: JournalEntry[]; photos: Ph
       {entries.map((entry, i) => {
         const key = `${entry.kind}:${entry.ref}:${entry.at}:${i}`;
         return entry.kind === "photo" ? (
-          <PhotoEntry key={key} entry={entry} photo={byPath.get(entry.ref)} tag={tag} />
+          <PhotoEntry key={key} entry={entry} photo={byPath.get(entry.ref)} tag={tag} onOpenDiagnosis={onOpenDiagnosis} />
         ) : (
           <TaskEntry key={key} entry={entry} />
         );

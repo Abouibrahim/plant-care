@@ -2,18 +2,19 @@
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays } from "./dates";
 import { t } from "../i18n";
-import type {
-  JournalEntry,
-  Photo,
-  PhotoInsert,
-  Plant,
-  PlantInsert,
-  PlantWithSpecies,
-  Site,
-  Species,
-  SpeciesProfile,
-  Task,
-  TaskWithPlant,
+import {
+  DIAGNOSIS_RULE_PREFIX,
+  type JournalEntry,
+  type Photo,
+  type PhotoInsert,
+  type Plant,
+  type PlantInsert,
+  type PlantWithSpecies,
+  type Site,
+  type Species,
+  type SpeciesProfile,
+  type Task,
+  type TaskWithPlant,
 } from "../types";
 
 interface Result<T> {
@@ -180,7 +181,8 @@ export async function updateSpeciesField<K extends keyof SpeciesProfile>(
 }
 
 // ---- tasks ------------------------------------------------------------------
-// Rows are written by the expansion (api/_tasks.ts); the app only reads them and closes them.
+// Rows are written by the expansion (api/_tasks.ts); the app reads them and closes them. The one
+// exception is the diagnosis section below, which writes the treatment log and the re-photograph task.
 
 /** Fired on window whenever a task is acted on here or an expansion changed the table; the nav badge listens. */
 export const TASKS_CHANGED = "plantcare:tasks-changed";
@@ -279,4 +281,96 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
   if (error && error.code !== "23505") throw new Error(error.message);
   await closeTask(task.id, "snoozed", "");
   return due_on;
+}
+
+// ---- diagnosis rows -----------------------------------------------------------
+// The rows a diagnosis writes from the app (the carve-out recorded in docs/DECISIONS.md): the
+// re-photograph reminder as a pending `scout` row keyed `diagnosis:<photo_id>`, and each treatment
+// as a done `protect` row keyed `diagnosis:<photo_id>:treated`. The expansion leaves both alone.
+
+export function diagnosisRuleKey(photoId: string): string {
+  return `${DIAGNOSIS_RULE_PREFIX}${photoId}`;
+}
+
+export function treatedRuleKey(photoId: string): string {
+  return `${diagnosisRuleKey(photoId)}:treated`;
+}
+
+/** Every task a diagnosis wrote for a plant, whatever its status, newest first. */
+export async function listDiagnosisTasks(plantId: string): Promise<Task[]> {
+  const r = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("plant_id", plantId)
+    .like("rule_key", `${DIAGNOSIS_RULE_PREFIX}%`)
+    .order("created_at", { ascending: false });
+  return must(r) as Task[];
+}
+
+/**
+ * Logs a treatment: a `protect` row already done, dated today, whose note the journal shows in
+ * place of the title. Returns null when this diagnosis already has a treatment logged today
+ * (the unique plant, rule and day), so a second tap changes nothing.
+ */
+export async function insertTreatedTask(input: {
+  plant_id: string;
+  photo_id: string;
+  title: string;
+  note: string;
+  todayIso: string;
+}): Promise<Task | null> {
+  const r = await supabase
+    .from("tasks")
+    .insert({
+      plant_id: input.plant_id,
+      type: "protect",
+      rule_key: treatedRuleKey(input.photo_id),
+      due_on: input.todayIso,
+      window_end: null,
+      title: input.title,
+      instruction: "",
+      status: "done",
+      acted_at: new Date().toISOString(),
+      note: input.note,
+    })
+    .select("*")
+    .single();
+  if (r.error) {
+    if (r.error.code === "23505") return null;
+    throw new Error(r.error.message);
+  }
+  return r.data as Task;
+}
+
+/**
+ * The re-photograph reminder: a pending `scout` row on the day the diagnosis named. It shows on
+ * Today, on the plant's Calendar tab and in the digest like any task. Returns null when a task of
+ * this diagnosis already falls on that day.
+ */
+export async function insertRephotoTask(input: {
+  plant_id: string;
+  photo_id: string;
+  due_on: string;
+  title: string;
+  instruction: string;
+}): Promise<Task | null> {
+  const r = await supabase
+    .from("tasks")
+    .insert({
+      plant_id: input.plant_id,
+      type: "scout",
+      rule_key: diagnosisRuleKey(input.photo_id),
+      due_on: input.due_on,
+      window_end: null,
+      title: input.title,
+      instruction: input.instruction,
+    })
+    .select("*")
+    .single();
+  if (r.error) {
+    if (r.error.code === "23505") return null;
+    throw new Error(r.error.message);
+  }
+  notifyTasksChanged();
+  return r.data as Task;
 }
