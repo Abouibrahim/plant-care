@@ -37,3 +37,5 @@ Done when Mohamed can photograph a tree at the farm on his Android phone, confir
 ## Usage check
 
 After the three test plants, the Claude Console usage page shows under $0.20 spent.
+
+Result on 2026-10-24: $0.14 after two plants (persimmon, papaya) with two identifications and two profiles.
