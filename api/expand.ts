@@ -1,4 +1,4 @@
-// POST /api/expand  { plant_id? }  ->  { plants, created, removed, today }
+// POST /api/expand  { plant_id? }  ->  { plants, created, removed, expired, superseded, today }
 // The same expansion as the cron, on demand: the app calls it after a plant is saved and from the
 // Today screen, so new tasks do not wait for 06:00.
 import type { VercelRequest, VercelResponse } from "@vercel/node";

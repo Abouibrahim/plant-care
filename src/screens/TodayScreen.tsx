@@ -7,7 +7,7 @@ import { t } from "../i18n";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
 import { completeTask, listDueTasks, skipTask, snoozeTask } from "../lib/db";
-import { TASK_TYPES, type Site, type TaskWithPlant } from "../types";
+import { expansionChanged, TASK_TYPES, type Site, type TaskWithPlant } from "../types";
 
 /** Today plus the coming week. */
 const WEEK_DAYS = 7;
@@ -66,7 +66,7 @@ export function TodayScreen() {
       api
         .expand()
         .then((r) => {
-          if (active && (r.created > 0 || r.removed > 0)) setAttempt((n) => n + 1);
+          if (active && expansionChanged(r)) setAttempt((n) => n + 1);
         })
         .catch(() => {
           // Not fatal: the cron fills the table each morning, and Refresh tries again.
@@ -89,7 +89,7 @@ export function TodayScreen() {
     setError(null);
     try {
       const r = await api.expand();
-      setRefreshNote(t.today.refreshed(r.created, r.removed));
+      setRefreshNote(t.today.refreshed(r.created, r.removed, r.expired, r.superseded));
       reload();
     } catch (err) {
       setError(`${t.today.refreshFailed}: ${message(err)}`);

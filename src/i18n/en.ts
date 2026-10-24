@@ -76,10 +76,14 @@ export const en = {
     skipReason: "Reason (optional)",
     skipConfirm: "Skip it",
     snoozeDays: (n: number) => (n === 1 ? "1 day" : `${n} days`),
-    refreshed: (created: number, removed: number) =>
-      created === 0 && removed === 0
-        ? "Tasks are up to date"
-        : `${created === 1 ? "1 task added" : `${created} tasks added`}${removed > 0 ? `, ${removed} removed` : ""}`,
+    refreshed: (created: number, removed: number, expired: number, superseded: number) => {
+      const parts: string[] = [];
+      if (created > 0) parts.push(created === 1 ? "1 task added" : `${created} tasks added`);
+      if (removed > 0) parts.push(`${removed} removed`);
+      if (expired > 0) parts.push(expired === 1 ? "1 ended window closed" : `${expired} ended windows closed`);
+      if (superseded > 0) parts.push(superseded === 1 ? "1 old watering closed" : `${superseded} old waterings closed`);
+      return parts.length === 0 ? "Tasks are up to date" : parts.join(", ");
+    },
     refreshFailed: "The tasks could not be refreshed",
     actionFailed: "The task could not be updated",
   },
@@ -297,6 +301,12 @@ export const en = {
     },
     language: "Language",
     languageNote: "English for now; a French toggle follows in Phase 5.",
+  },
+
+  /** Notes the expansion (api/_tasks.ts) writes on the tasks it closes; the journal shows them in place of the title. */
+  expansion: {
+    windowEnded: "Window ended",
+    superseded: "Superseded by the next watering",
   },
 
   /** The push digest, composed on the server (api/_push.ts) from this same table. */

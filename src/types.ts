@@ -231,9 +231,19 @@ export interface ExpandRequest {
 export interface ExpandResponse {
   plants: number;
   created: number;
+  /** Pending tasks deleted because their rule no longer applies to the plant. */
   removed: number;
+  /** Pending window tasks closed as skipped because their window ended before today. */
+  expired: number;
+  /** Overdue waterings closed as skipped because a newer watering of the same rule is due. */
+  superseded: number;
   /** The Tunis date the expansion ran for, YYYY-MM-DD. */
   today: string;
+}
+
+/** Whether an expansion changed the tasks table, so lists and the Today badge should be read again. */
+export function expansionChanged(r: ExpandResponse): boolean {
+  return r.created + r.removed + r.expired + r.superseded > 0;
 }
 
 export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
