@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { LogIn, Sprout } from "lucide-react";
 import { Banner } from "../components/Banner";
+import { GardenScene } from "../components/GardenScene";
 import { t } from "../i18n";
 import { useAuth } from "../lib/auth-context";
+import { dayPhase } from "../lib/today";
 
 const inputStyle = { minHeight: 56, fontSize: "1.05rem" } as const;
 
@@ -13,6 +15,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phase] = useState(() => dayPhase(new Date().getHours()));
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,14 +33,17 @@ export function LoginScreen() {
   }
 
   return (
-    <div className="screen" style={{ paddingTop: 48 }}>
-      <div className="row" style={{ marginBottom: 16 }}>
-        <span className="head-icon" aria-hidden>
-          <Sprout size={24} />
-        </span>
-        <span className="muted">{t.app.name}</span>
-      </div>
-      <h1>{t.login.title}</h1>
+    <div className="screen">
+      <header className={`today-hero ${phase}`}>
+        <div className="row" style={{ gap: 10 }}>
+          <span className="head-icon" aria-hidden>
+            <Sprout size={24} />
+          </span>
+          <span style={{ fontWeight: 700 }}>{t.app.name}</span>
+        </div>
+        <h1 style={{ marginTop: 18 }}>{t.login.title}</h1>
+        <GardenScene phase={phase} />
+      </header>
 
       {!configured ? (
         <Banner kind="warn">{t.login.notConfigured}</Banner>

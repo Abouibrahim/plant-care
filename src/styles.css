@@ -24,6 +24,11 @@
   --ok-soft: #dfeed6;
   --shadow: 0 1px 2px rgba(62, 48, 18, 0.06), 0 6px 18px rgba(62, 48, 18, 0.06);
   --shadow-lift: 0 8px 24px rgba(31, 52, 34, 0.22);
+  --late: #b4492a;
+  --ring: var(--accent);
+  --toast-bg: #1c2b21;
+  --toast-text: #f3f1e8;
+  --toast-action: #b7d69f;
 
   /* task types: foreground and soft tint */
   --c-water: #1f7fb8;
@@ -75,6 +80,11 @@
     --ok-soft: #22381f;
     --shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
     --shadow-lift: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --late: #f6a07a;
+    --ring: var(--sage-text);
+    --toast-bg: #edf2e6;
+    --toast-text: #1c2b21;
+    --toast-action: #2e7046;
 
     --c-water: #7cc4ee;
     --c-water-soft: #1b3442;
@@ -512,11 +522,27 @@ input[type="checkbox"] {
   flex-wrap: wrap;
   margin-bottom: 12px;
 }
+.chips.scroll {
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px 12px;
+  padding: 0 16px;
+}
+.chips.scroll::-webkit-scrollbar {
+  display: none;
+}
+.chips.scroll .chip {
+  flex-shrink: 0;
+}
 .chip {
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 999px;
-  padding: 8px 16px;
+  padding: 8px 12px;
+  gap: 6px;
+  font-size: 0.95rem;
   min-height: 44px;
   font-weight: 500;
 }
@@ -836,15 +862,55 @@ button.icon-btn,
 }
 
 /* ---- tasks ---------------------------------------------------------------- */
+/* A task folds away in two beats: the card ticks (or slides), then its row collapses to nothing. */
 
-.task {
-  border-left: 4px solid var(--border);
+.task-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-bottom: 12px;
+  transition:
+    grid-template-rows 0.35s ease 0.45s,
+    margin-bottom 0.35s ease 0.45s,
+    opacity 0.3s ease 0.45s;
 }
-.task.overdue {
-  border-left-color: var(--apricot);
+.task-clip {
+  min-height: 0;
+  overflow: clip;
+  overflow-clip-margin: 24px;
 }
-.task.due-today {
-  border-left-color: var(--accent);
+.task-wrap .card {
+  margin-bottom: 0;
+  transition:
+    transform 0.35s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease;
+}
+.task-wrap.leaving {
+  grid-template-rows: 0fr;
+  margin-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.task-wrap.leaving.skip,
+.task-wrap.leaving.snooze {
+  transition-delay: 0.25s;
+}
+.task-wrap.leaving.done .card {
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+}
+.task-wrap.leaving.done .task-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.task-wrap.leaving.skip .card {
+  transform: translateX(-12%);
+}
+.task-wrap.leaving.snooze .card {
+  transform: translateX(12%);
+}
+.card.task.overdue {
+  border-color: color-mix(in srgb, var(--late) 45%, var(--border));
 }
 .task-body {
   display: block;
@@ -854,11 +920,77 @@ button.icon-btn,
 a.task-body:active {
   opacity: 0.7;
 }
+.task-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.task-tile {
+  position: relative;
+  flex-shrink: 0;
+}
+.type-tile.ticked {
+  background: var(--accent);
+  color: var(--accent-text);
+  animation: pop 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.task-type {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tc);
+}
+.task-title {
+  font-weight: 650;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.tag {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 1px 8px;
+}
+.task-due {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.task-due.overdue {
+  color: var(--late);
+}
+.task-due.today {
+  color: var(--ok);
+}
+.task-due.open {
+  color: var(--c-harvest);
+}
+.task-instruction {
+  margin: 6px 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
 .task-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1.3fr 1fr 1fr;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .task-actions button {
   padding-left: 8px;
@@ -867,22 +999,63 @@ a.task-body:active {
 .task-sub {
   display: grid;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 .task-sub.skip {
   grid-template-columns: 1fr auto auto;
 }
 .task-sub.snooze {
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr) auto;
 }
 .task-sub button {
   padding-left: 8px;
   padding-right: 8px;
   white-space: nowrap;
 }
-.warn-text {
-  color: var(--warn);
-  font-weight: 600;
+.burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
+.burst i {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.burst i::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sun);
+  animation: burst 0.6s ease-out forwards;
+}
+.burst i:nth-child(even)::before {
+  width: 9px;
+  height: 6px;
+  border-radius: 0 100% 0 100%;
+  background: var(--c-propagate);
+}
+@keyframes burst {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-36px) scale(0.4);
+    opacity: 0;
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 .count {
   color: var(--muted);
@@ -892,6 +1065,357 @@ a.task-body:active {
 .center {
   text-align: center;
   padding: 32px 0;
+}
+
+/* ---- today ---------------------------------------------------------------- */
+/* The header's sky is fixed per time of day in both themes; the scene fades into the page below. */
+
+.today-hero {
+  position: relative;
+  margin: -16px -16px 0;
+  padding: calc(14px + env(safe-area-inset-top)) 20px 0;
+  overflow: hidden;
+  color: #1d2a20;
+}
+.today-hero.dawn {
+  background: linear-gradient(180deg, #f5bf97 0%, #f9d7b6 45%, #fbe6cf 80%);
+}
+.today-hero.day {
+  background: linear-gradient(180deg, #9fd1e8 0%, #cfe9ec 50%, #eef3df 85%);
+}
+.today-hero.dusk {
+  background: linear-gradient(180deg, #e9845d 0%, #f3a676 40%, #f8cf9c 80%);
+}
+.today-hero.night {
+  background: linear-gradient(180deg, #111a33 0%, #1f2c4f 50%, #34446a 85%);
+  color: #f3efe2;
+}
+.today-hero .eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8461f;
+}
+.today-hero.night .eyebrow {
+  color: #f6c35a;
+}
+.today-hero h1 {
+  font-size: 2.3rem;
+  line-height: 1.08;
+  margin: 2px 0 12px;
+}
+.hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.icon-btn.glass {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: transparent;
+  color: inherit;
+}
+.today-hero.night .hero-chip,
+.today-hero.night .icon-btn.glass {
+  background: rgba(255, 255, 255, 0.12);
+}
+.garden-scene {
+  display: block;
+  width: calc(100% + 40px);
+  height: auto;
+  aspect-ratio: 400 / 160;
+  max-height: 240px;
+  margin: 4px -20px 0;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+.star {
+  animation: twinkle 3s ease-in-out infinite;
+}
+.clouds {
+  animation: drift 40s linear infinite alternate;
+}
+.sun-glow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glow 6s ease-in-out infinite;
+}
+@keyframes twinkle {
+  50% {
+    opacity: 0.3;
+  }
+}
+@keyframes drift {
+  to {
+    transform: translateX(40px);
+  }
+}
+@keyframes glow {
+  50% {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+}
+
+.round-card {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: -30px 0 14px;
+  padding: 16px;
+  border-radius: 24px;
+  background: var(--sage);
+  color: var(--sage-text);
+  box-shadow: var(--shadow-lift);
+}
+.round-card.all-done {
+  background: linear-gradient(135deg, var(--sage), color-mix(in srgb, var(--sun) 40%, var(--sage)));
+}
+.round-card h2 {
+  margin: 2px 0 4px;
+  font-size: 1.35rem;
+}
+.round-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  opacity: 0.85;
+}
+.round-card .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+.ring {
+  position: relative;
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+}
+.ring svg {
+  display: block;
+}
+.ring-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--sage-text) 14%, transparent);
+  stroke-width: 8;
+}
+.ring-fill {
+  fill: none;
+  stroke: var(--ring);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.7s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+.ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.ring.full .ring-label {
+  animation: pop 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--c-feed);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.week h2 {
+  margin: 0;
+}
+.week-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: 10px;
+}
+button.week-day {
+  position: relative;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 8px 0;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  background: transparent;
+  font-weight: 500;
+}
+.week-day .dow {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.week-day .dnum {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.day-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--tc-soft, transparent);
+  color: var(--tc, var(--muted));
+}
+.week-day.free .day-icon {
+  opacity: 0.55;
+}
+.day-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.week-day.free .day-count {
+  color: var(--muted);
+}
+button.week-day.today {
+  background: var(--surface-2);
+}
+button.week-day.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+.week-day.selected .dow,
+.week-day.selected .day-count {
+  color: inherit;
+}
+.day-dot {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--apricot);
+}
+.chip-count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 20px;
+}
+.chip.active .chip-count {
+  background: color-mix(in srgb, var(--accent-text) 22%, transparent);
+  color: inherit;
+}
+.site-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.2rem;
+}
+.site-heading .count {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(var(--nav-h) + 26px + env(safe-area-inset-bottom));
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 2px 6px 2px 16px;
+  border-radius: 18px;
+  background: var(--toast-bg);
+  color: var(--toast-text);
+  box-shadow: var(--shadow-lift);
+  animation: toast-in 0.3s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+.toast-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.toast button.link {
+  color: var(--toast-action);
+  font-weight: 700;
+}
+.toast.done svg {
+  color: var(--toast-action);
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+
+.leaf-fall {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  pointer-events: none;
+}
+.leaf-fall i {
+  position: absolute;
+  top: -24px;
+  border-radius: 0 100% 0 100%;
+  background: var(--leaf);
+  animation: leaf-fall linear forwards;
+}
+@keyframes leaf-fall {
+  to {
+    transform: translate(var(--drift), 110vh) rotate(var(--turn));
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .leaf-fall,
+  .burst {
+    display: none;
+  }
 }
 
 /* ---- diagnosis -------------------------------------------------------------- */

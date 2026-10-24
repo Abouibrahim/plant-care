@@ -253,6 +253,34 @@ async function closeTask(id: string, status: "done" | "skipped" | "snoozed", not
   return changed;
 }
 
+/** Tasks marked done since a moment (ISO timestamp): the "N of M done" of today's round on Today. */
+export async function countDoneSince(sinceIso: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("tasks")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "done")
+    .gte("acted_at", sinceIso);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+/**
+ * Undo of Done or Skip from the Today toast: the row goes back to pending as the expansion wrote it.
+ * Snoozed rows are not reopened (the snooze already wrote the moved row). Returns false when the row
+ * was not done or skipped any more.
+ */
+export async function reopenTask(id: string): Promise<boolean> {
+  const r = await supabase
+    .from("tasks")
+    .update({ status: "pending", acted_at: null, note: "" })
+    .eq("id", id)
+    .in("status", ["done", "skipped"])
+    .select("id");
+  const changed = (must(r) as Array<{ id: string }>).length > 0;
+  if (changed) notifyTasksChanged();
+  return changed;
+}
+
 export function completeTask(id: string): Promise<boolean> {
   return closeTask(id, "done", "");
 }
