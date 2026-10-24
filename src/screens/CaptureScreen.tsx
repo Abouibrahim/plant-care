@@ -396,6 +396,9 @@ export function CaptureScreen() {
         progress.rows.add(i);
       }
 
+      // The plant's first tasks now rather than at the 06:00 cron; a failure here is not a failed save.
+      await api.expand({ plant_id: plant.id }).catch(() => undefined);
+
       if (runRef.current !== run) return;
       revokeAll();
       navigate(species.confirmed ? `/plants/${plant.id}` : `/species/${species.id}?plant=${plant.id}`);

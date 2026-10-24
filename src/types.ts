@@ -9,6 +9,8 @@ export const PLANT_SOURCES: PlantSource[] = ["nursery", "seed", "cutting", "graf
 
 export type PhotoKind = "identify" | "journal" | "problem";
 export type TaskType = "water" | "prune" | "feed" | "mulch" | "harvest" | "scout" | "propagate" | "protect";
+/** Display order on the Today screen and in the calendar. */
+export const TASK_TYPES: TaskType[] = ["water", "prune", "feed", "mulch", "harvest", "scout", "propagate", "protect"];
 export type TaskStatus = "pending" | "done" | "skipped" | "snoozed";
 
 export type PlantType = "tree" | "shrub" | "herb" | "climber" | "groundcover" | "grass" | "succulent" | "other";
@@ -198,6 +200,40 @@ export interface Task {
   acted_at: string | null;
   note: string;
   created_at: string;
+}
+
+/** What the expansion writes; status, acted_at and note take their defaults. */
+export type TaskInsert = Pick<Task, "plant_id" | "type" | "rule_key" | "due_on" | "window_end" | "title" | "instruction">;
+
+/** A task with the bits of its plant the Today screen shows. */
+export interface TaskWithPlant extends Task {
+  plant: Pick<Plant, "id" | "tag" | "site" | "zone"> | null;
+}
+
+/** One row of the `journal` view: a photo or an acted task, in one dated stream per plant. */
+export interface JournalEntry {
+  plant_id: string;
+  at: string;
+  kind: "photo" | "task";
+  /** photo kind, or task type */
+  subtype: string;
+  /** photo note, or the task's note (skip reason) falling back to its title */
+  text: string;
+  /** storage_path for a photo, status for a task */
+  ref: string;
+}
+
+export interface ExpandRequest {
+  /** Expand one plant only; omitted, every plant. */
+  plant_id?: string;
+}
+
+export interface ExpandResponse {
+  plants: number;
+  created: number;
+  removed: number;
+  /** The Tunis date the expansion ran for, YYYY-MM-DD. */
+  today: string;
 }
 
 export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

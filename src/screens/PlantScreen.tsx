@@ -1,14 +1,29 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { t } from "../i18n";
-import { getPlant, insertPhoto, listPhotos, photoPath, updatePlant, uploadPhoto } from "../lib/db";
+import { api } from "../lib/api";
+import { ageInMonths, localIsoDate, toLocalDate } from "../lib/dates";
+import {
+  completeTask,
+  getPlant,
+  insertPhoto,
+  listJournal,
+  listPhotos,
+  listPlantTasks,
+  photoPath,
+  skipTask,
+  snoozeTask,
+  updatePlant,
+  uploadPhoto,
+} from "../lib/db";
 import { prepareImage } from "../lib/image";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { PhotoImg } from "../components/PhotoImg";
 import { RecordForm, type RecordValues } from "../components/RecordForm";
+import { TaskCard, type TaskAction } from "../components/TaskCard";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
-import type { Photo, PlantWithSpecies } from "../types";
+import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Task, TaskStatus } from "../types";
 
 type TabKey = keyof typeof t.plant.tabs;
 const TABS: TabKey[] = ["needs", "calendar", "health", "guild", "journal"];
@@ -19,24 +34,20 @@ interface Loaded {
   photos: Photo[];
 }
 
+/** Tasks and the journal load after the plant; a failure there leaves the rest of the screen usable. */
+interface Extras {
+  id: string;
+  tasks: Task[];
+  journal: JournalEntry[];
+}
+
 function message(err: unknown): string {
   return err instanceof Error && err.message ? err.message : t.errors.generic;
 }
 
-/** Full months between a YYYY-MM-DD date and today. */
-function monthsSince(iso: string, today: Date = new Date()): number {
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return 0;
-  let months = (today.getFullYear() - y) * 12 + (today.getMonth() + 1 - m);
-  if (today.getDate() < d) months -= 1;
-  return Math.max(0, months);
-}
-
 /** YYYY-MM-DD as a local date string, without a timezone shift. */
 function formatIsoDate(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  if (!y || !m || !d) return iso;
-  return new Date(y, m - 1, d).toLocaleDateString();
+  return toLocalDate(iso)?.toLocaleDateString() ?? iso;
 }
 
 /** The top candidate scientific name stored in an identify photo's ai_result. */
@@ -58,6 +69,10 @@ export function PlantScreen() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [extras, setExtras] = useState<Extras | null>(null);
+  const [extrasError, setExtrasError] = useState<{ id: string; message: string } | null>(null);
+  const [extrasKey, setExtrasKey] = useState(0);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,15 +92,39 @@ export function PlantScreen() {
     };
   }, [id, reloadKey]);
 
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    Promise.all([listPlantTasks(id), listJournal(id)])
+      .then(([tasks, journal]) => {
+        if (!active) return;
+        setExtras({ id, tasks, journal });
+        setExtrasError(null);
+      })
+      .catch((err: unknown) => {
+        if (active) setExtrasError({ id, message: message(err) });
+      });
+    return () => {
+      active = false;
+    };
+  }, [id, reloadKey, extrasKey]);
+
   const error = loadError?.id === id ? loadError.message : null;
   const current = loaded?.id === id ? loaded : null;
   const loading = !error && current === null;
   const plant = current?.plant ?? null;
   const photos = current?.photos ?? [];
+  const tasks = extras?.id === id ? extras.tasks : null;
+  const journal = extras?.id === id ? extras.journal : null;
+  const extrasMessage = extrasError?.id === id ? extrasError.message : null;
 
   function retry() {
     setLoadError(null);
     setReloadKey((k) => k + 1);
+  }
+
+  function reloadExtras() {
+    setExtrasKey((k) => k + 1);
   }
 
   async function saveRecord(values: RecordValues) {
@@ -97,10 +136,31 @@ export function PlantScreen() {
       const fresh = await getPlant(plant.id);
       setLoaded((prev) => (prev && prev.id === plant.id ? { ...prev, plant: fresh } : prev));
       setEditing(false);
+      // A new planting date can change the plant's stage, so the tasks are expanded again.
+      void api
+        .expand({ plant_id: plant.id })
+        .catch(() => undefined)
+        .then(reloadExtras);
     } catch (err) {
       setActionError(message(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function actOnTask(task: Task, action: TaskAction) {
+    if (busyTaskId) return;
+    setBusyTaskId(task.id);
+    setActionError(null);
+    try {
+      if (action.kind === "done") await completeTask(task.id);
+      else if (action.kind === "skip") await skipTask(task.id, action.reason);
+      else await snoozeTask(task, action.days, localIsoDate());
+      reloadExtras();
+    } catch (err) {
+      setActionError(`${t.today.actionFailed}: ${message(err)}`);
+    } finally {
+      setBusyTaskId(null);
     }
   }
 
@@ -130,6 +190,7 @@ export function PlantScreen() {
       });
       const fresh = await listPhotos(plant.id);
       setLoaded((prev) => (prev && prev.id === plant.id ? { ...prev, photos: fresh } : prev));
+      reloadExtras();
       setTab("journal");
     } catch (err) {
       setActionError(message(err));
@@ -167,7 +228,8 @@ export function PlantScreen() {
 
   const species = plant.species;
   const newest = photos[0] ?? null;
-  const ageMonths = plant.planted_on ? monthsSince(plant.planted_on) : null;
+  const today = localIsoDate();
+  const ageMonths = ageInMonths(plant.planted_on, today);
   const busy = saving || uploading;
 
   return (
@@ -282,36 +344,96 @@ export function PlantScreen() {
       {tab === "needs" && <NeedsSection species={species} />}
       {tab === "calendar" && (
         <>
+          <section className="section">
+            <h2>{t.plant.nextTasks}</h2>
+            {extrasMessage && <Banner kind="error">{extrasMessage}</Banner>}
+            {tasks === null && !extrasMessage && <Spinner label={t.common.loading} />}
+            {tasks !== null && tasks.length === 0 && <p className="muted">{t.plant.noTasks}</p>}
+            {tasks?.map((task) => (
+              <TaskCard
+                key={task.id}
+                task={task}
+                today={today}
+                busy={busyTaskId === task.id}
+                onAct={(action) => void actOnTask(task, action)}
+              />
+            ))}
+            {tasks !== null && tasks.length > 0 && <p className="muted small">{t.plant.moreTasksHint}</p>}
+          </section>
           <CalendarSection species={species} plantedOn={plant.planted_on} />
         </>
       )}
       {tab === "health" && <HealthSection species={species} />}
       {tab === "guild" && <GuildUsesSection species={species} />}
-      {tab === "journal" && <Journal photos={photos} tag={plant.tag} />}
+      {tab === "journal" && (
+        <>
+          {extrasMessage && <Banner kind="error">{extrasMessage}</Banner>}
+          {journal === null && !extrasMessage && (
+            <div className="center">
+              <Spinner label={t.common.loading} />
+            </div>
+          )}
+          {journal !== null && <Journal entries={journal} photos={photos} tag={plant.tag} />}
+        </>
+      )}
     </div>
   );
 }
 
-function Journal({ photos, tag }: { photos: Photo[]; tag: string }) {
-  if (photos.length === 0) {
+const PHOTO_KINDS = new Set<string>(["identify", "journal", "problem"]);
+const TASK_STATUS_PILL: Record<TaskStatus, string> = { pending: "pill", done: "pill ok", skipped: "pill warn", snoozed: "pill" };
+
+function PhotoEntry({ entry, photo, tag }: { entry: JournalEntry; photo: Photo | undefined; tag: string }) {
+  const kind = (PHOTO_KINDS.has(entry.subtype) ? entry.subtype : "journal") as PhotoKind;
+  const kindLabel = t.plant.photoKinds[kind];
+  const top = kind === "identify" ? topCandidateName(photo?.ai_result) : null;
+  const pillClass = kind === "problem" ? "pill warn" : kind === "identify" ? "pill accent" : "pill";
+  return (
+    <div className="card row">
+      <PhotoImg path={entry.ref} alt={`${tag} · ${kindLabel}`} className="photo thumb" />
+      <div className="grow">
+        <div>{new Date(entry.at).toLocaleDateString()}</div>
+        <span className={pillClass}>{kindLabel}</span>
+        {top && <div className="muted small italic">{top}</div>}
+        {entry.text && <div className="small">{entry.text}</div>}
+      </div>
+    </div>
+  );
+}
+
+function TaskEntry({ entry }: { entry: JournalEntry }) {
+  const typeLabel = (t.enums.task_type as Record<string, string>)[entry.subtype] ?? entry.subtype;
+  const status = (entry.ref in TASK_STATUS_PILL ? entry.ref : "pending") as TaskStatus;
+  return (
+    <div className="card">
+      <div className="row between" style={{ alignItems: "flex-start" }}>
+        <div className="grow">
+          <div>{new Date(entry.at).toLocaleDateString()}</div>
+          <div>{entry.text}</div>
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <span className="pill accent">{typeLabel}</span>
+          <span className={TASK_STATUS_PILL[status]}>{t.enums.task_status[status]}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Photos and acted tasks from the `journal` view, newest first; photos keep their identify candidate. */
+function Journal({ entries, photos, tag }: { entries: JournalEntry[]; photos: Photo[]; tag: string }) {
+  if (entries.length === 0) {
     return <p className="center muted">{t.plant.journalEmpty}</p>;
   }
+  const byPath = new Map(photos.map((p) => [p.storage_path, p]));
   return (
     <div>
-      {photos.map((photo) => {
-        const kindLabel = t.plant.photoKinds[photo.kind];
-        const top = photo.kind === "identify" ? topCandidateName(photo.ai_result) : null;
-        const pillClass = photo.kind === "problem" ? "pill warn" : photo.kind === "identify" ? "pill accent" : "pill";
-        return (
-          <div className="card row" key={photo.id}>
-            <PhotoImg path={photo.storage_path} alt={`${tag} · ${kindLabel}`} className="photo thumb" />
-            <div className="grow">
-              <div>{new Date(photo.taken_at).toLocaleDateString()}</div>
-              <span className={pillClass}>{kindLabel}</span>
-              {top && <div className="muted small italic">{top}</div>}
-              {photo.note && <div className="small">{photo.note}</div>}
-            </div>
-          </div>
+      {entries.map((entry, i) => {
+        const key = `${entry.kind}:${entry.ref}:${entry.at}:${i}`;
+        return entry.kind === "photo" ? (
+          <PhotoEntry key={key} entry={entry} photo={byPath.get(entry.ref)} tag={tag} />
+        ) : (
+          <TaskEntry key={key} entry={entry} />
         );
       })}
     </div>

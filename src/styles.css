@@ -538,6 +538,60 @@ input[type="checkbox"] {
   padding-left: 20px;
 }
 
+/* ---- tasks ---------------------------------------------------------------- */
+
+.task {
+  border-left: 4px solid var(--border);
+}
+.task.overdue {
+  border-left-color: var(--warn);
+}
+.task.due-today {
+  border-left-color: var(--accent);
+}
+.task-body {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+a.task-body:active {
+  opacity: 0.7;
+}
+.task-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.task-actions button {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.task-sub {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.task-sub.skip {
+  grid-template-columns: 1fr auto auto;
+}
+.task-sub.snooze {
+  grid-template-columns: repeat(4, 1fr);
+}
+.task-sub button {
+  padding-left: 8px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
+.warn-text {
+  color: var(--warn);
+  font-weight: 600;
+}
+.count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .center {
   text-align: center;
   padding: 32px 0;

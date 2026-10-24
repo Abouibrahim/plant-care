@@ -54,9 +54,33 @@ export const en = {
 
   today: {
     title: "Today",
-    empty: "Tasks arrive in Phase 2. Until then, photograph a plant to add it to the library.",
+    refresh: "Refresh",
+    refreshing: "Refreshing…",
+    summary: (total: number, overdue: number) =>
+      total === 0
+        ? "No tasks this week"
+        : `${total === 1 ? "1 task" : `${total} tasks`} this week${overdue > 0 ? `, ${overdue} overdue` : ""}`,
+    taskCount: (n: number) => (n === 1 ? "1 task" : `${n} tasks`),
+    empty: "Nothing due this week.",
+    emptyHint: "Tasks come from each species' care calendar, 90 days ahead, every morning. Photograph a plant to add one.",
     capture: "Photograph a plant",
-    plantsCount: (n: number) => (n === 1 ? "1 plant recorded" : `${n} plants recorded`),
+    overdue: "Overdue",
+    dueToday: "Today",
+    openSince: (date: string) => `Open since ${date}`,
+    until: (date: string) => `until ${date}`,
+    windowEnded: (date: string) => `Window ended ${date}`,
+    done: "Done",
+    skip: "Skip",
+    snooze: "Snooze",
+    skipReason: "Reason (optional)",
+    skipConfirm: "Skip it",
+    snoozeDays: (n: number) => (n === 1 ? "1 day" : `${n} days`),
+    refreshed: (created: number, removed: number) =>
+      created === 0 && removed === 0
+        ? "Tasks are up to date"
+        : `${created === 1 ? "1 task added" : `${created} tasks added`}${removed > 0 ? `, ${removed} removed` : ""}`,
+    refreshFailed: "The tasks could not be refreshed",
+    actionFailed: "The task could not be updated",
   },
 
   capture: {
@@ -136,8 +160,11 @@ export const en = {
     editRecord: "Edit record",
     addJournalPhoto: "Add a journal photo",
     diagnose: "Diagnose (Phase 4)",
-    tasksLater: "Tasks are generated from these rules from Phase 2.",
-    journalEmpty: "No photos yet",
+    nextTasks: "Next tasks",
+    noTasks: "No pending tasks. They are created from the rules below, 90 days ahead.",
+    moreTasksHint: "Tasks are listed on Today when they come due.",
+    journalEmpty: "No photos or task log yet",
+    extrasFailed: "The tasks and the journal could not be loaded",
     profileLink: "Open the species profile",
     plantedOn: "Planted",
     ageMonths: (m: number) => (m < 24 ? `${m} months old (establishment)` : `${Math.floor(m / 12)} years old (mature)`),
@@ -244,8 +271,8 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 1",
-    phaseBody: "Capture, identify, profile, save. Tasks and reminders follow in Phases 2 and 3.",
+    phaseTitle: "Phase 2",
+    phaseBody: "Capture, identify, profile, and the task calendar with the Today screen. Push reminders follow in Phase 3.",
     language: "Language",
     languageNote: "English for now; a French toggle follows in Phase 5.",
   },
@@ -300,6 +327,7 @@ export const en = {
       propagate: "Propagate",
       protect: "Protect",
     },
+    task_status: { pending: "Pending", done: "Done", skipped: "Skipped", snoozed: "Snoozed" },
     months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
     monthsShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
   },

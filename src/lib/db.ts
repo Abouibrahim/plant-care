@@ -1,7 +1,9 @@
-// Typed access to the four tables and the photos bucket. Screens import from here only.
+// Typed access to the four tables, the journal view and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
+import { addDays } from "./dates";
 import { t } from "../i18n";
 import type {
+  JournalEntry,
   Photo,
   PhotoInsert,
   Plant,
@@ -10,6 +12,8 @@ import type {
   Site,
   Species,
   SpeciesProfile,
+  Task,
+  TaskWithPlant,
 } from "../types";
 
 interface Result<T> {
@@ -173,4 +177,86 @@ export async function updateSpeciesField<K extends keyof SpeciesProfile>(
   const user_edits = { ...species.user_edits, [key]: value };
   const r = await supabase.from("species").update({ [key]: value, user_edits }).eq("id", species.id).select("*").single();
   return must(r) as Species;
+}
+
+// ---- tasks ------------------------------------------------------------------
+// Rows are written by the expansion (api/_tasks.ts); the app only reads them and closes them.
+
+const TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone)";
+
+/** Pending tasks due on or before a day (YYYY-MM-DD), earliest first, each with its plant. */
+export async function listDueTasks(untilIso: string): Promise<TaskWithPlant[]> {
+  const r = await supabase
+    .from("tasks")
+    .select(TASK_WITH_PLANT)
+    .eq("status", "pending")
+    .lte("due_on", untilIso)
+    .order("due_on", { ascending: true })
+    .order("created_at", { ascending: true });
+  return must(r) as unknown as TaskWithPlant[];
+}
+
+/** A plant's next pending tasks, earliest first. */
+export async function listPlantTasks(plantId: string, limit = 12): Promise<Task[]> {
+  const r = await supabase
+    .from("tasks")
+    .select("*")
+    .eq("plant_id", plantId)
+    .eq("status", "pending")
+    .order("due_on", { ascending: true })
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  return must(r) as Task[];
+}
+
+/** Photos and acted tasks of a plant in one stream, newest first (the `journal` view). */
+export async function listJournal(plantId: string): Promise<JournalEntry[]> {
+  const r = await supabase.from("journal").select("*").eq("plant_id", plantId).order("at", { ascending: false });
+  return must(r) as JournalEntry[];
+}
+
+/**
+ * Closes a pending task. Only a pending row changes, so a second tap or a task already acted on
+ * from another screen is a no-op; returns false in that case.
+ */
+async function closeTask(id: string, status: "done" | "skipped" | "snoozed", note: string): Promise<boolean> {
+  const r = await supabase
+    .from("tasks")
+    .update({ status, acted_at: new Date().toISOString(), note })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id");
+  return (must(r) as Array<{ id: string }>).length > 0;
+}
+
+export function completeTask(id: string): Promise<boolean> {
+  return closeTask(id, "done", "");
+}
+
+/** The reason goes to `note`, which the journal shows in place of the title. */
+export function skipTask(id: string, reason: string): Promise<boolean> {
+  return closeTask(id, "skipped", reason.trim());
+}
+
+/**
+ * Snooze: a new pending row carries the same rule to today + days, then the current row closes as
+ * `snoozed`. The closed row keeps its line in the journal and its slot for the expansion's
+ * de-duplication (same plant, rule_key and due_on), so the task is not recreated the next morning.
+ * When a task of the same rule already falls on the new day, that one stands in for the snoozed task.
+ * Returns the new due date.
+ */
+export async function snoozeTask(task: Task, days: number, todayIso: string): Promise<string> {
+  const due_on = addDays(todayIso, days);
+  const { error } = await supabase.from("tasks").insert({
+    plant_id: task.plant_id,
+    type: task.type,
+    rule_key: task.rule_key,
+    due_on,
+    window_end: task.window_end,
+    title: task.title,
+    instruction: task.instruction,
+  });
+  if (error && error.code !== "23505") throw new Error(error.message);
+  await closeTask(task.id, "snoozed", "");
+  return due_on;
 }

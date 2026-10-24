@@ -1,26 +1,7 @@
 import { t } from "../../i18n";
-import type { CareRule, SpeciesProfile, TaskType } from "../../types";
+import { ageInMonths, localIsoDate, ruleApplies } from "../../lib/dates";
+import { TASK_TYPES, type CareRule, type SpeciesProfile } from "../../types";
 import { MonthGrid } from "./MonthGrid";
-
-const ORDER: TaskType[] = ["water", "prune", "feed", "mulch", "harvest", "scout", "propagate", "protect"];
-/** Below this age a plant is in establishment; from it on it is mature. */
-const ESTABLISHMENT_MONTHS = 24;
-
-/** Whole months between a YYYY-MM-DD planting date and today; null when unknown or unreadable. */
-function ageInMonths(plantedOn: string | null, today: Date): number | null {
-  if (!plantedOn) return null;
-  const [y, m, d] = plantedOn.split("-").map(Number);
-  if (!y || !m || !d) return null;
-  let months = (today.getFullYear() - y) * 12 + (today.getMonth() + 1 - m);
-  if (today.getDate() < d) months -= 1;
-  return Math.max(0, months);
-}
-
-function ruleApplies(rule: CareRule, ageMonths: number | null): boolean {
-  if (rule.age === "any") return true;
-  const stage = ageMonths !== null && ageMonths < ESTABLISHMENT_MONTHS ? "establishment" : "mature";
-  return rule.age === stage;
-}
 
 /** First listed month, 13 when the rule names none, so unscheduled rules sort last. */
 function firstMonth(rule: CareRule): number {
@@ -65,8 +46,8 @@ function RuleCard({ rule, applies }: { rule: CareRule; applies: boolean }) {
  */
 export function CalendarSection({ species, plantedOn }: { species: SpeciesProfile; plantedOn?: string | null }) {
   const rules = species.care_calendar ?? [];
-  const age = plantedOn === undefined ? undefined : ageInMonths(plantedOn, new Date());
-  const ordered = [...rules].sort((a, b) => firstMonth(a) - firstMonth(b) || ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
+  const age = plantedOn === undefined ? undefined : ageInMonths(plantedOn, localIsoDate());
+  const ordered = [...rules].sort((a, b) => firstMonth(a) - firstMonth(b) || TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type));
 
   return (
     <section className="section">
@@ -79,7 +60,6 @@ export function CalendarSection({ species, plantedOn }: { species: SpeciesProfil
           applies={age === undefined || ruleApplies(rule, age)}
         />
       ))}
-      <p className="muted small">{t.plant.tasksLater}</p>
     </section>
   );
 }

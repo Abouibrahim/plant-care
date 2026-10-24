@@ -1,6 +1,13 @@
 // Calls to the Vercel functions. Every call carries the Supabase access token.
 import { supabase } from "./supabase";
-import type { IdentifyRequest, IdentifyResponse, ProfileApiResponse, ProfileRequest } from "../types";
+import type {
+  ExpandRequest,
+  ExpandResponse,
+  IdentifyRequest,
+  IdentifyResponse,
+  ProfileApiResponse,
+  ProfileRequest,
+} from "../types";
 
 export class ApiError extends Error {
   status: number;
@@ -20,7 +27,7 @@ function parseJson(text: string): unknown {
   }
 }
 
-export async function callApi<T>(path: string, body: unknown): Promise<T> {
+export async function callApi<T>(path: string, body: unknown, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -28,7 +35,7 @@ export async function callApi<T>(path: string, body: unknown): Promise<T> {
 
   // The functions budget their own time (api/_claude.ts); this only stops a dead connection hanging.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(`/api/${path}`, {
@@ -57,8 +64,12 @@ export async function callApi<T>(path: string, body: unknown): Promise<T> {
 }
 
 const REQUEST_TIMEOUT_MS = 300_000;
+/** The expansion makes no Claude call; a cold start plus three queries is well under this. */
+const EXPAND_TIMEOUT_MS = 30_000;
 
 export const api = {
   identify: (req: IdentifyRequest) => callApi<IdentifyResponse>("identify", req),
   profile: (req: ProfileRequest) => callApi<ProfileApiResponse>("profile", req),
+  /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
+  expand: (req: ExpandRequest = {}) => callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS),
 };
