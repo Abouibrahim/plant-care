@@ -23,9 +23,10 @@ api/                 Vercel functions (one file per route)
   identify.ts        POST → candidates
   profile.ts         POST → species profile, upsert
   diagnose.ts        POST → diagnosis
+  ask.ts             POST → answer to a free question about one plant (Phase 6)
   daily.ts           cron: expand tasks, then send the digest
   push-subscribe.ts  POST → store a push subscription
-prompts/             system-context.md, identify.md, profile.md, diagnose.md, *.schema.json
+prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, *.schema.json
 src/                 the PWA (screens: Today, Capture, Plant, Plants, Species, Settings)
 supabase/schema.sql  tables, enums, RLS
 docs/SPEC.md         the design spec
@@ -44,7 +45,7 @@ PHASE1.md            first milestone with acceptance tests
 - `system` is an array: first the site context from `prompts/system-context.md` with `cache_control: { type: "ephemeral" }`, then the call-specific instructions from `prompts/<call>.md`. Check the prompt-caching page before changing this: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
 - Images go before text in the user message, each preceded by a short label (`Image 1:`), as the vision page recommends: https://platform.claude.com/docs/en/build-with-claude/vision
 - `output_config.format = { type: "json_schema", schema }` with the matching `prompts/*.schema.json`. Every property is required and every object has `additionalProperties: false`; keep it that way, the API limits optional fields and reorders them. Reference: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
-- `max_tokens`: identify 2048, profile 6000, diagnose 2048. If `stop_reason` is `max_tokens`, retry once with double; if `refusal`, surface the text to the user; otherwise parse the first text block.
+- `max_tokens`: identify 2048, profile 6000, diagnose 2048, ask 3072. If `stop_reason` is `max_tokens`, retry once with double; if `refusal`, surface the text to the user; otherwise parse the first text block.
 - The `care_calendar` array in the profile is the single source of schedules, watering included (`every_days` and `litres` on the item); the `water` object holds needs, tolerance and signs only. This supersedes the `establishment_schedule` / `mature_schedule` fields named in the spec.
 - Profile regeneration merges: fields listed in `species.user_edits` are kept, everything else is replaced.
 

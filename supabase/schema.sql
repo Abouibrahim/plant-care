@@ -106,6 +106,19 @@ create table settings (
   updated_at timestamptz not null default now()
 );
 
+-- Ask Claude (Phase 6): one row per exchange, written by the app once Claude answered. The rows of
+-- one conversation share a thread_id, so a conversation reopened from the journal can go on.
+create table questions (
+  id         uuid primary key default gen_random_uuid(),
+  plant_id   uuid not null references plants(id) on delete cascade,
+  thread_id  uuid not null,
+  asked_at   timestamptz not null default now(),
+  question   text not null,
+  answer     jsonb not null                       -- {answer, profile_note, follow_ups} plus the usage
+);
+create index questions_plant_idx on questions (plant_id, asked_at desc);
+create index questions_thread_idx on questions (thread_id, asked_at);
+
 -- updated_at maintenance
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
@@ -113,13 +126,18 @@ create trigger species_updated before update on species for each row execute fun
 create trigger plants_updated  before update on plants  for each row execute function set_updated_at();
 create trigger settings_updated before update on settings for each row execute function set_updated_at();
 
--- Journal: photos, task actions and diagnoses in one dated stream per plant.
-create view journal as
+-- Journal: photos, task actions, diagnoses and questions in one dated stream per plant.
+-- security_invoker makes the view read the tables with the caller's rights, so their RLS applies;
+-- a plain view runs as its owner and would hand every row to the anon key.
+create view journal with (security_invoker = true) as
   select plant_id, taken_at as at, 'photo'::text as kind, kind::text as subtype, note as text, storage_path as ref
     from photos
   union all
   select plant_id, acted_at as at, 'task', type::text, coalesce(nullif(note, ''), title), status::text
-    from tasks where acted_at is not null;
+    from tasks where acted_at is not null
+  union all
+  select plant_id, asked_at as at, 'question', thread_id::text, question, id::text
+    from questions;
 
 -- Row level security: the single authenticated user owns everything.
 alter table species            enable row level security;
@@ -128,6 +146,7 @@ alter table photos             enable row level security;
 alter table tasks              enable row level security;
 alter table push_subscriptions enable row level security;
 alter table settings           enable row level security;
+alter table questions          enable row level security;
 
 create policy owner_all on species            for all to authenticated using (true) with check (true);
 create policy owner_all on plants             for all to authenticated using (true) with check (true);
@@ -135,6 +154,7 @@ create policy owner_all on photos             for all to authenticated using (tr
 create policy owner_all on tasks              for all to authenticated using (true) with check (true);
 create policy owner_all on push_subscriptions for all to authenticated using (true) with check (true);
 create policy owner_all on settings           for all to authenticated using (true) with check (true);
+create policy owner_all on questions          for all to authenticated using (true) with check (true);
 
 -- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
 -- read through signed URLs and delete in it. Both are safe to re-run, and the policy never

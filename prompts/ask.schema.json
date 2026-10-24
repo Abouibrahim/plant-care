@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "answer": { "type": "string" },
+    "profile_note": { "type": "string" },
+    "follow_ups": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["answer", "profile_note", "follow_ups"],
+  "additionalProperties": false
+}

@@ -115,6 +115,52 @@ export type ProblemAiResult = Diagnosis & Usage & { note: string };
  */
 export const DIAGNOSIS_RULE_PREFIX = "diagnosis:";
 
+// ---- ask ----------------------------------------------------------------------
+
+/** Longest question /api/ask accepts; the panel's text box stops at the same length. */
+export const ASK_MAX_QUESTION_CHARS = 1000;
+/** Earlier exchanges of a conversation sent back with a question; older ones are left out. */
+export const ASK_MAX_HISTORY = 6;
+
+/** Exactly what prompts/ask.schema.json returns. */
+export interface Answer {
+  answer: string;
+  /** Where the answer departs from the species profile, or "". */
+  profile_note: string;
+  /** Up to three questions the grower may ask next, in the language of the answer. */
+  follow_ups: string[];
+}
+
+/** One earlier exchange of a conversation, sent back with the next question. */
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
+export interface AskRequest {
+  plant_id: string;
+  question: string;
+  /** The conversation so far, oldest first; the route reads the last six exchanges. */
+  history?: AskTurn[];
+}
+
+export type AskResponse = (Answer & Usage) | ({ refusal: string } & Usage);
+
+/**
+ * A row of the questions table: one exchange of a conversation, saved by the app once Claude
+ * answered. The app makes the id and asked_at when the answer arrives, so a save retried later
+ * keeps the exchange's place in the conversation and cannot write it twice.
+ */
+export interface Question {
+  id: string;
+  plant_id: string;
+  /** Shared by every question of one conversation. */
+  thread_id: string;
+  asked_at: string;
+  question: string;
+  answer: Answer & Usage;
+}
+
 // ---- species profile -------------------------------------------------------
 
 export interface CareRule {
@@ -252,16 +298,16 @@ export interface TaskWithPlant extends Task {
   plant: Pick<Plant, "id" | "tag" | "site" | "zone"> | null;
 }
 
-/** One row of the `journal` view: a photo or an acted task, in one dated stream per plant. */
+/** One row of the `journal` view: a photo, an acted task or a question, in one dated stream per plant. */
 export interface JournalEntry {
   plant_id: string;
   at: string;
-  kind: "photo" | "task";
-  /** photo kind, or task type */
+  kind: "photo" | "task" | "question";
+  /** photo kind, task type, or a question's thread id */
   subtype: string;
-  /** photo note, or the task's note (skip reason) falling back to its title */
+  /** photo note, the task's note (skip reason) falling back to its title, or the question asked */
   text: string;
-  /** storage_path for a photo, status for a task */
+  /** storage_path for a photo, status for a task, the questions row id for a question */
   ref: string;
 }
 

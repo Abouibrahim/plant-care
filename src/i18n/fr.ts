@@ -190,6 +190,7 @@ export const fr: Strings = {
     editRecord: "Modifier la fiche",
     addJournalPhoto: "Photo pour le journal",
     diagnose: "Diagnostiquer",
+    ask: "Demander à Claude",
     nextTasks: "Prochaines tâches",
     noTasks: "Aucune tâche en attente. Elles sont créées à partir des règles ci-dessous, 90 jours à l'avance.",
     moreTasksHint: "Les tâches apparaissent dans Aujourd'hui à leur échéance.",
@@ -263,6 +264,34 @@ export const fr: Strings = {
       mechanical: "Mécanique",
       other: "Autre",
     },
+  },
+
+  /** Demander à Claude depuis l'écran de la plante : une conversation sur une plante, chaque réponse gardée dans son journal. */
+  ask: {
+    title: "Demander à Claude",
+    intro: (name) =>
+      `Posez n'importe quelle question sur cette plante (${name}) : soins, calendrier, quoi planter à côté. Claude répond d'après sa fiche, ses tâches, ses diagnostics et les plantes de sa zone.`,
+    photoHint: "Pour un symptôme visible, Diagnostiquer avec une photo donne une meilleure réponse.",
+    startersLabel: "Questions pour commencer",
+    starters: ["Que dois-je faire pour elle ce mois-ci ?", "Comment l'arroser en ce moment ?", "Que planter à côté d'elle ?"],
+    followUps: "Questions suivantes",
+    label: "Votre question",
+    placeholder: "ex. Faut-il la tailler avant les pluies ?",
+    send: "Demander",
+    sending: "Claude réfléchit…",
+    failed: "La question n'a pas pu recevoir de réponse",
+    refusal: "Claude a décliné cette question",
+    loading: "Chargement de la conversation…",
+    loadFailed: "La conversation n'a pas pu être chargée",
+    profileNote: "À vérifier dans la fiche",
+    askedOn: (date) => `Demandé le ${date}`,
+    saving: "Enregistrement dans le journal…",
+    saveFailed: "La réponse n'est pas encore dans le journal.",
+    saveAgain: "Réessayer l'enregistrement",
+    unavailable:
+      "Les réponses ne sont pas encore gardées : la table questions n'existe pas. Exécutez le SQL de la section Setup de PHASE6.md dans l'éditeur SQL de Supabase.",
+    journalLabel: "Question",
+    openConversation: "Ouvrir la conversation",
   },
 
   plants: {
@@ -392,9 +421,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 5",
+    phaseTitle: "Phase 6",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, et maintenant l'interface en français, les exports CSV, les listes de zones par site et la modification à la main du calendrier de soins et des ravageurs.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, et maintenant les questions à Claude sur une plante, gardées dans son journal.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt.",

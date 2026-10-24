@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { BookOpen, ChevronLeft, ImagePlus, MapPin, Pencil, Stethoscope, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ImagePlus, MapPin, MessageCircleQuestionMark, Pencil, Stethoscope, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
+import { storedAnswer } from "../lib/ask";
 import { ageInMonths, localIsoDate, toLocalDate } from "../lib/dates";
 import {
   completeTask,
@@ -11,6 +12,7 @@ import {
   listJournal,
   listPhotos,
   listPlantTasks,
+  listQuestions,
   photoPath,
   skipTask,
   snoozeTask,
@@ -26,12 +28,16 @@ import { RecordForm, type RecordValues } from "../components/RecordForm";
 import { TaskCard, type TaskAction } from "../components/TaskCard";
 import { SiteLabel, TypePill } from "../components/TypeIcon";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
+import { AskPanel } from "./plant/AskPanel";
 import { DiagnosePanel } from "./plant/DiagnosePanel";
 import { PastDiagnoses } from "./plant/PastDiagnoses";
-import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Task, TaskStatus, TaskType } from "../types";
+import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Question, Task, TaskStatus, TaskType } from "../types";
 
 /** The diagnosis panel: a new diagnosis, or a saved one reopened from the journal or the Health tab. */
 type DiagnoseState = { kind: "new" } | { kind: "open"; photo: Photo } | null;
+
+/** The Ask Claude panel: a new conversation (threadId null), or a saved one reopened from the journal. */
+type AskState = { threadId: string | null } | null;
 
 type TabKey = keyof typeof t.plant.tabs;
 const TABS: TabKey[] = ["needs", "calendar", "health", "guild", "journal"];
@@ -47,6 +53,8 @@ interface Extras {
   id: string;
   tasks: Task[];
   journal: JournalEntry[];
+  /** The answers behind the journal's question entries; empty when they cannot be read. */
+  questions: Question[];
 }
 
 function message(err: unknown): string {
@@ -82,6 +90,7 @@ export function PlantScreen() {
   const [extrasKey, setExtrasKey] = useState(0);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [diagnose, setDiagnose] = useState<DiagnoseState>(null);
+  const [ask, setAsk] = useState<AskState>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -104,10 +113,13 @@ export function PlantScreen() {
   useEffect(() => {
     if (!id) return;
     let active = true;
-    Promise.all([listPlantTasks(id), listJournal(id)])
-      .then(([tasks, journal]) => {
+    // The questions only add the answer previews to the journal's question entries (which carry
+    // their thread id themselves), so a failure there costs the previews, not the tasks and the journal.
+    const questionsLoad = listQuestions(id).catch((): Question[] => []);
+    Promise.all([listPlantTasks(id), listJournal(id), questionsLoad])
+      .then(([tasks, journal, questions]) => {
         if (!active) return;
-        setExtras({ id, tasks, journal });
+        setExtras({ id, tasks, journal, questions });
         setExtrasError(null);
       })
       .catch((err: unknown) => {
@@ -125,6 +137,7 @@ export function PlantScreen() {
   const photos = current?.photos ?? [];
   const tasks = extras?.id === id ? extras.tasks : null;
   const journal = extras?.id === id ? extras.journal : null;
+  const questions = extras?.id === id ? extras.questions : [];
   const extrasMessage = extrasError?.id === id ? extrasError.message : null;
 
   function retry() {
@@ -314,6 +327,10 @@ export function PlantScreen() {
           <Stethoscope size={18} aria-hidden />
           {t.plant.diagnose}
         </button>
+        <button type="button" className="small span-2" onClick={() => setAsk({ threadId: null })} disabled={busy}>
+          <MessageCircleQuestionMark size={18} aria-hidden />
+          {t.plant.ask}
+        </button>
         {uploading && <Spinner />}
       </div>
       <input
@@ -403,7 +420,14 @@ export function PlantScreen() {
             </div>
           )}
           {journal !== null && (
-            <Journal entries={journal} photos={photos} tag={plant.tag} onOpenDiagnosis={(photo) => setDiagnose({ kind: "open", photo })} />
+            <Journal
+              entries={journal}
+              photos={photos}
+              questions={questions}
+              tag={plant.tag}
+              onOpenDiagnosis={(photo) => setDiagnose({ kind: "open", photo })}
+              onOpenThread={(threadId) => setAsk({ threadId })}
+            />
           )}
         </>
       )}
@@ -417,6 +441,7 @@ export function PlantScreen() {
           onClose={() => setDiagnose(null)}
         />
       )}
+      {ask && <AskPanel plant={plant} threadId={ask.threadId} onChanged={reloadExtras} onClose={() => setAsk(null)} />}
     </div>
   );
 }
@@ -477,28 +502,60 @@ function TaskEntry({ entry }: { entry: JournalEntry }) {
   );
 }
 
+/**
+ * A question asked about the plant: the opening lines of the answer and the way back into the
+ * conversation, whose id the journal row carries, so it opens even when the answers could not be read.
+ */
+function QuestionEntry({ entry, question, onOpenThread }: { entry: JournalEntry; question: Question | undefined; onOpenThread: (threadId: string) => void }) {
+  const answer = question ? storedAnswer(question.answer) : null;
+  const threadId = question?.thread_id ?? entry.subtype;
+  return (
+    <div className="card">
+      <div className="row between" style={{ alignItems: "flex-start" }}>
+        <div className="grow">{new Date(entry.at).toLocaleDateString()}</div>
+        <span className="pill accent">{t.ask.journalLabel}</span>
+      </div>
+      <div style={{ fontWeight: 600, margin: "4px 0" }}>{entry.text}</div>
+      {answer && <div className="small muted answer-text clamp-3">{answer.answer}</div>}
+      {threadId && (
+        <button type="button" className="link small" style={{ paddingLeft: 0 }} onClick={() => onOpenThread(threadId)}>
+          {t.ask.openConversation}
+        </button>
+      )}
+    </div>
+  );
+}
+
 interface JournalProps {
   entries: JournalEntry[];
   photos: Photo[];
+  questions: Question[];
   tag: string;
   onOpenDiagnosis: (photo: Photo) => void;
+  onOpenThread: (threadId: string) => void;
 }
 
-/** Photos and acted tasks from the `journal` view, newest first; photos keep their identify candidate or diagnosis. */
-function Journal({ entries, photos, tag, onOpenDiagnosis }: JournalProps) {
+/**
+ * Photos, acted tasks and questions from the `journal` view, newest first; photos keep their
+ * identify candidate or diagnosis, questions the opening of their answer.
+ */
+function Journal({ entries, photos, questions, tag, onOpenDiagnosis, onOpenThread }: JournalProps) {
   if (entries.length === 0) {
     return <p className="center muted">{t.plant.journalEmpty}</p>;
   }
   const byPath = new Map(photos.map((p) => [p.storage_path, p]));
+  const byId = new Map(questions.map((q) => [q.id, q]));
   return (
     <div>
       {entries.map((entry, i) => {
         const key = `${entry.kind}:${entry.ref}:${entry.at}:${i}`;
-        return entry.kind === "photo" ? (
-          <PhotoEntry key={key} entry={entry} photo={byPath.get(entry.ref)} tag={tag} onOpenDiagnosis={onOpenDiagnosis} />
-        ) : (
-          <TaskEntry key={key} entry={entry} />
-        );
+        if (entry.kind === "photo") {
+          return <PhotoEntry key={key} entry={entry} photo={byPath.get(entry.ref)} tag={tag} onOpenDiagnosis={onOpenDiagnosis} />;
+        }
+        if (entry.kind === "question") {
+          return <QuestionEntry key={key} entry={entry} question={byId.get(entry.ref)} onOpenThread={onOpenThread} />;
+        }
+        return <TaskEntry key={key} entry={entry} />;
       })}
     </div>
   );

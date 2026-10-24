@@ -11,6 +11,7 @@ import {
   type Plant,
   type PlantInsert,
   type PlantWithSpecies,
+  type Question,
   type Site,
   type Species,
   type SpeciesProfile,
@@ -405,6 +406,45 @@ export async function insertRephotoTask(input: {
   return r.data as Task;
 }
 
+// ---- questions --------------------------------------------------------------
+// One row per exchange of an Ask Claude conversation (Phase 6), written once Claude answered.
+// Until the SQL that creates the table has been run, reads and writes fail with
+// QuestionsUnavailable: the panel still answers and says the answers are not kept.
+
+export class QuestionsUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QuestionsUnavailable";
+  }
+}
+
+function questionsError(error: { code?: string; message: string }): Error {
+  return missingTable(error, "questions") ? new QuestionsUnavailable(error.message) : new Error(error.message);
+}
+
+/** Every question asked about a plant, newest first. */
+export async function listQuestions(plantId: string): Promise<Question[]> {
+  const r = await supabase.from("questions").select("*").eq("plant_id", plantId).order("asked_at", { ascending: false });
+  if (r.error) throw questionsError(r.error);
+  return (r.data ?? []) as Question[];
+}
+
+/** One conversation, oldest first. */
+export async function listThread(threadId: string): Promise<Question[]> {
+  const r = await supabase.from("questions").select("*").eq("thread_id", threadId).order("asked_at", { ascending: true });
+  if (r.error) throw questionsError(r.error);
+  return (r.data ?? []) as Question[];
+}
+
+/**
+ * Saves one exchange under the id the app made for it. A retry after a save whose answer was lost
+ * on the way back finds the row already there (unique id) and counts as saved.
+ */
+export async function insertQuestion(row: Question): Promise<void> {
+  const { error } = await supabase.from("questions").insert(row);
+  if (error && error.code !== "23505") throw questionsError(error);
+}
+
 // ---- export -----------------------------------------------------------------
 // The CSV exports (Settings) read whole tables. PostgREST answers at most 1,000 rows per request,
 // so the readers page through with range(); a single year of waterings passes that mark.
@@ -457,13 +497,13 @@ export class SettingsUnavailable extends Error {
 }
 
 /** PostgREST answers PGRST205 when a table is not in its schema cache; Postgres says 42P01. */
-function missingTable(error: { code?: string; message: string }): boolean {
+function missingTable(error: { code?: string; message: string }, table: string): boolean {
   if (error.code === "PGRST205" || error.code === "42P01") return true;
-  return /settings/.test(error.message) && /could not find|does not exist/i.test(error.message);
+  return error.message.includes(table) && /could not find|does not exist/i.test(error.message);
 }
 
 function settingsError(error: { code?: string; message: string }): Error {
-  return missingTable(error) ? new SettingsUnavailable(error.message) : new Error(error.message);
+  return missingTable(error, "settings") ? new SettingsUnavailable(error.message) : new Error(error.message);
 }
 
 export async function getSetting<T>(key: string): Promise<T | null> {

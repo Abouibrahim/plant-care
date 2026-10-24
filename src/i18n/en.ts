@@ -190,6 +190,7 @@ export const en = {
     editRecord: "Edit record",
     addJournalPhoto: "Add a journal photo",
     diagnose: "Diagnose",
+    ask: "Ask Claude about this plant",
     nextTasks: "Next tasks",
     noTasks: "No pending tasks. They are created from the rules below, 90 days ahead.",
     moreTasksHint: "Tasks are listed on Today when they come due.",
@@ -263,6 +264,34 @@ export const en = {
       mechanical: "Mechanical",
       other: "Other",
     },
+  },
+
+  /** Ask Claude on the Plant screen: a conversation about one plant, each answer saved to its journal. */
+  ask: {
+    title: "Ask Claude",
+    intro: (name: string) =>
+      `Ask anything about this ${name}: care, timing, what to plant beside it. Claude answers from its profile, its tasks, its diagnoses and the plants in its zone.`,
+    photoHint: "For a symptom you can see, Diagnose with a photo gives a better answer.",
+    startersLabel: "Questions to start with",
+    starters: ["What should I do for it this month?", "How should I water it now?", "What would grow well beside it?"],
+    followUps: "Ask next",
+    label: "Your question",
+    placeholder: "e.g. Should I prune it before the rains?",
+    send: "Ask",
+    sending: "Claude is thinking…",
+    failed: "The question could not be answered",
+    refusal: "Claude declined this question",
+    loading: "Loading the conversation…",
+    loadFailed: "The conversation could not be loaded",
+    profileNote: "Check the profile",
+    askedOn: (date: string) => `Asked ${date}`,
+    saving: "Saving to the journal…",
+    saveFailed: "The answer is not in the journal yet.",
+    saveAgain: "Save again",
+    unavailable:
+      "Answers are not kept yet: the questions table does not exist. Run the SQL from the Setup section of PHASE6.md in the Supabase SQL editor.",
+    journalLabel: "Question",
+    openConversation: "Open the conversation",
   },
 
   plants: {
@@ -393,9 +422,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 5",
+    phaseTitle: "Phase 6",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, and now the French interface, CSV exports, the zone lists per site and hand editing of the care calendar and the pests.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, and now questions to Claude about a plant, kept in its journal.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon.",
