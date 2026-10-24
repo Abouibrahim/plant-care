@@ -6,8 +6,8 @@ Reference: step 5 of the "Reminder engine" section and the Notifications decisio
 
 ## Setup (Mohamed does the parts marked ★)
 
-- [ ] ★ Add the four Web Push variables to the Vercel project `plant-care` (Settings → Environment Variables, Production and Preview), with the names from `.env.example` and the values already in `.env.local`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` followed by your address) and `VITE_VAPID_PUBLIC_KEY` (the same value as the public key; the `VITE_` copy is what the browser uses to subscribe). If `.env.local` does not have them yet, generate a pair once with `npx web-push generate-vapid-keys` and put the same pair in both places.
-- [ ] ★ Redeploy after adding them (Deployments → ⋯ → Redeploy, or push any commit): `VITE_VAPID_PUBLIC_KEY` is baked into the app at build time, so the deploy that ran before the variable existed cannot subscribe.
+- [x] ★ Add the four Web Push variables to the Vercel project `plant-care` (Settings → Environment Variables, Production and Preview), with the names from `.env.example` and the values already in `.env.local`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` followed by your address) and `VITE_VAPID_PUBLIC_KEY` (the same value as the public key; the `VITE_` copy is what the browser uses to subscribe). If `.env.local` does not have them yet, generate a pair once with `npx web-push generate-vapid-keys` and put the same pair in both places.
+- [x] ★ Redeploy after adding them (Deployments → ⋯ → Redeploy, or push any commit): `VITE_VAPID_PUBLIC_KEY` is baked into the app at build time, so the deploy that ran before the variable existed cannot subscribe.
 - [ ] ★ On the phone, open the installed app → Settings → Reminders → Turn on, and allow notifications when Chrome asks.
 - [ ] No database change: `push_subscriptions` is already part of `supabase/schema.sql`.
 
