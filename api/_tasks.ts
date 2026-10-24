@@ -5,7 +5,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, ageInMonths, isoDate, lastDayOfMonth, parseIso, ruleApplies } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
-import { TASK_TYPES, type CareRule, type ExpandResponse, type TaskInsert, type TaskStatus, type TaskType } from "../src/types.js";
+import {
+  DIAGNOSIS_RULE_PREFIX,
+  TASK_TYPES,
+  type CareRule,
+  type ExpandResponse,
+  type TaskInsert,
+  type TaskStatus,
+  type TaskType,
+} from "../src/types.js";
 
 export const HORIZON_DAYS = 90;
 const INSERT_CHUNK = 200;
@@ -144,9 +152,6 @@ export function expandPlant(plant: ExpansionPlant, todayIso: string, horizonDays
 
 // ---- stale tasks ---------------------------------------------------------------
 
-/** Rule keys a diagnosis writes (Phase 4) start with this; the expansion leaves those rows alone. */
-const DIAGNOSIS_PREFIX = "diagnosis:";
-
 /** The columns `staleTasks` reads. `status` is checked again inside, so any rows can be passed. */
 export interface StaleCandidate {
   id: string;
@@ -172,14 +177,15 @@ export interface StaleTasks {
  * - a periodic watering (`window_end` null) due on or before today when a later watering of the same
  *   plant and `rule_key` is also due, so a week away leaves one overdue watering, the newest, not one
  *   per interval ("Superseded by the next watering"). Waterings due after today are not looked at.
- * Done, skipped and snoozed rows are never listed, nor rows whose `rule_key` starts with `diagnosis:`.
+ * Done, skipped and snoozed rows are never listed, nor the rows a diagnosis wrote (`rule_key` starting
+ * with `DIAGNOSIS_RULE_PREFIX`, the Phase 4 carve-out).
  */
 export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTasks {
   const expired: string[] = [];
   const superseded: string[] = [];
   const newestDue = new Map<string, StaleCandidate>();
   for (const task of tasks) {
-    if (task.status !== "pending" || task.rule_key.startsWith(DIAGNOSIS_PREFIX)) continue;
+    if (task.status !== "pending" || task.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) continue;
     if (task.window_end !== null) {
       if (task.window_end < todayIso) expired.push(task.id);
       continue;
@@ -302,6 +308,9 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   if (pendingErr) throw pendingErr;
   const obsolete = ((pendingRows ?? []) as PendingRow[])
     .filter((r) => {
+      // Phase 4 carve-out: rows a diagnosis wrote (rule_key "diagnosis:<photo_id>", the
+      // re-photograph task) come from the app, not from a species rule; they are never obsolete here.
+      if (r.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) return false;
       const keys = keysByPlant.get(r.plant_id);
       return keys !== undefined && !keys.has(r.rule_key);
     })

@@ -3,6 +3,8 @@ import { supabase } from "./supabase";
 import { notifyTasksChanged } from "./db";
 import {
   expansionChanged,
+  type DiagnoseRequest,
+  type DiagnoseResponse,
   type ExpandRequest,
   type ExpandResponse,
   type IdentifyRequest,
@@ -74,6 +76,8 @@ const EXPAND_TIMEOUT_MS = 30_000;
 export const api = {
   identify: (req: IdentifyRequest) => callApi<IdentifyResponse>("identify", req),
   profile: (req: ProfileRequest) => callApi<ProfileApiResponse>("profile", req),
+  /** A problem photo read against the plant's context; the app saves the photo and the result afterwards. */
+  diagnose: (req: DiagnoseRequest) => callApi<DiagnoseResponse>("diagnose", req),
   /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
   expand: async (req: ExpandRequest = {}) => {
     const r = await callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS);
