@@ -4,12 +4,15 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
-import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
+import { GuildUsesSection, NeedsSection, orderPests, orderRules, PestCard, RuleCard } from "../components/profile";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
 import { confirmSpecies, deleteSpeciesIfUnused, getSpecies, speciesPlantCounts } from "../lib/db";
 import { isRefusal, type Species } from "../types";
 import { GUILD_TARGETS, IDENTITY_TARGETS, NEEDS_TARGETS, type EditTarget } from "./species/fields";
+import { ListCard, type FollowUp } from "./species/ListCard";
+import { PestEditor } from "./species/PestEditor";
+import { RuleEditor } from "./species/RuleEditor";
 import { SectionCard } from "./species/SectionCard";
 
 type LoadState =
@@ -119,6 +122,20 @@ function SpeciesView({ id }: { id: string }) {
   function startEdit(target: EditTarget) {
     setEditing(target.id);
   }
+
+  // A changed calendar changes the tasks: expand every plant now rather than waiting for 06:00.
+  // Skipped when no plant uses the profile (nothing to expand).
+  const calendarFollowUp: FollowUp | undefined =
+    plantCount === 0
+      ? undefined
+      : {
+          run: async () => {
+            await api.expand();
+          },
+          running: t.species.tasksRefreshing,
+          done: t.species.tasksRefreshed,
+          failed: t.species.tasksRefreshFailed,
+        };
 
   function saved(next: Species) {
     setSpecies(next);
@@ -253,14 +270,51 @@ function SpeciesView({ id }: { id: string }) {
         <NeedsSection species={s} />
       </SectionCard>
 
-      {/* CalendarSection and HealthSection render their own headings; no editing in Phase 1. */}
-      <SectionCard targets={[]} hint={t.species.regenerateOnly} {...cardProps}>
-        <CalendarSection species={s} />
-      </SectionCard>
+      {/* The care calendar and the pests are lists: each entry is edited, added or deleted on its own, and the whole list saved. */}
+      <ListCard
+        listKey="care_calendar"
+        title={t.species.sections.calendar}
+        addLabel={t.species.addRule}
+        deleteConfirm={t.species.deleteRuleConfirm}
+        emptyText={t.species.calendarEmpty}
+        species={s}
+        order={orderRules}
+        renderItem={(rule, actions) => <RuleCard rule={rule} actions={actions} />}
+        renderEditor={(e) => (
+          <RuleEditor
+            rule={e.item}
+            siblings={s.care_calendar.filter((r) => r !== e.item)}
+            saving={e.saving}
+            error={e.error}
+            onSave={e.onSave}
+            onDelete={e.onDelete}
+            onCancel={e.onCancel}
+          />
+        )}
+        editing={editing}
+        onEdit={setEditing}
+        onSaved={saved}
+        onCancel={() => setEditing(null)}
+        disabled={busy !== null}
+        followUp={calendarFollowUp}
+      />
 
-      <SectionCard targets={[]} hint={t.species.regenerateOnly} {...cardProps}>
-        <HealthSection species={s} />
-      </SectionCard>
+      <ListCard
+        listKey="pests"
+        title={t.species.sections.pests}
+        addLabel={t.species.addPest}
+        deleteConfirm={t.species.deletePestConfirm}
+        emptyText={t.common.none}
+        species={s}
+        order={orderPests}
+        renderItem={(pest, actions) => <PestCard pest={pest} actions={actions} />}
+        renderEditor={(e) => <PestEditor pest={e.item} saving={e.saving} error={e.error} onSave={e.onSave} onDelete={e.onDelete} onCancel={e.onCancel} />}
+        editing={editing}
+        onEdit={setEditing}
+        onSaved={saved}
+        onCancel={() => setEditing(null)}
+        disabled={busy !== null}
+      />
 
       <SectionCard title={t.plant.tabs.guild} targets={GUILD_TARGETS} {...cardProps}>
         <GuildUsesSection species={s} />
