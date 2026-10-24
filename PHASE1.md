@@ -24,7 +24,7 @@ Done when Mohamed can photograph a tree at the farm on his Android phone, confir
 - [x] Profile review screen: all profile sections readable, "AI-written, confirm" banner, Confirm button sets `confirmed = true`; field edits go to `user_edits`.
 - [x] Plant screen with tabs Needs, Calendar (rules listed by month; tasks come in Phase 2), Health (pests by month), Guild and uses (toxicity badge), Journal (photos newest first).
 - [x] Plants screen: cards with photo, tag, species common name, site and zone; filter by site; search by tag or name.
-- [ ] Deployed to Vercel; installed on the phone from Chrome ("Add to Home screen").
+- [x] Deployed to Vercel (https://plant-care-phi-fawn.vercel.app); installed on the phone from Chrome ("Add to Home screen").
 
 ## Acceptance tests (run on the phone, on the deployed URL)
 
