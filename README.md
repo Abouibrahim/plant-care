@@ -1,6 +1,6 @@
 # Plant Care
 
-Phone-first PWA for one grower: photograph a plant at the backyard or at the farm, identify it with Claude, keep a species profile written for Cap Bon conditions, get a task calendar from it and a push digest every morning. Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, milestones in `PHASE1.md`, `PHASE2.md` and `PHASE3.md`.
+Phone-first PWA for one grower: photograph a plant at the backyard or at the farm, identify it with Claude, keep a species profile written for Cap Bon conditions, get a task calendar from it and a push digest every morning, and diagnose a problem photo against the plant's own context. Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, milestones in `PHASE1.md` to `PHASE4.md`.
 
 ## Stack
 
@@ -44,8 +44,8 @@ npm run build
 ## Layout
 
 ```
-api/            Vercel functions: identify, profile, expand, push-subscribe, daily (cron: expansion + push digest);
-                helpers _claude.ts, _supabase.ts, _tasks.ts, _push.ts
+api/            Vercel functions: identify, profile, diagnose, expand, push-subscribe, daily (cron: expansion + push digest);
+                helpers _claude.ts, _images.ts, _supabase.ts, _tasks.ts, _push.ts
 prompts/        system context, per-call rules, JSON schemas sent to Claude
 public/         icons and push-sw.js (push handlers imported by the generated service worker)
 src/            the PWA: screens, components, lib (supabase, api, image, db, push), i18n

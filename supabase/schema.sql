@@ -70,7 +70,9 @@ create table photos (
 );
 create index photos_plant_idx on photos (plant_id, taken_at desc);
 
--- Tasks are expanded by /api/daily from species.care_calendar; never typed by hand.
+-- Tasks are expanded by /api/daily from species.care_calendar. The app writes two kinds of row itself
+-- (Phase 4): the re-photograph reminder of a diagnosis (rule_key 'diagnosis:<photo_id>') and each
+-- treatment logged ('diagnosis:<photo_id>:treated'); the expansion never removes those.
 create table tasks (
   id          uuid primary key default gen_random_uuid(),
   plant_id    uuid not null references plants(id) on delete cascade,
