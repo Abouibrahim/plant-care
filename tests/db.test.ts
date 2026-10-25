@@ -86,6 +86,15 @@ describe("snoozeTask", () => {
     expect(byId(task.id).status).toBe("pending");
   });
 
+  it("refuses to snooze a task acted on since the screen loaded, and takes its copy back", async () => {
+    const task = addTask({ type: "water", rule_key: "water:6-7-8:any:7", due_on: "2026-06-01", window_end: null });
+    byId(task.id).status = "done";
+    byId(task.id).acted_at = "2026-06-01T08:00:00Z";
+    await expect(snoozeTask(task, 3, "2026-06-01")).rejects.toThrow(en.today.alreadyActed);
+    expect(sharedState.tasks).toHaveLength(1);
+    expect(byId(task.id).status).toBe("done");
+  });
+
   it("extends a window to the new day when the snooze passes its end", async () => {
     const task = addTask({ due_on: "2026-08-01", window_end: "2026-09-30" });
     const moved = await snoozeTask(task, 3, "2026-09-29");

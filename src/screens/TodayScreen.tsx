@@ -178,7 +178,8 @@ export function TodayScreen() {
       const now = new Date();
       setHour(now.getHours());
       const iso = localIsoDate(now);
-      setStreak(checkIn(iso));
+      // A check-in is a day Today was looked at: the midnight tick of a hidden page does not count.
+      if (document.visibilityState === "visible") setStreak(checkIn(iso));
       if (loadedToday !== null && loadedToday !== iso) {
         setDay(null);
         setAttempt((n) => n + 1);

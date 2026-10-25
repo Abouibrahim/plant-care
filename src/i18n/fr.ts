@@ -111,6 +111,7 @@ export const fr: Strings = {
     toastSnoozed: (date) => `Reportée au ${date}`,
     snoozeCovered: (date) => `Couvert par le report au ${date}`,
     snoozeNoDay: "Aucun jour libre où la reporter",
+    alreadyActed: "Cette tâche a déjà été traitée",
     undoFailed: "La tâche n'a pas pu être rouverte",
   },
 
@@ -207,6 +208,7 @@ export const fr: Strings = {
     delete: "Supprimer cette plante",
     deleteNote: "Pour une plante morte ou enregistrée sous la mauvaise espèce. Ses photos, ses tâches et ses questions partent avec elle ; la fiche espèce reste.",
     deleteConfirm: (tag) => `Supprimer ${tag} ? Ses photos, ses tâches et ses questions partent avec elle.`,
+    deleting: "Suppression…",
     deleteFailed: "La plante n'a pas pu être supprimée",
   },
 

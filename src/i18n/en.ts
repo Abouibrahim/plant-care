@@ -112,6 +112,7 @@ export const en = {
     /** Note on the waterings a snooze skips over; the journal shows it in place of the title. */
     snoozeCovered: (date: string) => `Covered by the snooze to ${date}`,
     snoozeNoDay: "No free day to move it to",
+    alreadyActed: "This task was already acted on",
     undoFailed: "The task could not be reopened",
   },
 
@@ -208,6 +209,7 @@ export const en = {
     delete: "Delete this plant",
     deleteNote: "For a plant that died or was recorded under the wrong species. Its photos, tasks and questions go with it; the species profile stays.",
     deleteConfirm: (tag: string) => `Delete ${tag}? Its photos, tasks and questions go with it.`,
+    deleting: "Deleting…",
     deleteFailed: "The plant could not be deleted",
   },
 

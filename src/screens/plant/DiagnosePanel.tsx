@@ -304,7 +304,7 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
                   </p>
                 </Banner>
                 {response && <p className="small muted">{t.capture.usage(response.input_tokens, response.output_tokens)}</p>}
-                <button type="button" className="block" onClick={onClose}>
+                <button type="button" className="block" onClick={close}>
                   {t.common.close}
                 </button>
               </>

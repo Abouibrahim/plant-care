@@ -3,7 +3,7 @@
 // questions table and shows in the journal; reopened with a thread id, the panel loads that
 // conversation and lets it go on. A refusal is shown but not saved.
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Send, X } from "lucide-react";
 import { Banner } from "../../components/Banner";
 import { Spinner } from "../../components/Spinner";
@@ -67,6 +67,7 @@ function rowTurn(row: Question): Turn | null {
 }
 
 export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) {
+  const navigate = useNavigate();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [loading, setLoading] = useState(threadId !== null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -288,7 +289,16 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
                       <div>
                         <strong>{t.ask.profileNote}:</strong> {turn.answer.profile_note}
                       </div>
-                      <Link to={`/species/${plant.species.id}`} className="small">
+                      <Link
+                        to={`/species/${plant.species.id}`}
+                        className="small"
+                        // The sheet holds the current history entry: replace it, so back from the
+                        // profile returns to the plant in one tap instead of landing on a dead entry.
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(`/species/${plant.species.id}`, { replace: true });
+                        }}
+                      >
                         {t.plant.profileLink}
                       </Link>
                     </div>

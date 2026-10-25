@@ -224,7 +224,9 @@ export function PlantScreen() {
       const existing = new Set((loaded?.photos ?? []).map((p) => p.storage_path));
       while (existing.has(photoPath(plant.id, takenAt))) takenAt = new Date(takenAt.getTime() + 1);
       const storage_path = photoPath(plant.id, takenAt);
-      await uploadPhoto(storage_path, prepared.blob);
+      // The path is past every photo row this screen knows; an object already there is this photo's own,
+      // from an earlier pick whose reply was lost, so it is written over rather than refused.
+      await uploadPhoto(storage_path, prepared.blob, true);
       await insertPhoto({
         plant_id: plant.id,
         taken_at: takenAt.toISOString(),
@@ -453,7 +455,7 @@ export function PlantScreen() {
       <div className="card stack" style={{ marginTop: 24 }}>
         <button type="button" className="danger block" disabled={busy} onClick={() => void remove()}>
           <Trash2 size={18} aria-hidden />
-          {deleting ? t.common.saving : t.plant.delete}
+          {deleting ? t.plant.deleting : t.plant.delete}
         </button>
         <span className="small muted">{t.plant.deleteNote}</span>
       </div>

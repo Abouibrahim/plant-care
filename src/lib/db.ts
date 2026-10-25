@@ -348,6 +348,7 @@ const SNOOZE_SLOT_TRIES = 7;
 export async function snoozeTask(task: Task, days: number, todayIso: string): Promise<string> {
   const from = task.due_on > todayIso ? task.due_on : todayIso;
   let due_on = addDays(from, Math.max(1, days));
+  let inserted = false;
   for (let tries = 0; ; tries++) {
     const window_end = task.window_end !== null && task.window_end < due_on ? due_on : task.window_end;
     const { error } = await supabase.from("tasks").insert({
@@ -359,7 +360,10 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
       title: task.title,
       instruction: task.instruction,
     });
-    if (!error) break;
+    if (!error) {
+      inserted = true;
+      break;
+    }
     if (error.code !== "23505") throw new Error(error.message);
     const taken = await supabase
       .from("tasks")
@@ -373,7 +377,14 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
     if (tries >= SNOOZE_SLOT_TRIES) throw new Error(t.today.snoozeNoDay);
     due_on = addDays(due_on, 1);
   }
-  await closeTask(task.id, "snoozed", "");
+  // The task may have been acted on since the screen loaded (Done on another screen, the expansion
+  // closing it as superseded): then the copy just written is taken back and the tap fails plainly.
+  if (!(await closeTask(task.id, "snoozed", ""))) {
+    if (inserted) {
+      await supabase.from("tasks").delete().eq("plant_id", task.plant_id).eq("rule_key", task.rule_key).eq("due_on", due_on).eq("status", "pending");
+    }
+    throw new Error(t.today.alreadyActed);
+  }
 
   if (task.type === "water" && task.window_end === null) {
     const covered = await supabase
