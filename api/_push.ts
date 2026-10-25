@@ -179,7 +179,11 @@ export async function sendDigest(db: SupabaseClient, messages: DigestMessage[]):
           break; // the other messages cannot reach this subscription either
         }
         result.failed += 1;
-        console.error(`push failed: status ${status ?? "none"}, ${(err as Error).message ?? "unknown error"}`);
+        // 403 is the push service refusing the VAPID signature: the subscription was made with another
+        // key pair (the keys were regenerated, or VAPID_PUBLIC_KEY and VITE_VAPID_PUBLIC_KEY differ).
+        // The row is kept, since a key misconfiguration on the server would otherwise wipe every good one.
+        const hint = status === 403 ? " (VAPID key does not match this subscription)" : "";
+        console.error(`push failed: status ${status ?? "none"}${hint}, ${(err as Error).message ?? "unknown error"}`);
       }
     }
   }

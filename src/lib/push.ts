@@ -35,6 +35,16 @@ function keyBytes(base64Url: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+/** Whether a subscription was made with this build's VAPID key; one made with another key gets 403 from the push service. */
+function matchesKey(sub: PushSubscription): boolean {
+  const key = sub.options.applicationServerKey;
+  if (!key) return false;
+  const have = new Uint8Array(key);
+  const want = keyBytes(PUBLIC_KEY);
+  return have.length === want.length && have.every((b, i) => b === want[i]);
+}
+
+/** "on" only for a subscription under the current key: an older one cannot receive the digest, so it reads as off. */
 export async function getPushState(): Promise<PushState> {
   if (!pushSupported()) return "unsupported";
   if (Notification.permission === "denied") return "blocked";
@@ -42,7 +52,7 @@ export async function getPushState(): Promise<PushState> {
   const reg = await registration();
   if (!reg) return "unsupported";
   const sub = await reg.pushManager.getSubscription();
-  return sub ? "on" : "off";
+  return sub && matchesKey(sub) ? "on" : "off";
 }
 
 export class PushError extends Error {
@@ -69,18 +79,18 @@ export async function enablePush(strings: { denied: string; failed: string }): P
   const reg = await registration();
   if (!reg) throw new PushError("unsupported", strings.failed);
 
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    const options: PushSubscriptionOptionsInit = { userVisibleOnly: true, applicationServerKey: keyBytes(PUBLIC_KEY) };
-    try {
-      sub = await reg.pushManager.subscribe(options);
-    } catch (err) {
-      // A subscription made with an older key pair blocks a new one: drop it and try once more.
-      if ((err as Error)?.name !== "InvalidStateError") throw err;
-      const stale = await reg.pushManager.getSubscription();
-      if (stale) await stale.unsubscribe();
-      sub = await reg.pushManager.subscribe(options);
-    }
+  // subscribe() returns the existing subscription when it was made with this key, and throws
+  // InvalidStateError when it was made with another: that one is dropped and replaced, since the
+  // push service would refuse every digest sent to it.
+  const options: PushSubscriptionOptionsInit = { userVisibleOnly: true, applicationServerKey: keyBytes(PUBLIC_KEY) };
+  let sub: PushSubscription;
+  try {
+    sub = await reg.pushManager.subscribe(options);
+  } catch (err) {
+    if ((err as Error)?.name !== "InvalidStateError") throw err;
+    const stale = await reg.pushManager.getSubscription();
+    if (stale) await stale.unsubscribe();
+    sub = await reg.pushManager.subscribe(options);
   }
 
   const json = sub.toJSON();
