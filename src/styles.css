@@ -249,7 +249,7 @@ p {
   padding: 0 6px;
   border-radius: 999px;
   background: var(--apricot);
-  /* Dark text: white on apricot was 2.7:1 (2.2:1 in dark mode) for an 11 px figure; this is 5.5:1 and 7.3:1. */
+  /* Dark text: white on apricot was 2.7:1 (2.2:1 in dark mode) for a 12 px figure; this is 5.1:1 and 7.3:1. */
   color: var(--sage-text);
   font-size: 0.72rem;
   font-weight: 700;

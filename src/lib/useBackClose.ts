@@ -34,7 +34,7 @@ export function useBackClose(onClose: () => boolean | void, locked: boolean): vo
     if (!isSheetEntry()) window.history.pushState(sheetState(), "");
     let poppedAway = false;
     const onPop = () => {
-      if (isSheetEntry()) return; // another sheet's entry, or ours pushed back
+      if (isSheetEntry()) return; // ours pushed back while locked; the app opens one sheet at a time
       if (lockedRef.current || closeRef.current() === false) {
         window.history.pushState(sheetState(), "");
         return;

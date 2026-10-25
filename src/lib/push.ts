@@ -39,9 +39,14 @@ function keyBytes(base64Url: string): Uint8Array<ArrayBuffer> {
 function matchesKey(sub: PushSubscription): boolean {
   const key = sub.options.applicationServerKey;
   if (!key) return false;
-  const have = new Uint8Array(key);
-  const want = keyBytes(PUBLIC_KEY);
-  return have.length === want.length && have.every((b, i) => b === want[i]);
+  try {
+    const have = new Uint8Array(key);
+    const want = keyBytes(PUBLIC_KEY);
+    return have.length === want.length && have.every((b, i) => b === want[i]);
+  } catch {
+    // A build key that does not decode: the subscription cannot be under it.
+    return false;
+  }
 }
 
 /** "on" only for a subscription under the current key: an older one cannot receive the digest, so it reads as off. */
@@ -89,7 +94,11 @@ export async function enablePush(strings: { denied: string; failed: string }): P
   } catch (err) {
     if ((err as Error)?.name !== "InvalidStateError") throw err;
     const stale = await reg.pushManager.getSubscription();
-    if (stale) await stale.unsubscribe();
+    if (stale) {
+      // Its server row goes too, or the digest keeps being sent to the dead endpoint every morning.
+      await api.pushUnsubscribe(stale.endpoint).catch(() => undefined);
+      await stale.unsubscribe();
+    }
     sub = await reg.pushManager.subscribe(options);
   }
 

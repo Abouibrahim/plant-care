@@ -3,7 +3,7 @@
 // waterings (docs/DECISIONS.md). `expandPlant` and `staleTasks` are pure; `runExpansion` reads and
 // writes through the service client. /api/daily and /api/expand both call it.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { addDays, ageInMonths, isoDate, lastDayOfMonth, parseIso, ruleApplies } from "../src/lib/dates.js";
+import { addDays, ageInMonths, isoDate, isoDateIn, lastDayOfMonth, parseIso, ruleApplies, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
 import {
   DIAGNOSIS_RULE_PREFIX,
@@ -118,7 +118,8 @@ export function mergeDuplicateRules(calendar: CareRule[]): CareRule[] {
     }
     if (item.title && item.title !== first.title) first.title = `${first.title}; ${item.title}`;
     const instruction = typeof item.instruction === "string" ? item.instruction.trim() : "";
-    if (instruction && !first.instruction.includes(instruction)) first.instruction = [first.instruction, instruction].filter(Boolean).join(" ");
+    const have = typeof first.instruction === "string" ? first.instruction : "";
+    if (instruction && !have.includes(instruction)) first.instruction = [have, instruction].filter(Boolean).join(" ");
     if (typeof item.lead_days === "number" && item.lead_days > first.lead_days) first.lead_days = item.lead_days;
     if (typeof item.litres === "number" && item.litres > first.litres) first.litres = item.litres;
   }
@@ -330,7 +331,8 @@ export function carriedOver(seed: TaskInsert, acted: ActedWindow[], currentKeys:
   if (seed.window_end === null || seed.due_on >= todayIso) return false;
   const end = seed.window_end;
   return acted.some((a) => {
-    const day = a.acted_at?.slice(0, 10) ?? "";
+    // The window's days are Tunis dates; acted_at is an instant, read in the same zone.
+    const day = a.acted_at ? isoDateIn(SITE_TIME_ZONE, new Date(a.acted_at)) : "";
     return (
       a.plant_id === seed.plant_id &&
       a.type === seed.type &&

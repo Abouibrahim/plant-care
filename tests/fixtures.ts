@@ -51,7 +51,7 @@ export function fixture(options: MockOptions = {}): Fixture {
         site: "farm" as Site,
         zone: "",
         planted_on: null,
-        created_at: `2026-01-01T00:00:0${n}Z`,
+        created_at: `2026-01-01T00:00:${String(n).padStart(2, "0")}Z`,
         ...plant,
       });
       return id;

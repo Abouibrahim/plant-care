@@ -100,6 +100,7 @@ function shortDate(iso: string): string {
  */
 function digestRank(task: DigestTask, todayIso: string): number {
   if (task.due_on > todayIso) return 0;
+  if (task.window_end !== null && task.window_end < todayIso) return 1; // ended, as late as a missed watering
   if (task.window_end !== null) return task.due_on === todayIso ? 2 : 3;
   return task.due_on < todayIso ? 1 : 2;
 }
@@ -119,10 +120,7 @@ export function composeDigest(tasks: DigestTask[], todayIso: string): DigestMess
   const due = tasks.filter((t) => t.plant !== null && inDigest(t, todayIso));
   const messages: DigestMessage[] = [];
   for (const site of SITE_ORDER) {
-    const mine = sortTasks(
-      due.filter((t) => t.plant?.site === site),
-      todayIso,
-    );
+    const mine = sortTasks(due.filter((t) => t.plant?.site === site), todayIso);
     if (mine.length === 0) continue;
     const lines = mine.slice(0, BODY_LINES).map((t) => {
       const line = en.digest.line(t.title, t.plant?.tag ?? "");

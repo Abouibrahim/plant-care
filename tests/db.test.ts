@@ -148,8 +148,9 @@ describe("countDueTasks", () => {
     addTask({ type: "water", rule_key: "water:6:any:9", due_on: "2026-10-28", window_end: null }); // coming
     addTask({ due_on: "2026-10-01", window_end: "2026-12-31" }); // open window
     addTask({ rule_key: "harvest:9:any", due_on: "2026-09-01", window_end: "2026-10-20" }); // ended window
+    addTask({ rule_key: "prune:10-11:any", due_on: "2026-10-26", window_end: "2026-11-30" }); // window opening today
     addTask({ rule_key: "harvest:8:any", due_on: "2026-08-01", window_end: "2026-09-30", status: "done" });
-    expect(await countDueTasks("2026-10-26")).toBe(3);
+    expect(await countDueTasks("2026-10-26")).toBe(4);
   });
 });
 
