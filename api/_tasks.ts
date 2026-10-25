@@ -92,6 +92,40 @@ export function periodOf(ruleKeyValue: string): number | null {
 }
 
 /**
+ * Folds the items of a Claude-written calendar that share a rule key into one, so no rule is silently
+ * shadowed: the expansion de-duplicates tasks on (plant, rule_key, due_on), and two window items with
+ * the same type, months and age (two scout items for the summer pests, say) would land on the same
+ * day, with only the first ever making a task; the editor would then refuse to touch either. The
+ * first item keeps its place; the others' titles join it when they differ (the editor's 8-word
+ * guidance is for Claude, not a limit here), their instructions follow, and the largest lead and
+ * litres win. Items the expansion cannot read are kept as they are.
+ */
+export function mergeDuplicateRules(calendar: CareRule[]): CareRule[] {
+  const out: CareRule[] = [];
+  const byKey = new Map<string, CareRule>();
+  for (const item of calendar) {
+    if (!isRule(item)) {
+      out.push(item);
+      continue;
+    }
+    const key = ruleKey(item);
+    const first = byKey.get(key);
+    if (!first) {
+      const copy = { ...item };
+      byKey.set(key, copy);
+      out.push(copy);
+      continue;
+    }
+    if (item.title && item.title !== first.title) first.title = `${first.title}; ${item.title}`;
+    const instruction = typeof item.instruction === "string" ? item.instruction.trim() : "";
+    if (instruction && !first.instruction.includes(instruction)) first.instruction = [first.instruction, instruction].filter(Boolean).join(" ");
+    if (typeof item.lead_days === "number" && item.lead_days > first.lead_days) first.lead_days = item.lead_days;
+    if (typeof item.litres === "number" && item.litres > first.litres) first.litres = item.litres;
+  }
+  return out;
+}
+
+/**
  * Contiguous runs of months on the 12-month circle, each in calendar order:
  * [4, 10] → [[4], [10]]; [11, 12, 1, 2, 3] → [[11, 12, 1, 2, 3]]; [1..12] → one run from January.
  */

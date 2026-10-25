@@ -6,6 +6,7 @@
 import type { VercelRequest, VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema, ZERO_USAGE } from "./_claude.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { mergeDuplicateRules } from "./_tasks.js";
 import type { ProfileRequest, Species, SpeciesProfile } from "../src/types.js";
 
 /** ilike without wildcards is a case-insensitive equality once the LIKE metacharacters are escaped. */
@@ -97,14 +98,17 @@ async function findByAnyName(name: string): Promise<Species | null> {
   return (data as Species | null) ?? null;
 }
 
-function writeProfile(text: string) {
-  return callJson<SpeciesProfile>({
+async function writeProfile(text: string) {
+  const result = await callJson<SpeciesProfile>({
     rules: readPrompt("profile.md"),
     schema: readSchema("profile.schema.json"),
     content: [{ type: "text", text }],
     maxTokens: 6000,
     effort: "medium",
   });
+  // Two items with one rule key would share their tasks; the prompt asks Claude not to, this makes sure.
+  if (result.ok && Array.isArray(result.data.care_calendar)) result.data.care_calendar = mergeDuplicateRules(result.data.care_calendar);
+  return result;
 }
 
 function describe(body: ProfileRequest): string {

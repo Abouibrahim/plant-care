@@ -11,6 +11,7 @@ Rules
   - Write separate water items for establishment and for mature plants, by season (for example months 6 to 9 every 7 days in establishment; months 6 to 9 every 21 days mature; no water items for months with rain unless the species needs it).
   - Feeding is compost and mulch only; mention the well's nitrate credit where it matters.
   - Scout items name the pest and what to look for.
+  - No two items may share the same type, months and age (and, for water, the same every_days): tasks are keyed on that, so a second such item would never produce a task. Combine them into one item whose instruction covers both.
 - pests: the pests and diseases this species meets in Cap Bon, months of appearance, symptoms, the organic treatment that works, and prevention. Only organic inputs.
 - companions: good companions for a guild at this site, bad companions, and root-competition or allelopathy warnings.
 - uses: edible parts, preparation, storage, and the ripeness cues for harvest.

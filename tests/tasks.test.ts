@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandPlant, monthRuns, periodOf, ruleKey, runExpansion, staleTasks, type StaleCandidate } from "../api/_tasks.js";
+import { expandPlant, mergeDuplicateRules, monthRuns, periodOf, ruleKey, runExpansion, staleTasks, type StaleCandidate } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
 import { addDays } from "../src/lib/dates";
 import { dueDates, fixture, rule, water, window } from "./fixtures";
@@ -17,6 +17,35 @@ describe("ruleKey", () => {
     expect(periodOf("water:6-7-8:any")).toBeNull();
     expect(periodOf("prune:1-2:any")).toBeNull();
     expect(periodOf("diagnosis:photo-1")).toBeNull();
+  });
+});
+
+describe("mergeDuplicateRules", () => {
+  it("folds items that share a rule key into the first, keeping the rest in order", () => {
+    const calendar = [
+      window("scout", [6, 7, 8, 9, 10], { title: "Scout for olive fly", instruction: "Check the fruit.", lead_days: 3 }),
+      window("prune", [1, 2], { title: "Winter prune" }),
+      window("scout", [6, 7, 8, 9, 10], { title: "Scout for black scale", instruction: "Look under the leaves.", lead_days: 7 }),
+    ];
+    const merged = mergeDuplicateRules(calendar);
+    expect(merged).toHaveLength(2);
+    expect(merged[0]).toMatchObject({
+      type: "scout",
+      title: "Scout for olive fly; Scout for black scale",
+      instruction: "Check the fruit. Look under the leaves.",
+      lead_days: 7,
+    });
+    expect(merged[1].title).toBe("Winter prune");
+    // The input is left alone.
+    expect(calendar[0].title).toBe("Scout for olive fly");
+  });
+
+  it("keeps water items apart by interval and leaves unreadable items in place", () => {
+    const odd = { type: "swim", months: [1] } as unknown as ReturnType<typeof rule>;
+    const merged = mergeDuplicateRules([water([6, 7, 8], 7), water([6, 7, 8], 21, { age: "mature" }), odd, water([6, 7, 8], 7, { litres: 60 })]);
+    expect(merged).toHaveLength(3);
+    expect(merged[0].litres).toBe(60);
+    expect(merged[2]).toBe(odd);
   });
 });
 
