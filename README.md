@@ -45,7 +45,7 @@ npm test
 npm run build
 ```
 
-`npm test` runs the vitest suite under `tests/` (dates, the task expansion, the digest and the app's task writes, against an in-memory copy of the tables). `npm run icons` regenerates the PWA icons under `public/icons`.
+`npm test` runs the vitest suite under `tests/` (dates, the task expansion, the digest, the Today reading, the token verdict and the app's task writes, against an in-memory copy of the tables). `npm run icons` regenerates the PWA icons under `public/icons`.
 
 ## Layout
 

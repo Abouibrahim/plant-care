@@ -18,25 +18,31 @@ Read `docs/SPEC.md` first. It is the agreed design; this file turns it into work
 
 ```
 api/                 Vercel functions (one file per route)
-  _claude.ts         Anthropic client, buildSystem(), callJson()
-  _supabase.ts       service-role client, verifyUser(req)
+  _claude.ts         Anthropic client, callJson()
+  _supabase.ts       service-role client, verifyUser(req), handleError()
+  _tasks.ts          the task expansion (rule keys, windows, waterings, stale tasks), runExpansion()
+  _push.ts           the digest (loadDigestTasks, composeDigest, sendDigest)
+  _context.ts        the plant and species text blocks shared by diagnose and ask
+  _images.ts         image validation shared by identify and diagnose
+  _http.ts           the request and response types
   identify.ts        POST → candidates
   profile.ts         POST → species profile, upsert
   diagnose.ts        POST → diagnosis
   ask.ts             POST → answer to a free question about one plant (Phase 6)
+  expand.ts          POST → runExpansion now (one plant, or all), bearer-checked
   daily.ts           cron: expand tasks, then send the digest
   push-subscribe.ts  POST → store a push subscription
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, *.schema.json
 src/                 the PWA (screens: Today, Capture, Plant, Plants, Species, Settings)
 supabase/schema.sql  tables, enums, RLS
-tests/               vitest over the dates, the task expansion, the digest and the app's task writes (mockdb.ts imitates the query builder)
+tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict and the app's task writes (mockdb.ts imitates the query builder)
 docs/SPEC.md         the design spec
 PHASE1.md            first milestone with acceptance tests
 ```
 
 ## API conventions
 
-- Every `/api/*` route except `daily` requires `Authorization: Bearer <supabase access token>`; verify it with `supabase.auth.getUser(token)` on the service client, accept only the user whose id is `OWNER_USER_ID`, and reject with 401 otherwise (a fault of Supabase Auth itself is a 502, never a 401: the app signs out on 401). The Vercel URL is public and the function holds the Claude key, so this check is not optional.
+- Every `/api/*` route except `daily` requires `Authorization: Bearer <supabase access token>`; verify it with `supabase.auth.getUser(token)` on the service client: a missing or rejected token is 401, a signed-in account other than `OWNER_USER_ID` is 403, and a fault of Supabase Auth itself is 502 or 500, never 401 (the app signs out on 401 only). The Vercel URL is public and the function holds the Claude key, so this check is not optional.
 - `/api/daily` accepts only `Authorization: Bearer ${process.env.CRON_SECRET}` (Vercel sends it automatically for cron invocations).
 - Request bodies carry images as `{ media_type, data }` base64; the client has already resized to 1,280 px on the long edge, JPEG quality 0.85, and read GPS from EXIF (package `exifr`) before resizing.
 - Responses are the parsed JSON from Claude plus `{ model, input_tokens, output_tokens }` so usage stays visible.
@@ -79,13 +85,13 @@ export async function callJson(opts: {
 }
 ```
 
-## Reminder engine (`api/daily.ts`)
+## Reminder engine (`api/_tasks.ts` and `api/_push.ts`, run by `api/daily.ts` and `api/expand.ts`)
 
 1. Load plants with their species `care_calendar`.
 2. For each plant and rule: age in months from `planted_on` (treat null as mature); skip when the rule's `age` does not match (`any` always matches).
 3. For the next 90 days: window rules (every type except water) create one task on the first day of the first month in `months` that falls in range, `due_on` = that day, `window_end` = last day of the last listed month; water rules create a task every `every_days` on days whose month is in `months`.
 4. Insert only when no task exists with the same `plant_id`, `rule_key` (`${type}:${months.join("-")}:${age}`, with `:${every_days}` appended for a periodic watering, the months sorted) and `due_on`.
-5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three task titles. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
+5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three lines in digest order (early notices, late, due today, open windows), each `title · tag`. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
 6. Store nothing about weather; it is out of scope.
 
 ## Working agreements

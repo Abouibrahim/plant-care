@@ -36,7 +36,8 @@ Reference: the "Ask Claude about this plant" item of the feature review of 2026-
       from questions;
   ```
 
-- [ ] ★ Supabase → Authentication → Sign In / Providers: check that "Allow new users to sign up" is off. The app has one user, and every table policy and every `/api` route trusts any signed-in user; with sign-ups on (the Supabase default), anyone holding the anon key could create an account, read the tables and spend Claude credit through the routes. This was already so before Phase 6; Ask adds one more paid route.
+- [ ] ★ Supabase → Authentication → Sign In / Providers: check that "Allow new users to sign up" is off. The app has one user, and every table policy trusts any signed-in user; with sign-ups on (the Supabase default), anyone holding the anon key could create an account and read the tables. This was already so before Phase 6; Ask adds one more paid route. (Since 0.6.1 the `/api` routes accept the owner only, see the next item.)
+- [x] ★ Vercel → Settings → Environment Variables: `OWNER_USER_ID` = the UUID of your user under Supabase → Authentication → Users, for Production and Preview, then redeploy. Required since 0.6.1: without it every `/api` route answers 500 "Server is not configured", and with a wrong value every route answers 403. Done on 2026-10-25 before the 0.6.1 deploy.
 - [x] Nothing else to create: the route uses the keys already in Vercel, and each question is one Claude call.
 
 ## Build
