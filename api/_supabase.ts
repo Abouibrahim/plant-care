@@ -33,12 +33,33 @@ export function bearerToken(req: VercelRequest): string {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
-/** Resolves the Supabase user behind the Authorization header, or null when it is missing or invalid. */
+/**
+ * A failure of Supabase Auth itself (unreachable, 5xx, rate-limited) rather than a verdict on the
+ * token. auth-js wraps the first two as AuthRetryableFetchError (status 0 or 502 to 504).
+ */
+function isAuthFault(error: { name?: string; status?: number }): boolean {
+  const status = error.status ?? 0;
+  return error.name === "AuthRetryableFetchError" || status === 429 || status >= 500;
+}
+
+/**
+ * Resolves the user behind the Authorization header: null when the token is missing, rejected or
+ * belongs to anyone but the owner. OWNER_USER_ID (the id of Mohamed's user under Authentication →
+ * Users) is required, since every table policy and every route trust any signed-in account and the
+ * anon key ships in the app: without the check, an account created through the Auth API could spend
+ * the Claude key. An upstream fault throws instead of returning null, so the route answers 502 or
+ * 500 rather than 401, which would make the phone drop its session.
+ */
 export async function verifyUser(req: VercelRequest): Promise<User | null> {
   const token = bearerToken(req);
   if (!token) return null;
+  const owner = requireEnv("OWNER_USER_ID");
   const { data, error } = await serviceClient().auth.getUser(token);
-  if (error || !data.user) return null;
+  if (error) {
+    if (isAuthFault(error)) throw error;
+    return null;
+  }
+  if (!data.user || data.user.id !== owner) return null;
   return data.user;
 }
 

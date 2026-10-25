@@ -2,6 +2,13 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-25 — Review fixes (0.6.1)
+
+A review of the whole app on 2026-10-25 (eight reviewers, each checked by a skeptic, then a pass over the seams) left 91 findings; the high and medium ones are fixed here, one commit each. Tests under `tests/` (vitest, `npm test`) cover the engine behaviours the fixes change.
+
+- **The `/api` routes accept the owner only.** `verifyUser` now requires `OWNER_USER_ID` (★ the UUID of Mohamed's user under Authentication → Users, added in Vercel before this deploys) and returns null for any other account, so the Claude key stays closed even if "Allow new users to sign up" is turned back on. The variable is required rather than optional: without it every route answers 500 "Server is not configured", which is visible at once, where a silent fail-open would not be. The table policies stay `using (true)`: with sign-ups off, every account is one Mohamed made, and a uuid checked into `schema.sql` would break a fresh setup.
+- **A Supabase Auth fault is not a sign-out.** `verifyUser` used to answer 401 for any error from `auth.getUser`, including a network failure or a 5xx from Supabase Auth, and the app drops its session on a 401 (`src/lib/api.ts`), so a blip between Vercel and Supabase signed the phone out and lost the capture in progress. Those errors (auth-js's `AuthRetryableFetchError`, 429 and 5xx) now throw, and the route answers 502 or 500; only a rejected token gives 401.
+
 ## 2026-10-25 — Phase 6: Ask Claude about a plant
 
 - **A fourth Claude call beyond the spec.** The feature review of 2026-10-25 found that users of the leading apps value an expert or chatbot to ask; the spec's three calls answer only fixed questions (what is it, how to care for it, what is wrong). `/api/ask` follows the CLAUDE.md conventions (cached site context then call rules in `system`, structured output, the refusal fallback through `callJson`) with `max_tokens` 3,072 at medium effort. That budget is above diagnose's 2,048 because an answer of up to about 250 words plus medium-effort thinking needs more room than a diagnosis; the doubled retry still covers a long answer. CLAUDE.md lists the new budget.
