@@ -4,11 +4,17 @@
 // paid call out, a save running) the entry is pushed again so the sheet stays and nothing is lost.
 import { useEffect, useRef } from "react";
 
-const STATE = { plantcareSheet: true };
+/** The router keeps its own fields in history.state (`idx`); the marker is added beside them. */
+function sheetState(): Record<string, unknown> {
+  return { ...((window.history.state as Record<string, unknown> | null) ?? {}), plantcareSheet: true };
+}
 
 function isSheetEntry(): boolean {
   return (window.history.state as { plantcareSheet?: boolean } | null)?.plantcareSheet === true;
 }
+
+/** Sheets mounted right now; a cleanup gives up the entry only when none claims it again at once. */
+let mounted = 0;
 
 /**
  * `onClose` may return false to keep the sheet open (the grower declined to lose unsaved work); the
@@ -23,25 +29,28 @@ export function useBackClose(onClose: () => boolean | void, locked: boolean): vo
   });
 
   useEffect(() => {
-    window.history.pushState(STATE, "");
+    mounted += 1;
+    // StrictMode mounts, cleans up and mounts again in development: the entry pushed the first time is reused.
+    if (!isSheetEntry()) window.history.pushState(sheetState(), "");
     let poppedAway = false;
     const onPop = () => {
       if (isSheetEntry()) return; // another sheet's entry, or ours pushed back
-      if (lockedRef.current) {
-        window.history.pushState(STATE, "");
-        return;
-      }
-      if (closeRef.current() === false) {
-        window.history.pushState(STATE, "");
+      if (lockedRef.current || closeRef.current() === false) {
+        window.history.pushState(sheetState(), "");
         return;
       }
       poppedAway = true;
     };
     window.addEventListener("popstate", onPop);
     return () => {
+      mounted -= 1;
       window.removeEventListener("popstate", onPop);
-      // Closed by its button: drop the entry so back does not need a second tap.
-      if (!poppedAway && isSheetEntry()) window.history.back();
+      if (poppedAway || !isSheetEntry()) return;
+      // Closed by its button: drop the entry so back does not need a second tap. Deferred, so a
+      // sheet mounted again at once (StrictMode, or one sheet replacing another) keeps it instead.
+      queueMicrotask(() => {
+        if (mounted === 0 && isSheetEntry()) window.history.back();
+      });
     };
   }, []);
 }
