@@ -202,6 +202,50 @@ describe("runExpansion", () => {
     expect(june).toEqual(["2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29"]);
   });
 
+  it("does not bring back a finished window when its rule changes months", async () => {
+    const f = fixture();
+    f.plant([window("harvest", [10, 11, 12])]);
+    await runExpansion(f.db, "2026-10-20");
+    const harvest = f.pending()[0];
+    harvest.status = "done";
+    harvest.acted_at = "2026-10-20T10:00:00Z";
+    f.state.species[0].care_calendar = [window("harvest", [10, 11, 12, 1])];
+    const r = await runExpansion(f.db, "2026-10-25");
+    expect(r.created).toBe(0);
+    expect(f.pending()).toHaveLength(0);
+    // The next year's window is a new one and comes back as usual.
+    const next = await runExpansion(f.db, "2027-09-15");
+    expect(next.created).toBe(1);
+    expect(f.pending()[0].due_on).toBe("2027-10-01");
+  });
+
+  it("brings back a window the expansion closed as ended when the new rule extends it", async () => {
+    const f = fixture();
+    f.plant([window("harvest", [10, 11])]);
+    await runExpansion(f.db, "2026-10-20");
+    await runExpansion(f.db, "2026-12-02"); // closes it: "Window ended"
+    expect(f.pending()).toHaveLength(0);
+    f.state.species[0].care_calendar = [window("harvest", [10, 11, 12, 1])];
+    const r = await runExpansion(f.db, "2026-12-05");
+    expect(r.created).toBe(1);
+  });
+
+  it("keeps the stage change from re-opening a done window", async () => {
+    const f = fixture();
+    // Planted 2024-11-01: establishment until 2026-11-01, when the mature rule takes over mid-window.
+    f.plant([window("prune", [10, 11, 12], { age: "establishment" }), window("prune", [10, 11, 12], { age: "mature" })], {
+      planted_on: "2024-11-01",
+    });
+    await runExpansion(f.db, "2026-10-20");
+    const prune = f.pending()[0];
+    expect(prune.rule_key).toBe("prune:10-11-12:establishment");
+    prune.status = "done";
+    prune.acted_at = "2026-10-21T10:00:00Z";
+    const r = await runExpansion(f.db, "2026-11-03");
+    expect(r.created).toBe(0);
+    expect(f.pending()).toHaveLength(0);
+  });
+
   it("reads past PostgREST's 1,000-row cap, so no obsolete task is left behind", async () => {
     // Twelve plants watered daily all year: 12 × 91 pending rows, more than one response holds.
     const f = fixture();

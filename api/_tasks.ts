@@ -270,6 +270,38 @@ interface PendingRow {
   rule_key: string;
 }
 
+/** An acted window task, read to decide whether a re-keyed open window was already dealt with. */
+export interface ActedWindow {
+  plant_id: string;
+  type: TaskType;
+  rule_key: string;
+  due_on: string;
+  window_end: string;
+  status: TaskStatus;
+  note: string;
+}
+
+/**
+ * Whether a fresh seed for a window already open today should be left out because the grower acted
+ * on the same window under a rule key that no longer applies: the rule's months or age were edited,
+ * a regeneration changed them, or the plant crossed into the mature stage. Without this the window
+ * came back as pending ("Open since 1 Oct") after being marked done. A done row counts, and a skip
+ * by the grower; a window the expansion itself closed as ended does not, since nobody acted on it.
+ */
+export function carriedOver(seed: TaskInsert, acted: ActedWindow[], currentKeys: Set<string>, todayIso: string): boolean {
+  if (seed.window_end === null || seed.due_on >= todayIso) return false;
+  return acted.some(
+    (a) =>
+      a.plant_id === seed.plant_id &&
+      a.type === seed.type &&
+      !currentKeys.has(a.rule_key) &&
+      !a.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX) &&
+      a.due_on <= seed.window_end! &&
+      a.window_end >= seed.due_on &&
+      (a.status === "done" || (a.status === "skipped" && a.note !== en.expansion.windowEnded)),
+  );
+}
+
 function chunks<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
@@ -314,12 +346,31 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
     return { id: row.id, planted_on: row.planted_on, care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [] };
   });
 
-  const seeds: TaskInsert[] = [];
+  let seeds: TaskInsert[] = [];
   const keysByPlant = new Map<string, Set<string>>();
   for (const plant of plants) {
     const { seeds: s, keys } = expandPlant(plant, todayIso);
     seeds.push(...s);
     keysByPlant.set(plant.id, keys);
+  }
+
+  // --- leave out re-keyed open windows the grower already acted on ---------------
+  const openSeeds = seeds.filter((s) => s.window_end !== null && s.due_on < todayIso);
+  if (openSeeds.length > 0) {
+    const earliestStart = openSeeds.map((s) => s.due_on).reduce((a, b) => (a < b ? a : b));
+    const acted = await readAll<ActedWindow>((from, to) => {
+      const q = db
+        .from("tasks")
+        .select("plant_id, type, rule_key, due_on, window_end, status, note")
+        .in("status", ["done", "skipped"])
+        .not("window_end", "is", null)
+        .gte("window_end", earliestStart)
+        .lte("due_on", todayIso);
+      return (plantId ? q.eq("plant_id", plantId) : q).order("id").range(from, to);
+    });
+    if (acted.length > 0) {
+      seeds = seeds.filter((s) => !carriedOver(s, acted, keysByPlant.get(s.plant_id) ?? new Set(), todayIso));
+    }
   }
 
   // --- insert what is missing ---------------------------------------------------
