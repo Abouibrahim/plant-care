@@ -12,7 +12,7 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask, deletePlant } = await import("../src/lib/db");
+const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks } = await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -129,6 +129,18 @@ describe("completeTask and reopenTask", () => {
     expect(byId(task.id).status).toBe("done");
     expect(await reopenTask(task.id)).toBe(true);
     expect(byId(task.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+  });
+});
+
+describe("countDueTasks", () => {
+  it("counts what is late or due today, like the round: open windows stay out, ended ones count", async () => {
+    addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-10-24", window_end: null }); // late
+    addTask({ type: "water", rule_key: "water:6:any:8", due_on: "2026-10-26", window_end: null }); // today
+    addTask({ type: "water", rule_key: "water:6:any:9", due_on: "2026-10-28", window_end: null }); // coming
+    addTask({ due_on: "2026-10-01", window_end: "2026-12-31" }); // open window
+    addTask({ rule_key: "harvest:9:any", due_on: "2026-09-01", window_end: "2026-10-20" }); // ended window
+    addTask({ rule_key: "harvest:8:any", due_on: "2026-08-01", window_end: "2026-09-30", status: "done" });
+    expect(await countDueTasks("2026-10-26")).toBe(3);
   });
 });
 

@@ -198,6 +198,28 @@ class Builder implements PromiseLike<Result> {
     else throw new Error(`mockdb: not.${operator} is not supported`);
     return this;
   }
+  /** PostgREST's `or` filter in its own syntax: "col.op.value,col.op.value" (is.null, eq, lt, lte, gt, gte). */
+  or(expression: string) {
+    const parts = expression.split(",").map((p) => {
+      const [column, operator, ...rest] = p.split(".");
+      const value = rest.join(".");
+      return { column, operator, value };
+    });
+    this.filters.push((r) =>
+      parts.some(({ column, operator, value }) => {
+        const v = r[column];
+        if (operator === "is") return value === "null" ? v === null : v === (value === "true");
+        if (operator === "eq") return String(v) === value;
+        if (v === null || v === undefined) return false;
+        if (operator === "lt") return cmp(v, value) < 0;
+        if (operator === "lte") return cmp(v, value) <= 0;
+        if (operator === "gt") return cmp(v, value) > 0;
+        if (operator === "gte") return cmp(v, value) >= 0;
+        throw new Error(`mockdb: or.${operator} is not supported`);
+      }),
+    );
+    return this;
+  }
   order(column: string, opts?: { ascending?: boolean }) {
     this.orders.push({ column, ascending: opts?.ascending !== false });
     return this;

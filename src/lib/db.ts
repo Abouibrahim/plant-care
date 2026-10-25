@@ -230,13 +230,17 @@ export function notifyTasksChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(TASKS_CHANGED));
 }
 
-/** Pending tasks due on or before a day (YYYY-MM-DD): the Today tab badge. */
+/**
+ * Pending tasks late or due on a day (YYYY-MM-DD): the Today tab badge, the same count as today's
+ * round. A window that is open (started, not over) is left out; one that ended counts as late.
+ */
 export async function countDueTasks(untilIso: string): Promise<number> {
   const { count, error } = await supabase
     .from("tasks")
     .select("id", { count: "exact", head: true })
     .eq("status", "pending")
-    .lte("due_on", untilIso);
+    .lte("due_on", untilIso)
+    .or(`window_end.is.null,window_end.lt.${untilIso}`);
   if (error) throw new Error(error.message);
   return count ?? 0;
 }
