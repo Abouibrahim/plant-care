@@ -123,8 +123,29 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
   const blocked = loading || loadError !== null;
   const unavailable = turns.some((turn) => turn.save === "unavailable");
   const last = turns.length > 0 ? turns[turns.length - 1] : null;
+  // An answer whose save failed exists only on this screen: Close asks first, and leaving any other
+  // way (the back gesture, the profile link) gives the save one more try on the way out.
+  const unsaved = turns.filter((turn) => turn.save === "failed");
+  const unsavedRef = useRef(unsaved);
+  useEffect(() => {
+    unsavedRef.current = unsaved;
+  });
+  useEffect(() => {
+    const pending = unsavedRef;
+    return () => {
+      for (const turn of pending.current) void save(turn);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, at unmount, over the latest failed turns
+  }, []);
+
+  function close(): boolean {
+    if (unsaved.length > 0 && !window.confirm(t.ask.closeUnsaved)) return false;
+    onClose();
+    return true;
+  }
+
   // The back gesture closes the sheet like the Close button, and like it waits while a call runs.
-  useBackClose(onClose, busy);
+  useBackClose(close, busy);
 
   function retryLoad() {
     setLoading(true);
@@ -229,7 +250,7 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
     <div className="sheet" role="dialog" aria-modal="true" aria-label={t.ask.title}>
       <div className="screen">
         <div className="screen-header">
-          <button type="button" className="icon-btn" onClick={onClose} disabled={busy} aria-label={t.common.close}>
+          <button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label={t.common.close}>
             <X size={22} aria-hidden />
           </button>
           <h1>{t.ask.title}</h1>

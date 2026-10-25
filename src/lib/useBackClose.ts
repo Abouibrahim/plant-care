@@ -10,7 +10,11 @@ function isSheetEntry(): boolean {
   return (window.history.state as { plantcareSheet?: boolean } | null)?.plantcareSheet === true;
 }
 
-export function useBackClose(onClose: () => void, locked: boolean): void {
+/**
+ * `onClose` may return false to keep the sheet open (the grower declined to lose unsaved work); the
+ * history entry is then pushed back so the next back gesture asks again instead of leaving the plant.
+ */
+export function useBackClose(onClose: () => boolean | void, locked: boolean): void {
   const closeRef = useRef(onClose);
   const lockedRef = useRef(locked);
   useEffect(() => {
@@ -27,8 +31,11 @@ export function useBackClose(onClose: () => void, locked: boolean): void {
         window.history.pushState(STATE, "");
         return;
       }
+      if (closeRef.current() === false) {
+        window.history.pushState(STATE, "");
+        return;
+      }
       poppedAway = true;
-      closeRef.current();
     };
     window.addEventListener("popstate", onPop);
     return () => {

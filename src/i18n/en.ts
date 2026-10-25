@@ -225,6 +225,7 @@ export const en = {
     saveFailed: "The photo could not be saved",
     saveAgain: "Save again",
     unsaved: "The treatment log and the reminder need the saved photo.",
+    closeUnsaved: "The diagnosis is not saved yet. Close anyway and lose it?",
     diagnosedOn: (date: string) => `Diagnosed ${date}`,
     likelyCauses: "Likely causes",
     evidence: "Evidence",
@@ -291,6 +292,7 @@ export const en = {
     saving: "Saving to the journal…",
     saveFailed: "The answer is not in the journal yet.",
     saveAgain: "Save again",
+    closeUnsaved: "An answer is not in the journal yet. Close anyway and lose it?",
     unavailable:
       "Answers are not kept yet: the questions table does not exist. Run the SQL from the Setup section of PHASE6.md in the Supabase SQL editor.",
     journalLabel: "Question",

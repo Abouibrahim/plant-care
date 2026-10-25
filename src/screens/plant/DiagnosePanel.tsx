@@ -112,8 +112,16 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
   const refusal = response && isRefusal(response) ? response.refusal : null;
   const busy = phase === "preparing" || phase === "sending" || saving;
   const speciesName = plant.species.common_names.en || plant.species.scientific_name;
+  // A fresh diagnosis whose save failed exists only on this screen: Close asks before losing it.
+  const unsaved = fresh !== null && saved === null && !saving;
+  function close(): boolean {
+    if (unsaved && !window.confirm(t.diagnose.closeUnsaved)) return false;
+    onClose();
+    return true;
+  }
+
   // The back gesture closes the sheet like the Close button, and like it waits while a call runs.
-  useBackClose(onClose, busy);
+  useBackClose(close, busy);
 
   function tasksChanged() {
     setTasksKey((k) => k + 1);
@@ -218,7 +226,7 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     <div className="sheet" role="dialog" aria-modal="true" aria-label={t.diagnose.title}>
       <div className="screen">
         <div className="screen-header">
-          <button type="button" className="icon-btn" onClick={onClose} disabled={busy} aria-label={t.common.close}>
+          <button type="button" className="icon-btn" onClick={close} disabled={busy} aria-label={t.common.close}>
             <X size={22} aria-hidden />
           </button>
           <h1>{t.diagnose.title}</h1>

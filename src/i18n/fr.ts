@@ -224,6 +224,7 @@ export const fr: Strings = {
     saveFailed: "La photo n'a pas pu être enregistrée",
     saveAgain: "Réessayer l'enregistrement",
     unsaved: "Le journal du traitement et le rappel ont besoin de la photo enregistrée.",
+    closeUnsaved: "Le diagnostic n'est pas encore enregistré. Fermer quand même et le perdre ?",
     diagnosedOn: (date) => `Diagnostiqué le ${date}`,
     likelyCauses: "Causes probables",
     evidence: "Indices",
@@ -290,6 +291,7 @@ export const fr: Strings = {
     saving: "Enregistrement dans le journal…",
     saveFailed: "La réponse n'est pas encore dans le journal.",
     saveAgain: "Réessayer l'enregistrement",
+    closeUnsaved: "Une réponse n'est pas encore dans le journal. Fermer quand même et la perdre ?",
     unavailable:
       "Les réponses ne sont pas encore gardées : la table questions n'existe pas. Exécutez le SQL de la section Setup de PHASE6.md dans l'éditeur SQL de Supabase.",
     journalLabel: "Question",
