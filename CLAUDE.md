@@ -29,13 +29,14 @@ api/                 Vercel functions (one file per route)
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, *.schema.json
 src/                 the PWA (screens: Today, Capture, Plant, Plants, Species, Settings)
 supabase/schema.sql  tables, enums, RLS
+tests/               vitest over the dates, the task expansion, the digest and the app's task writes (mockdb.ts imitates the query builder)
 docs/SPEC.md         the design spec
 PHASE1.md            first milestone with acceptance tests
 ```
 
 ## API conventions
 
-- Every `/api/*` route except `daily` requires `Authorization: Bearer <supabase access token>`; verify it with `supabase.auth.getUser(token)` on the service client and reject with 401 otherwise. The Vercel URL is public and the function holds the Claude key, so this check is not optional.
+- Every `/api/*` route except `daily` requires `Authorization: Bearer <supabase access token>`; verify it with `supabase.auth.getUser(token)` on the service client, accept only the user whose id is `OWNER_USER_ID`, and reject with 401 otherwise (a fault of Supabase Auth itself is a 502, never a 401: the app signs out on 401). The Vercel URL is public and the function holds the Claude key, so this check is not optional.
 - `/api/daily` accepts only `Authorization: Bearer ${process.env.CRON_SECRET}` (Vercel sends it automatically for cron invocations).
 - Request bodies carry images as `{ media_type, data }` base64; the client has already resized to 1,280 px on the long edge, JPEG quality 0.85, and read GPS from EXIF (package `exifr`) before resizing.
 - Responses are the parsed JSON from Claude plus `{ model, input_tokens, output_tokens }` so usage stays visible.
@@ -83,13 +84,13 @@ export async function callJson(opts: {
 1. Load plants with their species `care_calendar`.
 2. For each plant and rule: age in months from `planted_on` (treat null as mature); skip when the rule's `age` does not match (`any` always matches).
 3. For the next 90 days: window rules (every type except water) create one task on the first day of the first month in `months` that falls in range, `due_on` = that day, `window_end` = last day of the last listed month; water rules create a task every `every_days` on days whose month is in `months`.
-4. Insert only when no task exists with the same `plant_id`, `rule_key` (`${type}:${months.join("-")}:${age}`) and `due_on`.
+4. Insert only when no task exists with the same `plant_id`, `rule_key` (`${type}:${months.join("-")}:${age}`, with `:${every_days}` appended for a periodic watering, the months sorted) and `due_on`.
 5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three task titles. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
 6. Store nothing about weather; it is out of scope.
 
 ## Working agreements
 
-- `npm run typecheck`, `npm run lint` and `npm run build` pass before every commit; one commit per feature with a plain message.
+- `npm run typecheck`, `npm run lint`, `npm test` and `npm run build` pass before every commit; one commit per feature with a plain message. A change to the task expansion, the digest or the app's task writes comes with its test.
 - No plant facts hard-coded in the app or seed data; facts come from Claude calls and the user's review. Test fixtures may use an olive profile saved from a real call.
 - Keep the UI plain and fast: large tap targets, no component library unless it saves real time, dark mode by `prefers-color-scheme`.
 - When something in the spec cannot be done as written, note it in `docs/DECISIONS.md` with the alternative taken, and continue.
