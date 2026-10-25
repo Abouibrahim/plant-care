@@ -77,7 +77,7 @@ create table tasks (
   id          uuid primary key default gen_random_uuid(),
   plant_id    uuid not null references plants(id) on delete cascade,
   type        task_type_t not null,
-  rule_key    text not null,                      -- "${type}:${months}:${age}"
+  rule_key    text not null,                      -- "${type}:${months}:${age}", plus ":${every_days}" for a periodic watering
   due_on      date not null,
   window_end  date,
   title       text not null,

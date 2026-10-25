@@ -50,9 +50,27 @@ function validMonths(months: number[]): number[] {
   return [...new Set(months.filter((m) => Number.isInteger(m) && m >= 1 && m <= 12))].sort((a, b) => a - b);
 }
 
-/** `${type}:${months}:${age}` with the months sorted, so the key does not depend on the order Claude wrote. */
-export function ruleKey(rule: Pick<CareRule, "type" | "months" | "age">): string {
-  return `${rule.type}:${validMonths(rule.months).join("-")}:${rule.age}`;
+/** A water rule with a usable interval makes one task per `every_days`; any other rule makes window tasks. */
+export function isPeriodic(rule: Pick<CareRule, "type"> & Partial<Pick<CareRule, "every_days">>): boolean {
+  return rule.type === "water" && Number.isInteger(rule.every_days) && (rule.every_days as number) >= 1;
+}
+
+/**
+ * `${type}:${months}:${age}` with the months sorted, so the key does not depend on the order Claude
+ * wrote, plus `:${every_days}` for a periodic watering: a changed interval is a new schedule, and the
+ * old one's pending tasks must go as obsolete rather than stay beside the new ones.
+ */
+export function ruleKey(rule: Pick<CareRule, "type" | "months" | "age"> & Partial<Pick<CareRule, "every_days">>): string {
+  const base = `${rule.type}:${validMonths(rule.months).join("-")}:${rule.age}`;
+  return isPeriodic(rule) ? `${base}:${rule.every_days}` : base;
+}
+
+/** The interval of a periodic watering, read back from its rule_key; null for any other key. */
+export function periodOf(ruleKeyValue: string): number | null {
+  const parts = ruleKeyValue.split(":");
+  if (parts[0] !== "water" || parts.length < 4) return null;
+  const days = Number(parts[3]);
+  return Number.isInteger(days) && days >= 1 ? days : null;
 }
 
 /**
@@ -128,7 +146,7 @@ export function expandPlant(plant: ExpansionPlant, todayIso: string, horizonDays
     if (!isRule(rule) || !ruleApplies(rule, age)) continue;
     const rule_key = ruleKey(rule);
     keys.add(rule_key);
-    const periodic = rule.type === "water" && Number.isInteger(rule.every_days) && rule.every_days >= 1;
+    const periodic = isPeriodic(rule);
     const litres = rule.type === "water" && typeof rule.litres === "number" && rule.litres > 0 ? rule.litres : 0;
     const title = litres > 0 ? `${rule.title} (${litres} L)` : rule.title;
     const instruction = typeof rule.instruction === "string" ? rule.instruction : "";

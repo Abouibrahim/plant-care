@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandPlant, monthRuns, ruleKey, runExpansion, staleTasks, type StaleCandidate } from "../api/_tasks.js";
+import { expandPlant, monthRuns, periodOf, ruleKey, runExpansion, staleTasks, type StaleCandidate } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
 import { addDays } from "../src/lib/dates";
 import { dueDates, fixture, rule, water, window } from "./fixtures";
@@ -8,6 +8,15 @@ describe("ruleKey", () => {
   it("sorts and cleans the months so the order Claude wrote does not matter", () => {
     expect(ruleKey(rule({ type: "prune", months: [12, 1, 2], age: "mature" }))).toBe("prune:1-2-12:mature");
     expect(ruleKey(rule({ type: "prune", months: [2, 2, 13, 0, 1], age: "any" }))).toBe("prune:1-2:any");
+  });
+
+  it("carries the interval of a periodic watering, and nothing for a water window", () => {
+    expect(ruleKey(water([6, 7, 8], 7))).toBe("water:6-7-8:any:7");
+    expect(ruleKey(water([6, 7, 8], 0))).toBe("water:6-7-8:any");
+    expect(periodOf("water:6-7-8:any:7")).toBe(7);
+    expect(periodOf("water:6-7-8:any")).toBeNull();
+    expect(periodOf("prune:1-2:any")).toBeNull();
+    expect(periodOf("diagnosis:photo-1")).toBeNull();
   });
 });
 
@@ -160,6 +169,17 @@ describe("runExpansion", () => {
     expect(due).toHaveLength(1);
     expect(due[0].due_on).toBe("2026-06-13");
     expect(f.tasks((t) => t.note === en.expansion.superseded).length).toBeGreaterThan(0);
+  });
+
+  it("replaces the schedule when a watering interval changes", async () => {
+    const f = fixture();
+    f.plant([water([6, 7, 8], 3)]);
+    for (let day = "2026-06-01"; day <= "2026-06-04"; day = addDays(day, 1)) await runExpansion(f.db, day);
+    f.state.species[0].care_calendar = [water([6, 7, 8], 7)];
+    const r = await runExpansion(f.db, "2026-06-05");
+    expect(r.removed).toBeGreaterThan(0);
+    const june = dueDates(f.pending().filter((t) => (t.due_on as string) <= "2026-06-30"));
+    expect(june).toEqual(["2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29"]);
   });
 
   it("expands one plant only when asked", async () => {
