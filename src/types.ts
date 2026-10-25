@@ -323,7 +323,7 @@ export interface ExpandResponse {
   removed: number;
   /** Pending window tasks closed as skipped because their window ended before today. */
   expired: number;
-  /** Overdue waterings closed as skipped because a newer watering of the same rule is due. */
+  /** Overdue waterings closed as skipped: a newer watering of the same rule is due, or a whole interval passed with none. */
   superseded: number;
   /** The Tunis date the expansion ran for, YYYY-MM-DD. */
   today: string;

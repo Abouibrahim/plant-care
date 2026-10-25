@@ -102,13 +102,14 @@ describe("staleTasks", () => {
       task({ id: "ended", type: "harvest", rule_key: "harvest:10:any", due_on: "2026-10-01", window_end: "2026-10-31" }),
       task({ id: "open", type: "harvest", rule_key: "harvest:11:any", due_on: "2026-11-01", window_end: "2026-11-30" }),
     ];
-    expect(staleTasks(rows, "2026-11-05")).toEqual({ expired: ["ended"], superseded: [] });
+    expect(staleTasks(rows, "2026-11-05")).toEqual({ expired: ["ended"], superseded: [], missed: [] });
   });
 
   it("keeps the newest of several due waterings of one rule", () => {
     const rows = [task({ id: "a", due_on: "2026-06-01" }), task({ id: "b", due_on: "2026-06-08" }), task({ id: "c", due_on: "2026-06-15" })];
     const stale = staleTasks(rows, "2026-06-16");
     expect(stale.superseded.sort()).toEqual(["a", "b"]);
+    expect(stale.missed).toEqual([]);
   });
 
   it("leaves acted rows, future waterings and diagnosis rows alone", () => {
@@ -118,7 +119,15 @@ describe("staleTasks", () => {
       task({ id: "diag", type: "scout", rule_key: "diagnosis:photo-1", due_on: "2026-05-01" }),
       task({ id: "only" }),
     ];
-    expect(staleTasks(rows, "2026-06-16")).toEqual({ expired: [], superseded: [] });
+    expect(staleTasks(rows, "2026-06-16")).toEqual({ expired: [], superseded: [], missed: [] });
+  });
+
+  it("closes the season's last watering once its interval has passed, and not before", () => {
+    const last = task({ id: "last", rule_key: "water:6-7-8-9:any:7", due_on: "2026-09-28" });
+    expect(staleTasks([last], "2026-10-04").missed).toEqual([]);
+    expect(staleTasks([last], "2026-10-05").missed).toEqual(["last"]);
+    // A key from before the interval was part of it says nothing about the period: left alone.
+    expect(staleTasks([task({ id: "legacy", rule_key: "water:6-7-8-9:any", due_on: "2026-09-28" })], "2027-03-01").missed).toEqual([]);
   });
 });
 
@@ -169,6 +178,17 @@ describe("runExpansion", () => {
     expect(due).toHaveLength(1);
     expect(due[0].due_on).toBe("2026-06-13");
     expect(f.tasks((t) => t.note === en.expansion.superseded).length).toBeGreaterThan(0);
+  });
+
+  it("does not keep the season's last watering in the digest until the next season", async () => {
+    const f = fixture();
+    f.plant([water([6, 7, 8, 9], 7)]);
+    for (let day = "2026-09-20"; day <= "2026-10-06"; day = addDays(day, 1)) await runExpansion(f.db, day);
+    expect(f.pending()).toHaveLength(0);
+    const closed = f.tasks((t) => t.note === en.expansion.missed);
+    expect(closed).toHaveLength(1);
+    expect(closed[0].due_on).toBe("2026-09-28");
+    expect(f.tasks((t) => t.due_on === "2026-09-21")[0].note).toBe(en.expansion.superseded);
   });
 
   it("replaces the schedule when a watering interval changes", async () => {

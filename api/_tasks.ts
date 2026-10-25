@@ -186,6 +186,8 @@ export interface StaleTasks {
   expired: string[];
   /** Pending waterings due on or before today with a newer one of the same plant and rule also due. */
   superseded: string[];
+  /** The newest due watering of a rule once a whole interval has passed since it, with no newer one coming. */
+  missed: string[];
 }
 
 /**
@@ -194,13 +196,18 @@ export interface StaleTasks {
  *   digest but keeps its line in the plant's journal ("Window ended");
  * - a periodic watering (`window_end` null) due on or before today when a later watering of the same
  *   plant and `rule_key` is also due, so a week away leaves one overdue watering, the newest, not one
- *   per interval ("Superseded by the next watering"). Waterings due after today are not looked at.
+ *   per interval ("Superseded by the next watering"). Waterings due after today are not looked at;
+ * - the last due watering of a rule once `every_days` (read from its key) have passed since it with no
+ *   newer one: inside the season the next watering supersedes it on that same day, so this only
+ *   closes the season's last watering, which otherwise stayed in the digest until the season came
+ *   round again ("Missed watering").
  * Done, skipped and snoozed rows are never listed, nor the rows a diagnosis wrote (`rule_key` starting
  * with `DIAGNOSIS_RULE_PREFIX`, the Phase 4 carve-out).
  */
 export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTasks {
   const expired: string[] = [];
   const superseded: string[] = [];
+  const missed: string[] = [];
   const newestDue = new Map<string, StaleCandidate>();
   for (const task of tasks) {
     if (task.status !== "pending" || task.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) continue;
@@ -220,7 +227,11 @@ export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTask
       superseded.push(task.id);
     }
   }
-  return { expired, superseded };
+  for (const newest of newestDue.values()) {
+    const period = periodOf(newest.rule_key);
+    if (period !== null && addDays(newest.due_on, period) <= todayIso) missed.push(newest.id);
+  }
+  return { expired, superseded, missed };
 }
 
 interface PlantRow {
@@ -351,7 +362,7 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   if (staleErr) throw staleErr;
   const stale = staleTasks((staleRows ?? []) as StaleCandidate[], todayIso);
   const expired = await closeTasks(db, stale.expired, en.expansion.windowEnded);
-  const superseded = await closeTasks(db, stale.superseded, en.expansion.superseded);
+  const superseded = (await closeTasks(db, stale.superseded, en.expansion.superseded)) + (await closeTasks(db, stale.missed, en.expansion.missed));
 
   return { plants: plants.length, created, removed: obsolete.length, expired, superseded, today: todayIso };
 }

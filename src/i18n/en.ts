@@ -480,6 +480,7 @@ export const en = {
   expansion: {
     windowEnded: "Window ended",
     superseded: "Superseded by the next watering",
+    missed: "Missed watering",
   },
 
   /** The push digest, composed on the server (api/_push.ts) from this same table. */

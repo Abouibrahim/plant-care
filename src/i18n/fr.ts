@@ -479,6 +479,7 @@ export const fr: Strings = {
   expansion: {
     windowEnded: "Fenêtre terminée",
     superseded: "Remplacé par l'arrosage suivant",
+    missed: "Arrosage manqué",
   },
 
   /** Le résumé push, composé sur le serveur (api/_push.ts) à partir de la table anglaise. */
