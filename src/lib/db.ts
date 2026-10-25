@@ -1,6 +1,6 @@
 // Typed access to the four tables, the journal view and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
-import { addDays } from "./dates";
+import { addDays, toLocalDate } from "./dates";
 import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
@@ -16,6 +16,7 @@ import {
   type Species,
   type SpeciesProfile,
   type Task,
+  type TaskStatus,
   type TaskWithPlant,
   type ZoneLists,
 } from "../types";
@@ -191,7 +192,7 @@ export async function updateSpeciesField<K extends keyof SpeciesProfile>(
 export const TASKS_CHANGED = "plantcare:tasks-changed";
 
 export function notifyTasksChanged(): void {
-  window.dispatchEvent(new Event(TASKS_CHANGED));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(TASKS_CHANGED));
 }
 
 /** Pending tasks due on or before a day (YYYY-MM-DD): the Today tab badge. */
@@ -291,27 +292,69 @@ export function skipTask(id: string, reason: string): Promise<boolean> {
   return closeTask(id, "skipped", reason.trim());
 }
 
+/** Days a snooze steps forward past days already taken by acted tasks of the same rule. */
+const SNOOZE_SLOT_TRIES = 7;
+
 /**
- * Snooze: a new pending row carries the same rule to today + days, then the current row closes as
- * `snoozed`. The closed row keeps its line in the journal and its slot for the expansion's
- * de-duplication (same plant, rule_key and due_on), so the task is not recreated the next morning.
- * When a task of the same rule already falls on the new day, that one stands in for the snoozed task.
- * Returns the new due date.
+ * Snooze: a new pending row carries the same rule to `days` after the task's own day (after today
+ * when the task is overdue, so "1 day" means tomorrow), then the current row closes as `snoozed`.
+ * The closed row keeps its line in the journal and its slot for the expansion's de-duplication
+ * (same plant, rule_key and due_on), so the task is not recreated the next morning. When a pending
+ * task of the same rule already falls on the new day, that one stands in; a day taken by an acted
+ * row is stepped past, so a snooze always leaves a pending reminder. A window task's `window_end`
+ * moves out to the new day when the snooze passes it, so the copy is not closed as ended before it
+ * shows. For a periodic watering the pending waterings between the two days close as `snoozed` too:
+ * the grower asked for nothing until the new day. Returns the new due date.
  */
 export async function snoozeTask(task: Task, days: number, todayIso: string): Promise<string> {
-  const due_on = addDays(todayIso, days);
-  const { error } = await supabase.from("tasks").insert({
-    plant_id: task.plant_id,
-    type: task.type,
-    rule_key: task.rule_key,
-    due_on,
-    window_end: task.window_end,
-    title: task.title,
-    instruction: task.instruction,
-  });
-  if (error && error.code !== "23505") throw new Error(error.message);
+  const from = task.due_on > todayIso ? task.due_on : todayIso;
+  let due_on = addDays(from, Math.max(1, days));
+  for (let tries = 0; ; tries++) {
+    const window_end = task.window_end !== null && task.window_end < due_on ? due_on : task.window_end;
+    const { error } = await supabase.from("tasks").insert({
+      plant_id: task.plant_id,
+      type: task.type,
+      rule_key: task.rule_key,
+      due_on,
+      window_end,
+      title: task.title,
+      instruction: task.instruction,
+    });
+    if (!error) break;
+    if (error.code !== "23505") throw new Error(error.message);
+    const taken = await supabase
+      .from("tasks")
+      .select("status")
+      .eq("plant_id", task.plant_id)
+      .eq("rule_key", task.rule_key)
+      .eq("due_on", due_on)
+      .maybeSingle();
+    if (taken.error) throw new Error(taken.error.message);
+    if ((taken.data as { status?: TaskStatus } | null)?.status === "pending") break;
+    if (tries >= SNOOZE_SLOT_TRIES) throw new Error(t.today.snoozeNoDay);
+    due_on = addDays(due_on, 1);
+  }
   await closeTask(task.id, "snoozed", "");
+
+  if (task.type === "water" && task.window_end === null) {
+    const covered = await supabase
+      .from("tasks")
+      .update({ status: "snoozed", acted_at: new Date().toISOString(), note: t.today.snoozeCovered(formatIso(due_on)) })
+      .eq("plant_id", task.plant_id)
+      .eq("rule_key", task.rule_key)
+      .eq("status", "pending")
+      .gt("due_on", from)
+      .lt("due_on", due_on)
+      .select("id");
+    if (covered.error) throw new Error(covered.error.message);
+    if ((covered.data ?? []).length > 0) notifyTasksChanged();
+  }
   return due_on;
+}
+
+/** YYYY-MM-DD as the phone shows dates, for a note; the raw value when it cannot be read. */
+function formatIso(iso: string): string {
+  return toLocalDate(iso)?.toLocaleDateString() ?? iso;
 }
 
 // ---- diagnosis rows -----------------------------------------------------------

@@ -415,3 +415,15 @@ export type MockDb = ReturnType<typeof makeDb>;
 export function makeClient(state: MockState, options: MockOptions = {}): SupabaseClient {
   return makeDb(state, options) as unknown as SupabaseClient;
 }
+
+/**
+ * One state for the tests that mock the browser client (`vi.mock("../src/lib/supabase")`): the mock
+ * factory and the test file import this module once each from the same cache, so both see it.
+ * `resetState` empties it in place between tests, since the client keeps its reference.
+ */
+export const sharedState: MockState = makeState();
+
+export function resetState(state: MockState): void {
+  for (const table of ["plants", "species", "tasks", "photos", "questions", "push_subscriptions", "settings"] as const) state[table].length = 0;
+  state.objects.clear();
+}

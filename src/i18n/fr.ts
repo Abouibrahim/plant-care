@@ -109,6 +109,8 @@ export const fr: Strings = {
     toastDone: (title) => `Fait : ${title}`,
     toastSkipped: (title) => `Passée : ${title}`,
     toastSnoozed: (date) => `Reportée au ${date}`,
+    snoozeCovered: (date) => `Couvert par le report au ${date}`,
+    snoozeNoDay: "Aucun jour libre où la reporter",
     undoFailed: "La tâche n'a pas pu être rouverte",
   },
 

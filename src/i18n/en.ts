@@ -109,6 +109,9 @@ export const en = {
     toastDone: (title: string) => `Done: ${title}`,
     toastSkipped: (title: string) => `Skipped: ${title}`,
     toastSnoozed: (date: string) => `Moved to ${date}`,
+    /** Note on the waterings a snooze skips over; the journal shows it in place of the title. */
+    snoozeCovered: (date: string) => `Covered by the snooze to ${date}`,
+    snoozeNoDay: "No free day to move it to",
     undoFailed: "The task could not be reopened",
   },
 

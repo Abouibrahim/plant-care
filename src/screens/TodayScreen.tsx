@@ -233,7 +233,7 @@ export function TodayScreen() {
           ? completeTask(task.id).then(() => null)
           : action.kind === "skip"
             ? skipTask(task.id, action.reason).then(() => null)
-            : snoozeTask(task, action.days, loaded.today);
+            : snoozeTask(task, action.days, localIsoDate());
       const [, movedTo] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), save]);
       setLoaded((prev) =>
         prev
@@ -246,8 +246,9 @@ export function TodayScreen() {
       );
       if (action.kind === "snooze") {
         setToast({ id: nextToastId(), kind: "snooze", message: t.today.toastSnoozed(longDate(movedTo ?? loaded.today)) });
-        // A short snooze lands inside the week: fetch again so the moved task shows on its new day.
-        if (action.days < WEEK_DAYS) reload();
+        // Fetch again: the moved task may land inside the week, and a snoozed watering closes the
+        // waterings it skips over.
+        reload();
       } else {
         const text = action.kind === "done" ? t.today.toastDone(task.title) : t.today.toastSkipped(task.title);
         setToast({ id: nextToastId(), kind: action.kind, message: text, undo: task });
