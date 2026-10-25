@@ -12,6 +12,7 @@ import { addDays, localIsoDate } from "../../lib/dates";
 import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, uploadPhoto } from "../../lib/db";
 import { problemResult, rephotoDays, rephotoTask } from "../../lib/diagnosis";
 import { prepareImage, type PreparedImage } from "../../lib/image";
+import { useBackClose } from "../../lib/useBackClose";
 import {
   isRefusal,
   type DiagnoseResponse,
@@ -111,6 +112,8 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
   const refusal = response && isRefusal(response) ? response.refusal : null;
   const busy = phase === "preparing" || phase === "sending" || saving;
   const speciesName = plant.species.common_names.en || plant.species.scientific_name;
+  // The back gesture closes the sheet like the Close button, and like it waits while a call runs.
+  useBackClose(onClose, busy);
 
   function tasksChanged() {
     setTasksKey((k) => k + 1);
@@ -145,10 +148,12 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     try {
       const grower = note.trim();
       const res = await api.diagnose({ plant_id: plant.id, images: [image.payload], note: grower || undefined });
+      // The answer is paid for: save it before asking whether the panel is still there, so a diagnosis
+      // that arrives after the sheet was left still reaches the journal with its reminder.
+      if (!isRefusal(res)) void save(image, res, grower);
       if (!mountedRef.current) return;
       setResponse(res);
       setPhase("result");
-      if (!isRefusal(res)) void save(image, res, grower);
     } catch (err) {
       if (mountedRef.current) {
         setError(`${t.diagnose.failed}: ${describeError(err)}`);

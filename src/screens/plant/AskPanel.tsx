@@ -11,6 +11,7 @@ import { t } from "../../i18n";
 import { api, ApiError } from "../../lib/api";
 import { historyOf, storedAnswer } from "../../lib/ask";
 import { insertQuestion, listThread, QuestionsUnavailable } from "../../lib/db";
+import { useBackClose } from "../../lib/useBackClose";
 import { ASK_MAX_QUESTION_CHARS, isRefusal, type Answer, type PlantWithSpecies, type Question, type Usage } from "../../types";
 
 type SaveState = "saving" | "saved" | "failed" | "unavailable";
@@ -122,6 +123,8 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
   const blocked = loading || loadError !== null;
   const unavailable = turns.some((turn) => turn.save === "unavailable");
   const last = turns.length > 0 ? turns[turns.length - 1] : null;
+  // The back gesture closes the sheet like the Close button, and like it waits while a call runs.
+  useBackClose(onClose, busy);
 
   function retryLoad() {
     setLoading(true);
