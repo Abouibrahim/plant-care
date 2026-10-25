@@ -62,6 +62,25 @@ describe("composeDigest", () => {
     expect(farm.body.endsWith(en.digest.more(2))).toBe(true);
   });
 
+  it("puts the one-day early notice first, then the late watering, today's, and the open windows", () => {
+    const olive = { tag: "olive", site: "farm" as const, care_calendar: [harvestRule] };
+    const tasks = [
+      task({ id: "open", type: "scout", rule_key: "scout:6-7-8-9-10:any", due_on: "2026-06-01", window_end: "2026-10-31", title: "Scout for olive fly", plant: olive }),
+      task({ id: "today", due_on: "2026-09-17", title: "Water (8 L)", plant: { tag: "papaya", site: "farm", care_calendar: [] } }),
+      task({ id: "late", due_on: "2026-09-15", title: "Water (20 L)", plant: { tag: "carob", site: "farm", care_calendar: [] } }),
+      task({ id: "notice", type: "harvest", rule_key: "harvest:10-11:any", due_on: "2026-10-01", window_end: "2026-11-30", title: "Harvest olives", plant: olive }),
+      task({ id: "fig", due_on: "2026-09-17", title: "Water (20 L)", plant: { tag: "fig", site: "farm", care_calendar: [] } }),
+    ];
+    const [farm] = composeDigest(tasks, "2026-09-17");
+    expect(farm.tasks).toBe(5);
+    expect(farm.body.split("\n")).toEqual([
+      en.digest.soon("1 Oct", en.digest.line("Harvest olives", "olive")),
+      en.digest.line("Water (20 L)", "carob"),
+      en.digest.line("Water (20 L)", "fig"),
+      en.digest.more(2),
+    ]);
+  });
+
   it("says nothing on a day with nothing due", () => {
     expect(composeDigest([task({ due_on: "2026-09-20" })], "2026-09-17")).toEqual([]);
   });

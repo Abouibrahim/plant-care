@@ -91,10 +91,23 @@ function shortDate(iso: string): string {
   return new Date(Date.UTC(p.y, p.m - 1, p.d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
-/** Earliest due first (so overdue leads), then the calendar's type order, then the title; same as Today. */
-function sortTasks(tasks: DigestTask[]): DigestTask[] {
+/**
+ * The order of the body lines, the same reading as Today's (`dueState` in src/lib/today.ts, which
+ * the functions cannot import): the one-day early notices first, since the other lines come back
+ * every morning and a notice buried in "+N more" is never read; then what is late (a missed
+ * watering), then what is due today, then the windows that are open. Within a rank, earliest due
+ * first, then the calendar's type order, then the title.
+ */
+function digestRank(task: DigestTask, todayIso: string): number {
+  if (task.due_on > todayIso) return 0;
+  if (task.window_end !== null) return task.due_on === todayIso ? 2 : 3;
+  return task.due_on < todayIso ? 1 : 2;
+}
+
+function sortTasks(tasks: DigestTask[], todayIso: string): DigestTask[] {
   return [...tasks].sort(
     (a, b) =>
+      digestRank(a, todayIso) - digestRank(b, todayIso) ||
       a.due_on.localeCompare(b.due_on) ||
       TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type) ||
       a.title.localeCompare(b.title),
@@ -106,7 +119,10 @@ export function composeDigest(tasks: DigestTask[], todayIso: string): DigestMess
   const due = tasks.filter((t) => t.plant !== null && inDigest(t, todayIso));
   const messages: DigestMessage[] = [];
   for (const site of SITE_ORDER) {
-    const mine = sortTasks(due.filter((t) => t.plant?.site === site));
+    const mine = sortTasks(
+      due.filter((t) => t.plant?.site === site),
+      todayIso,
+    );
     if (mine.length === 0) continue;
     const lines = mine.slice(0, BODY_LINES).map((t) => {
       const line = en.digest.line(t.title, t.plant?.tag ?? "");
