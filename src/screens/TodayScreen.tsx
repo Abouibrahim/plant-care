@@ -135,8 +135,8 @@ export function TodayScreen() {
   const [celebrate, setCelebrate] = useState(false);
   const [site, setSite] = useState<SiteFilter>(readSite);
   const [day, setDay] = useState<string | null>(null);
-  const [hour] = useState(() => new Date().getHours());
-  const [streak] = useState(() => checkIn(localIsoDate()));
+  const [hour, setHour] = useState(() => new Date().getHours());
+  const [streak, setStreak] = useState(() => checkIn(localIsoDate()));
 
   useEffect(() => {
     let active = true;
@@ -167,6 +167,35 @@ export function TodayScreen() {
       active = false;
     };
   }, [attempt]);
+
+  // The installed app sits in the background overnight and the morning push only brings it to the
+  // front, so nothing remounts the screen: on every return to the foreground, and at the next
+  // midnight, the clock is read again for the greeting, the scene and the streak, and when the date
+  // turned the list, the round and the badge are fetched for the new day.
+  const loadedToday = loaded?.today ?? null;
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setHour(now.getHours());
+      const iso = localIsoDate(now);
+      setStreak(checkIn(iso));
+      if (loadedToday !== null && loadedToday !== iso) {
+        setDay(null);
+        setAttempt((n) => n + 1);
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    const midnight = new Date();
+    midnight.setHours(24, 0, 5, 0);
+    const timer = window.setTimeout(tick, Math.max(1000, midnight.getTime() - Date.now()));
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearTimeout(timer);
+    };
+  }, [loadedToday]);
 
   useEffect(() => {
     if (!toast) return;
