@@ -77,4 +77,13 @@ describe("loadDigestTasks", () => {
     expect(tasks[0].plant).toMatchObject({ tag: "fig", site: "backyard" });
     expect(tasks[0].plant?.care_calendar).toHaveLength(1);
   });
+
+  it("reads past the 1,000-row cap", async () => {
+    const f = fixture();
+    for (let i = 0; i < 12; i++) f.plant([water([9, 10, 11, 12], 1)]);
+    await runExpansion(f.db, "2026-09-02");
+    const tasks = await loadDigestTasks(f.db, "2026-09-02");
+    expect(f.pending().length).toBeGreaterThan(1000);
+    expect(tasks.length).toBe(f.pending().length);
+  });
 });

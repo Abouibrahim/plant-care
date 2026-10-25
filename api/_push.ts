@@ -4,7 +4,7 @@
 // the push service no longer knows. /api/daily calls the three after the expansion.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
-import { HORIZON_DAYS, ruleKey } from "./_tasks.js";
+import { HORIZON_DAYS, readAll, ruleKey } from "./_tasks.js";
 import { requireEnv } from "./_supabase.js";
 import { addDays, parseIso } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
@@ -37,16 +37,19 @@ interface TaskRow {
   plant: { tag: string; site: Site; species: { care_calendar: unknown } | null } | null;
 }
 
-/** Pending tasks up to the horizon with the plant's site and tag and its species' rules. */
+/** Pending tasks up to the horizon with the plant's site and tag and its species' rules, read in pages. */
 export async function loadDigestTasks(db: SupabaseClient, todayIso: string): Promise<DigestTask[]> {
-  const { data, error } = await db
-    .from("tasks")
-    .select("id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, species(care_calendar))")
-    .eq("status", "pending")
-    .lte("due_on", addDays(todayIso, HORIZON_DAYS))
-    .order("due_on", { ascending: true });
-  if (error) throw error;
-  return ((data ?? []) as unknown as TaskRow[]).map((row) => {
+  const rows = await readAll<TaskRow>((from, to) =>
+    db
+      .from("tasks")
+      .select("id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, species(care_calendar))")
+      .eq("status", "pending")
+      .lte("due_on", addDays(todayIso, HORIZON_DAYS))
+      .order("due_on", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  return rows.map((row) => {
     const calendar = row.plant?.species?.care_calendar;
     return {
       id: row.id,

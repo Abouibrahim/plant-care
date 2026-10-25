@@ -202,6 +202,20 @@ describe("runExpansion", () => {
     expect(june).toEqual(["2026-06-08", "2026-06-15", "2026-06-22", "2026-06-29"]);
   });
 
+  it("reads past PostgREST's 1,000-row cap, so no obsolete task is left behind", async () => {
+    // Twelve plants watered daily all year: 12 × 91 pending rows, more than one response holds.
+    const f = fixture();
+    for (let i = 0; i < 12; i++) f.plant([water([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 1)]);
+    const first = await runExpansion(f.db, "2026-06-01");
+    expect(first.created).toBe(12 * 91);
+    const again = await runExpansion(f.db, "2026-06-01");
+    expect(again.created).toBe(0);
+    for (const species of f.state.species) species.care_calendar = [window("prune", [1, 2])];
+    const r = await runExpansion(f.db, "2026-06-01");
+    expect(r.removed).toBe(12 * 91);
+    expect(f.pending()).toHaveLength(0);
+  });
+
   it("expands one plant only when asked", async () => {
     const f = fixture();
     const a = f.plant([window("harvest", [10])]);

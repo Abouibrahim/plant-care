@@ -19,6 +19,24 @@ export const HORIZON_DAYS = 90;
 const INSERT_CHUNK = 200;
 const DELETE_CHUNK = 100;
 const CLOSE_CHUNK = 100;
+/** PostgREST answers at most this many rows per request, for the service role too. */
+const PAGE = 1000;
+
+/**
+ * Reads a whole result in pages of PAGE rows: `page` builds the query afresh with the range to read,
+ * on an order that includes a unique column so no row moves between pages. A read past 1,000 rows
+ * (a summer of waterings for a few dozen young plants) would otherwise stop silently.
+ */
+export async function readAll<T>(page: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw error;
+    const rows = (data ?? []) as T[];
+    out.push(...rows);
+    if (rows.length < PAGE) return out;
+  }
+}
 
 export interface ExpansionPlant {
   id: string;
@@ -286,12 +304,12 @@ async function closeTasks(db: SupabaseClient, ids: string[], note: string): Prom
  * Acted tasks (done, skipped, snoozed) are never touched.
  */
 export async function runExpansion(db: SupabaseClient, todayIso: string, plantId?: string): Promise<ExpandResponse> {
-  let plantQuery = db.from("plants").select("id, planted_on, species(care_calendar)");
-  if (plantId) plantQuery = plantQuery.eq("id", plantId);
-  const { data: plantRows, error: plantErr } = await plantQuery;
-  if (plantErr) throw plantErr;
+  const plantRows = await readAll<PlantRow>((from, to) => {
+    const q = db.from("plants").select("id, planted_on, species(care_calendar)");
+    return (plantId ? q.eq("id", plantId) : q).order("id").range(from, to);
+  });
 
-  const plants: ExpansionPlant[] = ((plantRows ?? []) as unknown as PlantRow[]).map((row) => {
+  const plants: ExpansionPlant[] = plantRows.map((row) => {
     const calendar = row.species?.care_calendar;
     return { id: row.id, planted_on: row.planted_on, care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [] };
   });
@@ -313,11 +331,11 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
       if (s.due_on < min) min = s.due_on;
       if (s.due_on > max) max = s.due_on;
     }
-    let existingQuery = db.from("tasks").select("plant_id, rule_key, due_on").gte("due_on", min).lte("due_on", max);
-    if (plantId) existingQuery = existingQuery.eq("plant_id", plantId);
-    const { data: existingRows, error: existingErr } = await existingQuery;
-    if (existingErr) throw existingErr;
-    const existing = new Set(((existingRows ?? []) as ExistingRow[]).map((r) => `${r.plant_id}|${r.rule_key}|${r.due_on}`));
+    const existingRows = await readAll<ExistingRow>((from, to) => {
+      const q = db.from("tasks").select("plant_id, rule_key, due_on").gte("due_on", min).lte("due_on", max);
+      return (plantId ? q.eq("plant_id", plantId) : q).order("id").range(from, to);
+    });
+    const existing = new Set(existingRows.map((r) => `${r.plant_id}|${r.rule_key}|${r.due_on}`));
     const fresh = seeds.filter((s) => !existing.has(`${s.plant_id}|${s.rule_key}|${s.due_on}`));
 
     for (const chunk of chunks(fresh, INSERT_CHUNK)) {
@@ -331,11 +349,11 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   }
 
   // --- drop pending tasks of rules that no longer apply --------------------------
-  let pendingQuery = db.from("tasks").select("id, plant_id, rule_key").eq("status", "pending");
-  if (plantId) pendingQuery = pendingQuery.eq("plant_id", plantId);
-  const { data: pendingRows, error: pendingErr } = await pendingQuery;
-  if (pendingErr) throw pendingErr;
-  const obsolete = ((pendingRows ?? []) as PendingRow[])
+  const pendingRows = await readAll<PendingRow>((from, to) => {
+    const q = db.from("tasks").select("id, plant_id, rule_key").eq("status", "pending");
+    return (plantId ? q.eq("plant_id", plantId) : q).order("id").range(from, to);
+  });
+  const obsolete = pendingRows
     .filter((r) => {
       // Phase 4 carve-out: rows a diagnosis wrote (rule_key "diagnosis:<photo_id>", the
       // re-photograph task) come from the app, not from a species rule; they are never obsolete here.
@@ -352,15 +370,11 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   // --- close ended windows and stale waterings -----------------------------------
   // Read again after the delete so only rows still in the table are looked at; both rules concern
   // tasks due on or before today, so later ones stay out of the query.
-  let staleQuery = db
-    .from("tasks")
-    .select("id, plant_id, type, rule_key, due_on, window_end, status")
-    .eq("status", "pending")
-    .lte("due_on", todayIso);
-  if (plantId) staleQuery = staleQuery.eq("plant_id", plantId);
-  const { data: staleRows, error: staleErr } = await staleQuery;
-  if (staleErr) throw staleErr;
-  const stale = staleTasks((staleRows ?? []) as StaleCandidate[], todayIso);
+  const staleRows = await readAll<StaleCandidate>((from, to) => {
+    const q = db.from("tasks").select("id, plant_id, type, rule_key, due_on, window_end, status").eq("status", "pending").lte("due_on", todayIso);
+    return (plantId ? q.eq("plant_id", plantId) : q).order("id").range(from, to);
+  });
+  const stale = staleTasks(staleRows, todayIso);
   const expired = await closeTasks(db, stale.expired, en.expansion.windowEnded);
   const superseded = (await closeTasks(db, stale.superseded, en.expansion.superseded)) + (await closeTasks(db, stale.missed, en.expansion.missed));
 
