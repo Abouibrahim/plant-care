@@ -37,7 +37,7 @@ Reference: the "Ask Claude about this plant" item of the feature review of 2026-
   ```
 
 - [ ] ★ Supabase → Authentication → Sign In / Providers: check that "Allow new users to sign up" is off. The app has one user, and every table policy trusts any signed-in user; with sign-ups on (the Supabase default), anyone holding the anon key could create an account and read the tables. This was already so before Phase 6; Ask adds one more paid route. (Since 0.6.1 the `/api` routes accept the owner only, see the next item.)
-- [x] ★ Vercel → Settings → Environment Variables: `OWNER_USER_ID` = the UUID of your user under Supabase → Authentication → Users, for Production and Preview, then redeploy. Required since 0.6.1: without it every `/api` route answers 500 "Server is not configured", and with a wrong value every route answers 403. Done on 2026-10-25 before the 0.6.1 deploy.
+- [x] ★ Vercel → Settings → Environment Variables: `OWNER_USER_ID` = the UUID of your user under Supabase → Authentication → Users, for Production and Preview, then redeploy. Required since 0.6.1: without it every `/api` route answers 500 "Server is not configured", and with a wrong value every route answers 403. Recorded as done before the 0.6.1 deploy, but on the evening of 2026-10-25 the project had no such variable and Capture showed "OWNER_USER_ID is missing" on 0.6.2. Added that evening (Production only) and redeployed as `dpl_QYS4e5yYNB781yK1s4RFBoNsAe6v`; a dummy token now gets 401 instead of 500.
 - [x] Nothing else to create: the route uses the keys already in Vercel, and each question is one Claude call.
 
 ## Build
