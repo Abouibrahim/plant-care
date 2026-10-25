@@ -204,6 +204,10 @@ export const fr: Strings = {
     ageUnknown: "Date de plantation inconnue (considérée adulte)",
     quantity: (n) => (n === 1 ? "1 plante" : `${n} plantes`),
     photoKinds: { identify: "Identification", journal: "Journal", problem: "Problème" },
+    delete: "Supprimer cette plante",
+    deleteNote: "Pour une plante morte ou enregistrée sous la mauvaise espèce. Ses photos, ses tâches et ses questions partent avec elle ; la fiche espèce reste.",
+    deleteConfirm: (tag) => `Supprimer ${tag} ? Ses photos, ses tâches et ses questions partent avec elle.`,
+    deleteFailed: "La plante n'a pas pu être supprimée",
   },
 
   /** Le diagnostic depuis l'écran de la plante ; les titres de tâches et les notes qu'il écrit sont ici aussi. */

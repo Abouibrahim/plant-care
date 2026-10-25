@@ -70,6 +70,25 @@ export async function updatePlant(id: string, patch: Partial<PlantInsert>): Prom
   return must(r) as Plant;
 }
 
+/**
+ * Removes a plant: the row first (its photos, tasks and questions cascade), then its files in the
+ * photos bucket, which live under `<plant id>/`. A failure in Storage after the row is gone leaves
+ * orphaned files and nothing else, so it is not reported. The species profile stays.
+ */
+export async function deletePlant(id: string): Promise<void> {
+  const { error } = await supabase.from("plants").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  notifyTasksChanged();
+  try {
+    const bucket = supabase.storage.from(PHOTOS_BUCKET);
+    const { data } = await bucket.list(id, { limit: 1000 });
+    const paths = (data ?? []).map((o) => `${id}/${o.name}`);
+    if (paths.length > 0) await bucket.remove(paths);
+  } catch {
+    // Orphaned files only; the plant is gone.
+  }
+}
+
 /** Distinct zones used at a site, most recently used first, for the zone suggestions. */
 export async function recentZones(site: Site): Promise<string[]> {
   const r = await supabase.from("plants").select("zone").eq("site", site).order("updated_at", { ascending: false }).limit(100);

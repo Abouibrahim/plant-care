@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Link, useParams } from "react-router-dom";
-import { BookOpen, ChevronLeft, ImagePlus, MapPin, MessageCircleQuestionMark, Pencil, Stethoscope, X } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { BookOpen, ChevronLeft, ImagePlus, MapPin, MessageCircleQuestionMark, Pencil, Stethoscope, Trash2, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { storedAnswer } from "../lib/ask";
 import { ageInMonths, localIsoDate, toLocalDate } from "../lib/dates";
 import {
   completeTask,
+  deletePlant,
   getPlant,
   insertPhoto,
   listJournal,
@@ -77,6 +78,7 @@ function topCandidateName(ai: unknown): string | null {
 
 export function PlantScreen() {
   const { id = "" } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -84,6 +86,7 @@ export function PlantScreen() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [extras, setExtras] = useState<Extras | null>(null);
   const [extrasError, setExtrasError] = useState<{ id: string; message: string } | null>(null);
@@ -191,6 +194,21 @@ export function PlantScreen() {
     }
   }
 
+  /** A dead tree or a wrong identification: the plant goes, with its photos, tasks and questions. */
+  async function remove() {
+    if (!plant || busy) return;
+    if (!window.confirm(t.plant.deleteConfirm(plant.tag))) return;
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await deletePlant(plant.id);
+      navigate("/plants", { replace: true });
+    } catch (err) {
+      setActionError(`${t.plant.deleteFailed}: ${message(err)}`);
+      setDeleting(false);
+    }
+  }
+
   async function addJournalPhoto(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -257,7 +275,7 @@ export function PlantScreen() {
   const newest = photos[0] ?? null;
   const today = localIsoDate();
   const ageMonths = ageInMonths(plant.planted_on, today);
-  const busy = saving || uploading;
+  const busy = saving || uploading || deleting;
 
   return (
     <div className="screen">
@@ -431,6 +449,14 @@ export function PlantScreen() {
           )}
         </>
       )}
+
+      <div className="card stack" style={{ marginTop: 24 }}>
+        <button type="button" className="danger block" disabled={busy} onClick={() => void remove()}>
+          <Trash2 size={18} aria-hidden />
+          {deleting ? t.common.saving : t.plant.delete}
+        </button>
+        <span className="small muted">{t.plant.deleteNote}</span>
+      </div>
 
       {diagnose && (
         <DiagnosePanel

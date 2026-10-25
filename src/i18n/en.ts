@@ -205,6 +205,10 @@ export const en = {
     ageUnknown: "Planting date unknown (treated as mature)",
     quantity: (n: number) => (n === 1 ? "1 plant" : `${n} plants`),
     photoKinds: { identify: "Identification", journal: "Journal", problem: "Problem" },
+    delete: "Delete this plant",
+    deleteNote: "For a plant that died or was recorded under the wrong species. Its photos, tasks and questions go with it; the species profile stays.",
+    deleteConfirm: (tag: string) => `Delete ${tag}? Its photos, tasks and questions go with it.`,
+    deleteFailed: "The plant could not be deleted",
   },
 
   /** The diagnosis flow on the Plant screen; the task titles and notes it writes live here too. */

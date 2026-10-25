@@ -12,7 +12,7 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask } = await import("../src/lib/db");
+const { snoozeTask, completeTask, reopenTask, deletePlant } = await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -129,5 +129,24 @@ describe("completeTask and reopenTask", () => {
     expect(byId(task.id).status).toBe("done");
     expect(await reopenTask(task.id)).toBe(true);
     expect(byId(task.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+  });
+});
+
+describe("deletePlant", () => {
+  it("removes the row, what hangs off it, and its files in the bucket", async () => {
+    sharedState.species.push({ id: "s1", care_calendar: [water([6, 7, 8, 9], 3)] });
+    sharedState.plants.push({ id: "p1", species_id: "s1", tag: "Fig", site: "farm", planted_on: null });
+    sharedState.plants.push({ id: "p2", species_id: "s1", tag: "Other", site: "farm", planted_on: null });
+    sharedState.photos.push({ id: "ph1", plant_id: "p1", storage_path: "p1/1.jpg", kind: "identify" });
+    sharedState.objects.add("p1/1.jpg");
+    sharedState.objects.add("p2/1.jpg");
+    await runExpansion(db, "2026-07-04");
+    expect(pending().some((t) => t.plant_id === "p1")).toBe(true);
+    await deletePlant("p1");
+    expect(sharedState.plants.map((p) => p.id)).toEqual(["p2"]);
+    expect(sharedState.tasks.some((t) => t.plant_id === "p1")).toBe(false);
+    expect(sharedState.photos).toHaveLength(0);
+    expect([...sharedState.objects]).toEqual(["p2/1.jpg"]);
+    expect(sharedState.species).toHaveLength(1);
   });
 });

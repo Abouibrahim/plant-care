@@ -316,6 +316,11 @@ class Builder implements PromiseLike<Result> {
     if (this.op === "delete") {
       const gone = this.matching();
       this.state[this.table] = this.rows().filter((r) => !gone.includes(r));
+      if (this.table === "plants") {
+        // `references plants(id) on delete cascade` in the schema.
+        const ids = new Set(gone.map((r) => r.id));
+        for (const child of ["photos", "tasks", "questions"] as const) this.state[child] = this.state[child].filter((r) => !ids.has(r.plant_id));
+      }
       return this.finish(this.returning ? gone.map((r) => this.project(r, this.columns, this.table)) : null);
     }
 
@@ -377,9 +382,9 @@ class StorageBucket {
     return { data: { path }, error: null };
   }
 
-  async list(prefix: string) {
+  async list(prefix: string, opts?: { limit?: number }) {
     const names = [...this.state.objects].filter((p) => p.startsWith(`${prefix}/`)).map((p) => ({ name: p.slice(prefix.length + 1) }));
-    return { data: names, error: null };
+    return { data: names.slice(0, opts?.limit ?? 100), error: null };
   }
 
   async remove(paths: string[]) {
