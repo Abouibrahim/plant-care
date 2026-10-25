@@ -259,6 +259,34 @@ describe("runExpansion", () => {
     expect(r.created).toBe(1);
   });
 
+  it("does not let a done summer window swallow an autumn window re-keyed beside it", async () => {
+    const f = fixture();
+    f.plant([window("scout", [6, 7, 8, 9, 10], { title: "Scout for olive fly" }), window("scout", [10, 11, 12], { title: "Scout for peacock spot" })]);
+    await runExpansion(f.db, "2026-07-10");
+    const summer = f.pending().find((t) => t.rule_key === "scout:6-7-8-9-10:any")!;
+    summer.status = "done";
+    summer.acted_at = "2026-07-10T09:00:00Z";
+    await runExpansion(f.db, "2026-10-20");
+    expect(f.pending().map((t) => t.rule_key)).toEqual(["scout:10-11-12:any"]);
+    // A regeneration re-keys both rules; the autumn window must come back, the summer one not.
+    f.state.species[0].care_calendar = [window("scout", [5, 6, 7, 8, 9, 10], { title: "Scout for olive fly" }), window("scout", [10, 11], { title: "Scout for peacock spot" })];
+    const r = await runExpansion(f.db, "2026-10-25");
+    expect(r.removed).toBe(1);
+    expect(f.pending().map((t) => t.rule_key)).toEqual(["scout:10-11:any"]);
+  });
+
+  it("gives a stored profile with two same-key rules both their tasks", async () => {
+    const f = fixture();
+    f.plant([
+      window("scout", [6, 7, 8, 9, 10], { title: "Scout for olive fly", instruction: "Check the fruit." }),
+      window("scout", [6, 7, 8, 9, 10], { title: "Scout for black scale", instruction: "Look under the leaves." }),
+    ]);
+    const r = await runExpansion(f.db, "2026-07-01");
+    expect(r.created).toBe(1);
+    expect(f.pending()[0].title).toBe("Scout for olive fly; Scout for black scale");
+    expect(f.pending()[0].instruction).toBe("Check the fruit. Look under the leaves.");
+  });
+
   it("keeps the stage change from re-opening a done window", async () => {
     const f = fixture();
     // Planted 2024-11-01: establishment until 2026-11-01, when the mature rule takes over mid-window.

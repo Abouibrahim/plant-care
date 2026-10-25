@@ -81,7 +81,8 @@ export function RuleEditor({ rule, siblings, saving, error, onSave, onDelete, on
     if (!title) return setProblem(t.species.titleRequired);
     if (draft.months.length === 0) return setProblem(t.species.monthsRequired);
     if (water && every === 0) return setProblem(t.species.everyDaysRequired);
-    if (siblings.some((other) => sameKey(other, draft))) return setProblem(t.species.duplicateRule);
+    // A sibling that already shared the rule's own key (a pair Claude wrote before duplicates were folded) does not block: this edit is how the pair gets separated.
+    if (siblings.some((other) => sameKey(other, draft) && !(rule && sameKey(other, rule)))) return setProblem(t.species.duplicateRule);
     setProblem(null);
     onSave({
       type: draft.type,

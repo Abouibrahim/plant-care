@@ -313,27 +313,36 @@ export interface ActedWindow {
   window_end: string;
   status: TaskStatus;
   note: string;
+  acted_at: string | null;
 }
 
 /**
  * Whether a fresh seed for a window already open today should be left out because the grower acted
- * on the same window under a rule key that no longer applies: the rule's months or age were edited,
- * a regeneration changed them, or the plant crossed into the mature stage. Without this the window
- * came back as pending ("Open since 1 Oct") after being marked done. A done row counts, and a skip
- * by the grower; a window the expansion itself closed as ended does not, since nobody acted on it.
+ * on it under a rule key that no longer applies: the rule's months or age were edited, a regeneration
+ * changed them, or the plant crossed into the mature stage. Without this the window came back as
+ * pending ("Open since 1 Oct") after being marked done. The acted row must be of the same plant and
+ * type, overlap the new window, and have been acted on inside it: the day of the action is what ties
+ * the two, since a plant can carry several windows of one type (one scout rule per pest) and a done
+ * summer row must not swallow the autumn window re-keyed beside it. A done row counts, and a skip by
+ * the grower; a window the expansion itself closed as ended does not, since nobody acted on it.
  */
 export function carriedOver(seed: TaskInsert, acted: ActedWindow[], currentKeys: Set<string>, todayIso: string): boolean {
   if (seed.window_end === null || seed.due_on >= todayIso) return false;
-  return acted.some(
-    (a) =>
+  const end = seed.window_end;
+  return acted.some((a) => {
+    const day = a.acted_at?.slice(0, 10) ?? "";
+    return (
       a.plant_id === seed.plant_id &&
       a.type === seed.type &&
       !currentKeys.has(a.rule_key) &&
       !a.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX) &&
-      a.due_on <= seed.window_end! &&
+      a.due_on <= end &&
       a.window_end >= seed.due_on &&
-      (a.status === "done" || (a.status === "skipped" && a.note !== en.expansion.windowEnded)),
-  );
+      day >= seed.due_on &&
+      day <= end &&
+      (a.status === "done" || (a.status === "skipped" && a.note !== en.expansion.windowEnded))
+    );
+  });
 }
 
 function chunks<T>(items: T[], size: number): T[][] {
@@ -377,7 +386,8 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
 
   const plants: ExpansionPlant[] = plantRows.map((row) => {
     const calendar = row.species?.care_calendar;
-    return { id: row.id, planted_on: row.planted_on, care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [] };
+    // Profiles written before the fold at write time may still hold two items with one key: folded here too, so both make their tasks.
+    return { id: row.id, planted_on: row.planted_on, care_calendar: Array.isArray(calendar) ? mergeDuplicateRules(calendar as CareRule[]) : [] };
   });
 
   let seeds: TaskInsert[] = [];
@@ -395,7 +405,7 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
     const acted = await readAll<ActedWindow>((from, to) => {
       const q = db
         .from("tasks")
-        .select("plant_id, type, rule_key, due_on, window_end, status, note")
+        .select("plant_id, type, rule_key, due_on, window_end, status, note, acted_at")
         .in("status", ["done", "skipped"])
         .not("window_end", "is", null)
         .gte("window_end", earliestStart)
@@ -461,7 +471,8 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   });
   const stale = staleTasks(staleRows, todayIso);
   const expired = await closeTasks(db, stale.expired, en.expansion.windowEnded);
-  const superseded = (await closeTasks(db, stale.superseded, en.expansion.superseded)) + (await closeTasks(db, stale.missed, en.expansion.missed));
+  let superseded = await closeTasks(db, stale.superseded, en.expansion.superseded);
+  superseded += await closeTasks(db, stale.missed, en.expansion.missed);
 
   return { plants: plants.length, created, removed: obsolete.length, expired, superseded, today: todayIso };
 }
