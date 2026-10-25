@@ -9,7 +9,7 @@ import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
-import { deleteSpeciesIfUnused, insertPhoto, insertPlant, photoPath, updatePlant, uploadPhoto } from "../lib/db";
+import { deleteSpeciesIfUnused, insertPhoto, insertPlant, newId, photoPath, uploadPhoto } from "../lib/db";
 import { prepareImage, type PreparedImage } from "../lib/image";
 import {
   isRefusal,
@@ -29,10 +29,20 @@ type Phase = "idle" | "preparing" | "identifying" | "result" | "confirmed" | "sa
 
 type Choice = { kind: "candidate"; candidate: Candidate } | { kind: "typed"; name: string };
 
-/** What a failed save already managed to write, so a retry never inserts a second plant. */
+/**
+ * What a save has chosen and written so far, so a retry writes the same rows and objects again
+ * rather than new ones: the ids are made here before the first write, and a reply lost on the way
+ * back (a weak signal at the farm) cannot leave a second plant, a second photo row or a path
+ * Storage then refuses.
+ */
 interface SaveProgress {
+  plantId: string;
+  /** Set once the plant row is known to exist. */
   plant: Plant | null;
-  uploaded: Map<number, { path: string; takenAt: string }>;
+  /** The storage path and time chosen for each image, before its upload starts. */
+  planned: Map<number, { path: string; takenAt: string }>;
+  photoIds: Map<number, string>;
+  /** Images whose photo row is written. */
   rows: Set<number>;
 }
 
@@ -55,6 +65,11 @@ function writeSite(site: Site) {
   }
 }
 
+/** A fetch that never got an answer: supabase-js reports it as a TypeError, with the browser's wording. */
+function isNetworkFailure(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof Error && /failed to fetch|network ?error|load failed/i.test(err.message));
+}
+
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return t.errors.unauthorized;
@@ -62,6 +77,7 @@ function describeError(err: unknown): string {
     if (err.status === 413) return t.errors.tooLarge;
     return err.message || t.errors.generic;
   }
+  if (isNetworkFailure(err)) return t.errors.network;
   if (err instanceof Error && err.message) return err.message;
   return t.errors.generic;
 }
@@ -74,7 +90,7 @@ class UploadFailure extends Error {
 }
 
 function freshProgress(): SaveProgress {
-  return { plant: null, uploaded: new Map(), rows: new Set() };
+  return { plantId: newId(), plant: null, planned: new Map(), photoIds: new Map(), rows: new Set() };
 }
 
 function isUnknown(c: Candidate): boolean {
@@ -358,42 +374,51 @@ export function CaptureScreen() {
     setPhase("saving");
     setSaveError(null);
     try {
-      const row = { ...values, species_id: species.id };
-      const plant = progress.plant ? await updatePlant(progress.plant.id, row) : await insertPlant(row);
+      // An upsert on the id chosen for this capture: the same row whether this is the first Save or a retry.
+      const plant = await insertPlant({ ...values, species_id: species.id }, progress.plantId);
       progress.plant = plant;
       createdRef.current.delete(species.id); // in use now; any other row created here is still an orphan
       setPlantSaved(true);
 
       // Storage paths are keyed by timestamp: keep them distinct even for a burst of photos.
       const used = new Set<number>();
-      for (const u of progress.uploaded.values()) used.add(new Date(u.takenAt).getTime());
+      for (const p of progress.planned.values()) used.add(new Date(p.takenAt).getTime());
 
       for (let i = 0; i < images.length; i++) {
         if (progress.rows.has(i)) continue;
         const img = images[i];
-        let up = progress.uploaded.get(i);
-        if (!up) {
+        let planned = progress.planned.get(i);
+        // A path planned on an earlier attempt may already hold the object: upload over it.
+        const retry = planned !== undefined;
+        if (!planned) {
           let when = img.takenAt ? new Date(img.takenAt) : new Date();
           if (Number.isNaN(when.getTime())) when = new Date();
           while (used.has(when.getTime())) when = new Date(when.getTime() + 1);
           used.add(when.getTime());
-          const path = photoPath(plant.id, when);
-          try {
-            await uploadPhoto(path, img.blob);
-          } catch (err) {
-            throw new UploadFailure(describeError(err));
-          }
-          up = { path, takenAt: when.toISOString() };
-          progress.uploaded.set(i, up);
+          planned = { path: photoPath(plant.id, when), takenAt: when.toISOString() };
+          progress.planned.set(i, planned);
         }
-        await insertPhoto({
-          plant_id: plant.id,
-          taken_at: up.takenAt,
-          storage_path: up.path,
-          kind: "identify",
-          ai_result: response,
-          note: "",
-        });
+        try {
+          await uploadPhoto(planned.path, img.blob, retry);
+        } catch (err) {
+          throw new UploadFailure(describeError(err));
+        }
+        let photoId = progress.photoIds.get(i);
+        if (!photoId) {
+          photoId = newId();
+          progress.photoIds.set(i, photoId);
+        }
+        await insertPhoto(
+          {
+            plant_id: plant.id,
+            taken_at: planned.takenAt,
+            storage_path: planned.path,
+            kind: "identify",
+            ai_result: response,
+            note: "",
+          },
+          photoId,
+        );
         progress.rows.add(i);
       }
 

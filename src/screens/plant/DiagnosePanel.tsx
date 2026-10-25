@@ -9,7 +9,7 @@ import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { api, ApiError } from "../../lib/api";
 import { addDays, localIsoDate } from "../../lib/dates";
-import { insertPhoto, insertRephotoTask, listDiagnosisTasks, photoPath, uploadPhoto } from "../../lib/db";
+import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, uploadPhoto } from "../../lib/db";
 import { problemResult, rephotoDays, rephotoTask } from "../../lib/diagnosis";
 import { prepareImage, type PreparedImage } from "../../lib/image";
 import {
@@ -40,6 +40,11 @@ interface Props {
   onClose: () => void;
 }
 
+/** A fetch that never got an answer: supabase-js reports it as a TypeError, with the browser's wording. */
+function isNetworkFailure(err: unknown): boolean {
+  return err instanceof TypeError || (err instanceof Error && /failed to fetch|network ?error|load failed/i.test(err.message));
+}
+
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401) return t.errors.unauthorized;
@@ -47,6 +52,7 @@ function describeError(err: unknown): string {
     if (err.status === 413) return t.errors.tooLarge;
     return err.message || t.errors.generic;
   }
+  if (isNetworkFailure(err)) return t.errors.network;
   if (err instanceof Error && err.message) return err.message;
   return t.errors.generic;
 }
@@ -65,8 +71,11 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
   const mountedRef = useRef(true);
   // Preview object URLs made here; revoked when the panel closes.
   const urlsRef = useRef(new Set<string>());
-  // What a failed save already uploaded, so Save again never uploads twice (upsert is off).
-  const uploadedRef = useRef<{ path: string; takenAt: string } | null>(null);
+  // The storage path chosen for this diagnosis's photo and the row id made for it, kept from the
+  // first attempt so Save again writes the same object and the same row (and so one re-photograph
+  // reminder) instead of a path Storage refuses or a second row.
+  const plannedRef = useRef<{ path: string; takenAt: string; uploaded: boolean } | null>(null);
+  const photoIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const urls = urlsRef.current;
@@ -130,6 +139,9 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     if (!image) return;
     setPhase("sending");
     setError(null);
+    // A new diagnosis: its photo gets a fresh path and row id, whatever an earlier attempt planned.
+    plannedRef.current = null;
+    photoIdRef.current = null;
     try {
       const grower = note.trim();
       const res = await api.diagnose({ plant_id: plant.id, images: [image.payload], note: grower || undefined });
@@ -150,27 +162,34 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     setSaving(true);
     setSaveError(null);
     try {
-      let up = uploadedRef.current;
-      if (!up) {
+      let planned = plannedRef.current;
+      if (!planned) {
         let takenAt = img.takenAt ? new Date(img.takenAt) : new Date();
         if (Number.isNaN(takenAt.getTime())) takenAt = new Date();
         // Storage keys are timestamps: step past any photo of this plant already stored at that millisecond.
         const used = new Set(photos.map((p) => p.storage_path));
         while (used.has(photoPath(plant.id, takenAt))) takenAt = new Date(takenAt.getTime() + 1);
-        const path = photoPath(plant.id, takenAt);
-        await uploadPhoto(path, img.blob);
-        up = { path, takenAt: takenAt.toISOString() };
-        uploadedRef.current = up;
+        planned = { path: photoPath(plant.id, takenAt), takenAt: takenAt.toISOString(), uploaded: false };
+        plannedRef.current = planned;
       }
+      if (!planned.uploaded) {
+        // Save again uploads over the path it chose before: the object may be there from a reply that was lost.
+        await uploadPhoto(planned.path, img.blob, true);
+        planned.uploaded = true;
+      }
+      photoIdRef.current ??= newId();
       const ai: ProblemAiResult = { ...res, note: grower };
-      const row = await insertPhoto({
-        plant_id: plant.id,
-        taken_at: up.takenAt,
-        storage_path: up.path,
-        kind: "problem",
-        ai_result: ai,
-        note: grower,
-      });
+      const row = await insertPhoto(
+        {
+          plant_id: plant.id,
+          taken_at: planned.takenAt,
+          storage_path: planned.path,
+          kind: "problem",
+          ai_result: ai,
+          note: grower,
+        },
+        photoIdRef.current,
+      );
       // The follow-up reminder; if this fails the card offers "Set the reminder".
       const days = rephotoDays(res);
       if (days > 0) {

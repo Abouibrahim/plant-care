@@ -49,8 +49,19 @@ export async function getPlant(id: string): Promise<PlantWithSpecies | null> {
   return optional(r) as PlantWithSpecies | null;
 }
 
-export async function insertPlant(input: PlantInsert): Promise<Plant> {
-  const r = await supabase.from("plants").insert(input).select("*").single();
+/** A fresh row id made in the browser, so a write retried after a lost reply finds its own row. */
+export function newId(): string {
+  return crypto.randomUUID();
+}
+
+/**
+ * Inserts a plant. With an `id` made by the caller the write is an upsert on it, so a Save tapped
+ * again after a reply that never arrived updates the row it already wrote instead of adding a second plant.
+ */
+export async function insertPlant(input: PlantInsert, id?: string): Promise<Plant> {
+  const r = id
+    ? await supabase.from("plants").upsert({ id, ...input }, { onConflict: "id" }).select("*").single()
+    : await supabase.from("plants").insert(input).select("*").single();
   return must(r) as Plant;
 }
 
@@ -81,15 +92,20 @@ export function photoPath(plantId: string, takenAt: Date = new Date()): string {
   return `${plantId}/${takenAt.getTime()}.jpg`;
 }
 
-export async function uploadPhoto(storagePath: string, blob: Blob): Promise<void> {
-  const { error } = await supabase.storage
-    .from(PHOTOS_BUCKET)
-    .upload(storagePath, blob, { contentType: "image/jpeg", upsert: false, cacheControl: "3600" });
+/**
+ * Uploads a photo. `upsert` is for a retry of a path this save already chose: an upload whose reply
+ * was lost may have stored the object, and Storage refuses the path again otherwise (409).
+ */
+export async function uploadPhoto(storagePath: string, blob: Blob, upsert = false): Promise<void> {
+  const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(storagePath, blob, { contentType: "image/jpeg", upsert, cacheControl: "3600" });
   if (error) throw new Error(error.message);
 }
 
-export async function insertPhoto(input: PhotoInsert): Promise<Photo> {
-  const r = await supabase.from("photos").insert(input).select("*").single();
+/** Inserts a photo row; with an `id` made by the caller, an upsert on it, so a retry cannot add a second row. */
+export async function insertPhoto(input: PhotoInsert, id?: string): Promise<Photo> {
+  const r = id
+    ? await supabase.from("photos").upsert({ id, ...input }, { onConflict: "id" }).select("*").single()
+    : await supabase.from("photos").insert(input).select("*").single();
   return must(r) as Photo;
 }
 
