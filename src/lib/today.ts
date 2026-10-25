@@ -1,6 +1,46 @@
-// Small helpers behind the Today screen's mood: the time of day (greeting and garden scene), the
-// check-in streak kept on this phone, and the short vibration on Done. Nothing here touches the data.
+// Small helpers behind the Today screen: how a task stands against the day (shared by the cards,
+// the counts and the week strip, so "overdue" means the same thing everywhere), the time of day
+// (greeting and garden scene), the check-in streak kept on this phone, and the short vibration on
+// Done. Nothing here touches the data.
 import { addDays } from "./dates";
+import { TASK_TYPES, type Task } from "../types";
+
+export type DueState = "overdue" | "open" | "today" | "upcoming";
+
+/**
+ * Late: a watering past its day, or a window past its end. Open: a window that has started and is
+ * not over, which is not late, whatever its start date. Then due today, or still to come.
+ */
+export function dueState(task: Pick<Task, "due_on" | "window_end">, today: string): DueState {
+  const end = task.window_end;
+  if (end !== null && end < today) return "overdue";
+  if (task.due_on < today) return end !== null ? "open" : "overdue";
+  if (task.due_on === today) return "today";
+  return "upcoming";
+}
+
+export function isLate(task: Pick<Task, "due_on" | "window_end">, today: string): boolean {
+  return dueState(task, today) === "overdue";
+}
+
+/** Late or due today: what today's round counts and what clears the day. An open window is neither. */
+export function dueNow(task: Pick<Task, "due_on" | "window_end">, today: string): boolean {
+  const state = dueState(task, today);
+  return state === "overdue" || state === "today";
+}
+
+const DUE_RANK: Record<DueState, number> = { overdue: 0, today: 1, open: 2, upcoming: 3 };
+
+/** Late first, then due today, then open windows, then the coming days; within a rank by day, the calendar's type order and the title. */
+export function sortByDue<T extends Pick<Task, "due_on" | "window_end" | "type" | "title">>(tasks: T[], today: string): T[] {
+  return [...tasks].sort(
+    (a, b) =>
+      DUE_RANK[dueState(a, today)] - DUE_RANK[dueState(b, today)] ||
+      a.due_on.localeCompare(b.due_on) ||
+      TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type) ||
+      a.title.localeCompare(b.title),
+  );
+}
 
 /** Sky of the garden scene: dawn 5–9 h, day 10–16 h, dusk 17–19 h, night 20–4 h. */
 export type DayPhase = "dawn" | "day" | "dusk" | "night";

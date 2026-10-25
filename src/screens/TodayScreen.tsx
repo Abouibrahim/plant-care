@@ -12,7 +12,7 @@ import { t } from "../i18n";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
 import { completeTask, countDoneSince, listDueTasks, reopenTask, skipTask, snoozeTask } from "../lib/db";
-import { buzz, checkIn, dayPhase, greetingFor, prefersReducedMotion } from "../lib/today";
+import { buzz, checkIn, dayPhase, dueNow, greetingFor, isLate, prefersReducedMotion, sortByDue } from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
 import { RoundCard } from "./today/RoundCard";
 import { WeekStrip, type WeekDay } from "./today/WeekStrip";
@@ -63,17 +63,7 @@ function startOfDay(iso: string): string {
   return d.toISOString();
 }
 
-/** Earliest due first (so overdue leads), then the calendar's type order, then the title. */
-function sortTasks(tasks: TaskWithPlant[]): TaskWithPlant[] {
-  return [...tasks].sort(
-    (a, b) =>
-      a.due_on.localeCompare(b.due_on) ||
-      TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type) ||
-      a.title.localeCompare(b.title),
-  );
-}
-
-/** The tasks of one strip day; overdue tasks belong to today. */
+/** The tasks of one strip day; overdue tasks and open windows belong to today. */
 function onDay(tasks: TaskWithPlant[], iso: string, today: string): TaskWithPlant[] {
   return tasks.filter((x) => (iso === today ? x.due_on <= today : x.due_on === iso));
 }
@@ -96,7 +86,7 @@ function buildWeek(tasks: TaskWithPlant[], today: string): WeekDay[] {
   return Array.from({ length: WEEK_DAYS }, (_, i) => {
     const iso = addDays(today, i);
     const own = onDay(tasks, iso, today);
-    return { iso, count: own.length, main: mainType(own), overdue: i === 0 && own.some((x) => x.due_on < today) };
+    return { iso, count: own.length, main: mainType(own), overdue: i === 0 && own.some((x) => isLate(x, today)) };
   });
 }
 
@@ -222,11 +212,12 @@ export function TodayScreen() {
     setRefreshNote(null);
     setLeaving((prev) => ({ ...prev, [task.id]: action.kind }));
     if (action.kind === "done") buzz(18);
-    // Whether this tick clears the day: nothing else due today that is not already on its way out.
+    // Whether this tick clears the day: nothing else late or due today that is not already on its
+    // way out. Open windows do not count; they can stay open for months.
     const lastOfDay =
       action.kind === "done" &&
-      task.due_on <= loaded.today &&
-      !loaded.tasks.some((x) => x.id !== task.id && x.due_on <= loaded.today && !leaving[x.id]);
+      dueNow(task, loaded.today) &&
+      !loaded.tasks.some((x) => x.id !== task.id && dueNow(x, loaded.today) && !leaving[x.id]);
     try {
       const save =
         action.kind === "done"
@@ -281,14 +272,16 @@ export function TodayScreen() {
 
   const today = loaded?.today ?? localIsoDate();
   const tasks = loaded?.tasks ?? [];
-  const overdue = tasks.filter((x) => x.due_on < today).length;
-  const dueToday = tasks.filter((x) => x.due_on <= today).length;
+  // Late means a missed watering or an ended window; a window that is simply open is not late.
+  const overdue = tasks.filter((x) => isLate(x, today)).length;
+  // Today's round: what is late or due today. Open windows stay out, or the day could never clear.
+  const dueToday = tasks.filter((x) => dueNow(x, today)).length;
   const doneToday = loaded?.doneToday ?? 0;
 
   const siteTasks = site === "all" ? tasks : tasks.filter((x) => x.plant?.site === site);
   const week = buildWeek(siteTasks, today);
   const dayTasks = day === null ? tasks : onDay(tasks, day, today);
-  const shown = sortTasks(day === null ? siteTasks : onDay(siteTasks, day, today));
+  const shown = sortByDue(day === null ? siteTasks : onDay(siteTasks, day, today), today);
   const groups = SITE_ORDER.map((s) => ({ site: s, tasks: shown.filter((x) => x.plant?.site === s) })).filter((g) => g.tasks.length > 0);
   const siteCount = (s: SiteFilter) => (s === "all" ? dayTasks.length : dayTasks.filter((x) => x.plant?.site === s).length);
 

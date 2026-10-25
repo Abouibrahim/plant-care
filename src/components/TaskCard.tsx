@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, TriangleAlert, X } from "lucide-react";
 import { t } from "../i18n";
 import { toLocalDate } from "../lib/dates";
+import { dueState, type DueState } from "../lib/today";
 import { Spinner } from "./Spinner";
 import { TypeTile } from "./TypeIcon";
 import type { Task } from "../types";
@@ -11,8 +12,6 @@ export type TaskAction = { kind: "done" } | { kind: "skip"; reason: string } | {
 
 const SNOOZE_DAYS = [1, 3, 7];
 const MAX_REASON = 200;
-
-type DueState = "overdue" | "open" | "today" | "upcoming";
 
 function shortDate(iso: string): string {
   const d = toLocalDate(iso);
@@ -26,23 +25,18 @@ function weekdayDate(iso: string): string {
 
 /**
  * "Open since 1 Oct · until 31 Dec" for a window that has started, "Overdue · 21 Oct" for a missed
- * watering, "Today", or the day of the week for the coming days. Past windows say so.
+ * watering, "Today", or the day of the week for the coming days. Past windows say so. The state
+ * comes from `dueState`, the same reading the Today counts and the week strip use.
  */
 function dueLabel(task: Task, today: string): { text: string; state: DueState } {
   const end = task.window_end;
-  if (end !== null && end < today) return { text: t.today.windowEnded(shortDate(end)), state: "overdue" };
+  const state = dueState(task, today);
+  if (end !== null && end < today) return { text: t.today.windowEnded(shortDate(end)), state };
   let text: string;
-  let state: DueState;
-  if (task.due_on < today) {
-    text = end !== null ? t.today.openSince(shortDate(task.due_on)) : `${t.today.overdue} · ${shortDate(task.due_on)}`;
-    state = end !== null ? "open" : "overdue";
-  } else if (task.due_on === today) {
-    text = t.today.dueToday;
-    state = "today";
-  } else {
-    text = weekdayDate(task.due_on);
-    state = "upcoming";
-  }
+  if (state === "open") text = t.today.openSince(shortDate(task.due_on));
+  else if (state === "overdue") text = `${t.today.overdue} · ${shortDate(task.due_on)}`;
+  else if (state === "today") text = t.today.dueToday;
+  else text = weekdayDate(task.due_on);
   if (end !== null) text += ` · ${t.today.until(shortDate(end))}`;
   return { text, state };
 }
