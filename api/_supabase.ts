@@ -33,22 +33,34 @@ export function bearerToken(req: VercelRequest): string {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
+/** A signed-in account that is not the owner's: the route answers 403, which the app shows without signing out. */
+export class NotOwnerError extends Error {
+  constructor() {
+    super("This account is not the owner of this app");
+    this.name = "NotOwnerError";
+  }
+}
+
+/** auth-js error classes that are a verdict on the token, as opposed to a failure of Supabase Auth itself. */
+const TOKEN_VERDICTS = new Set(["AuthApiError", "AuthInvalidJwtError", "AuthSessionMissingError", "AuthInvalidCredentialsError"]);
+
 /**
- * A failure of Supabase Auth itself (unreachable, 5xx, rate-limited) rather than a verdict on the
- * token. auth-js wraps the first two as AuthRetryableFetchError (status 0 or 502 to 504).
+ * Whether getUser rejected the token (expired, malformed, revoked: a 4xx verdict from GoTrue). Anything
+ * else is a fault of Supabase Auth or the network (AuthRetryableFetchError with status 0 or 5xx, an
+ * AuthUnknownError for a non-JSON reply, a 429) and must not read as "signed out".
  */
-function isAuthFault(error: { name?: string; status?: number }): boolean {
+export function isTokenRejected(error: { name?: string; status?: number }): boolean {
   const status = error.status ?? 0;
-  return error.name === "AuthRetryableFetchError" || status === 429 || status >= 500;
+  return TOKEN_VERDICTS.has(error.name ?? "") && status >= 400 && status < 500 && status !== 429;
 }
 
 /**
- * Resolves the user behind the Authorization header: null when the token is missing, rejected or
- * belongs to anyone but the owner. OWNER_USER_ID (the id of Mohamed's user under Authentication →
- * Users) is required, since every table policy and every route trust any signed-in account and the
- * anon key ships in the app: without the check, an account created through the Auth API could spend
- * the Claude key. An upstream fault throws instead of returning null, so the route answers 502 or
- * 500 rather than 401, which would make the phone drop its session.
+ * Resolves the user behind the Authorization header: null when the token is missing or rejected, so
+ * the route answers 401. OWNER_USER_ID (the id of Mohamed's user under Authentication → Users) is
+ * required, since every table policy trusts any signed-in account and the anon key ships in the app:
+ * without the check, an account created through the Auth API could spend the Claude key. Another
+ * account throws NotOwnerError (403) rather than 401, and an upstream fault throws as it is (502 or
+ * 500): the phone drops its session on a 401 only, and neither case is one.
  */
 export async function verifyUser(req: VercelRequest): Promise<User | null> {
   const token = bearerToken(req);
@@ -56,10 +68,11 @@ export async function verifyUser(req: VercelRequest): Promise<User | null> {
   const owner = requireEnv("OWNER_USER_ID");
   const { data, error } = await serviceClient().auth.getUser(token);
   if (error) {
-    if (isAuthFault(error)) throw error;
-    return null;
+    if (isTokenRejected(error)) return null;
+    throw error;
   }
-  if (!data.user || data.user.id !== owner) return null;
+  if (!data.user) return null;
+  if (data.user.id !== owner) throw new NotOwnerError();
   return data.user;
 }
 
@@ -71,6 +84,10 @@ export function sendError(res: VercelResponse, status: number, message: string):
 export function handleError(res: VercelResponse, err: unknown): void {
   if (err instanceof ConfigError) {
     sendError(res, 500, err.message);
+    return;
+  }
+  if (err instanceof NotOwnerError) {
+    sendError(res, 403, err.message);
     return;
   }
   const e = err as { status?: number; message?: string; name?: string };
