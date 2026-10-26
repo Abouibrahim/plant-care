@@ -118,7 +118,7 @@ describe("the inventory text", () => {
   });
 
   it("puts the profile, the intent, the note, both sites and the language into one message", () => {
-    const text = describeCheck({ species, today: "2026-10-26", site: "farm", zone: "row 2", note: "shade for hens", lang: "fr", plants, zones });
+    const text = describeCheck({ species, today: "2026-10-26", site: "farm", zone: "row 2", note: "shade for hens", lang: "fr", plants, zones, weather: null });
     expect(text.startsWith("Today: 2026-10-26 (Oct).")).toBe(true);
     expect(text).toContain("Species: Persea americana (Avocado / Avocatier / أفوكادو avocado)");
     expect(text).toContain("Profile: written by Claude, not yet confirmed by the grower.");
@@ -129,7 +129,7 @@ describe("the inventory text", () => {
     expect(text).toContain("Write every text field in French");
     expect(text.endsWith("Check whether this species suits this site before it is bought or planted.")).toBe(true);
 
-    const open = describeCheck({ species, today: "2026-10-26", site: null, zone: "", note: "", lang: "en", plants: [], zones });
+    const open = describeCheck({ species, today: "2026-10-26", site: null, zone: "", note: "", lang: "en", plants: [], zones, weather: null });
     expect(open).toContain("The grower has not chosen a site yet: compare the farm and the backyard.");
     expect(open).toContain("The grower left no note.");
     expect(open).not.toContain("French");

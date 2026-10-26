@@ -8,7 +8,7 @@ import { HORIZON_DAYS, readAll, ruleKey } from "./_tasks.js";
 import { requireEnv } from "./_supabase.js";
 import { addDays, parseIso } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
-import { TASK_TYPES, type CareRule, type DigestMessage, type PushSubscriptionJson, type Site, type TaskType } from "../src/types.js";
+import { TASK_TYPES, type CareRule, type DigestMessage, type PushMessage, type PushSubscriptionJson, type Site, type TaskType } from "../src/types.js";
 
 /** Farm first, then Backyard, as on the Today screen. */
 const SITE_ORDER: Site[] = ["farm", "backyard"];
@@ -170,7 +170,7 @@ const GONE = new Set([404, 410]);
  * Sends every message to every subscription. Returns the counts; the rows of subscriptions the push
  * service rejects as gone are deleted. Other failures are counted and logged by status code only.
  */
-export async function sendDigest(db: SupabaseClient, messages: DigestMessage[]): Promise<SendResult> {
+export async function sendDigest(db: SupabaseClient, messages: PushMessage[]): Promise<SendResult> {
   const { data, error } = await db.from("push_subscriptions").select("id, endpoint, keys");
   if (error) throw error;
   const subs = (data ?? []) as SubscriptionRow[];

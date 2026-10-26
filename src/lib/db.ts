@@ -1,6 +1,7 @@
 // Typed access to the four tables, the journal view and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
+import { weatherSettings } from "./weather";
 import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
@@ -22,6 +23,8 @@ import {
   type TaskStatus,
   type TaskWithPlant,
   type Verdict,
+  type WeatherDay,
+  type WeatherSettings,
   type ZoneLists,
 } from "../types";
 
@@ -602,6 +605,37 @@ export async function latestChecks(): Promise<Map<string, CheckSummary>> {
 export async function insertCheck(row: PlantingCheckRow): Promise<void> {
   const { error } = await supabase.from("planting_checks").insert(row);
   if (error && error.code !== "23505") throw checksError(error);
+}
+
+// ---- weather ------------------------------------------------------------------
+// The weather_days rows (Phase 8), written by the functions from Open-Meteo and read here for
+// Today's card, and the weather setting in the settings table. Until the SQL that creates the table
+// has been run, reads fail with WeatherUnavailable and the card stays hidden.
+
+export class WeatherUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WeatherUnavailable";
+  }
+}
+
+/** The stored days from `from` to `to` (YYYY-MM-DD), by date. */
+export async function listWeather(from: string, to: string): Promise<WeatherDay[]> {
+  const r = await supabase.from("weather_days").select("*").gte("day", from).lte("day", to).order("day", { ascending: true });
+  if (r.error) throw missingTable(r.error, "weather_days") ? new WeatherUnavailable(r.error.message) : new Error(r.error.message);
+  return (r.data ?? []) as WeatherDay[];
+}
+
+export const WEATHER_KEY = "weather";
+
+export async function loadWeatherSettings(): Promise<WeatherSettings> {
+  return weatherSettings(await getSetting<unknown>(WEATHER_KEY));
+}
+
+export async function saveWeatherSettings(next: WeatherSettings): Promise<WeatherSettings> {
+  const clean = weatherSettings(next);
+  await setSetting(WEATHER_KEY, clean);
+  return clean;
 }
 
 // ---- export -----------------------------------------------------------------

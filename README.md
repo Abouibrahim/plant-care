@@ -1,6 +1,6 @@
 # Plant Care
 
-Phone-first PWA for one grower: photograph a plant at the backyard or at the farm, identify it with Claude, keep a species profile written for Cap Bon conditions, get a task calendar from it and a push digest every morning, and diagnose a problem photo against the plant's own context. The interface is in English or French, plants and tasks export as CSV, each site keeps a list of zones, a species' care calendar and pests can be edited by hand, any plant can be discussed with Claude, the answers kept in its journal, and a plant can be checked against the sites before it is bought or planted. Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, milestones in `PHASE1.md` to `PHASE7.md`.
+Phone-first PWA for one grower: photograph a plant at the backyard or at the farm, identify it with Claude, keep a species profile written for Cap Bon conditions, get a task calendar from it and a push digest every morning, and diagnose a problem photo against the plant's own context. The interface is in English or French, plants and tasks export as CSV, each site keeps a list of zones, a species' care calendar and pests can be edited by hand, any plant can be discussed with Claude, the answers kept in its journal, a plant can be checked against the sites before it is bought or planted, and the local weather (Open-Meteo) skips waterings after rain, warns of heat, sirocco, frost and gales, and shows the hours that suit spraying. Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, milestones in `PHASE1.md` to `PHASE8.md`.
 
 ## Stack
 
@@ -17,6 +17,7 @@ React + Vite + TypeScript PWA on Vercel, serverless functions under `api/`, Clau
 7. **Zone lists (Phase 5)**: a project set up before Phase 5 needs the `settings` table; run the SQL from the Setup section of `PHASE5.md` once in the Supabase SQL editor. A fresh project gets it from `supabase/schema.sql`.
 8. **Ask Claude (Phase 6)**: a project set up before Phase 6 needs the `questions` table and the rebuilt `journal` view; run the SQL from the Setup section of `PHASE6.md` once in the Supabase SQL editor. A fresh project gets both from `supabase/schema.sql`.
 9. **Check before planting (Phase 7)**: a project set up before Phase 7 needs the `planting_checks` table; run the SQL from the Setup section of `PHASE7.md` once in the Supabase SQL editor. A fresh project gets it from `supabase/schema.sql`.
+10. **Weather (Phase 8)**: a project set up before Phase 8 needs the `weather_days` table; run the SQL from the Setup section of `PHASE8.md` once in the Supabase SQL editor. Open-Meteo needs no key; its free tier is for non-commercial use.
 
 ## Commands
 
@@ -46,13 +47,13 @@ npm test
 npm run build
 ```
 
-`npm test` runs the vitest suite under `tests/` (dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes and the planting check, against an in-memory copy of the tables). `npm run icons` regenerates the PWA icons under `public/icons`.
+`npm test` runs the vitest suite under `tests/` (dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes, the planting check and the weather, against an in-memory copy of the tables). `npm run icons` regenerates the PWA icons under `public/icons`.
 
 ## Layout
 
 ```
-api/            Vercel functions: identify, profile, diagnose, ask, check, expand, push-subscribe, daily (cron: expansion + push digest);
-                helpers _claude.ts, _context.ts, _images.ts, _supabase.ts, _tasks.ts, _push.ts
+api/            Vercel functions: identify, profile, diagnose, ask, check, weather, expand, push-subscribe, daily (cron: weather, expansion, rain skip, push digest);
+                helpers _claude.ts, _context.ts, _images.ts, _supabase.ts, _tasks.ts, _push.ts, _weather.ts
 prompts/        system context, per-call rules, JSON schemas sent to Claude
 public/         icons and push-sw.js (push handlers imported by the generated service worker)
 src/            the PWA: screens, components, lib (supabase, api, image, db, push, csv, export), i18n (en, fr)

@@ -132,6 +132,29 @@ create table planting_checks (
 );
 create index planting_checks_species_idx on planting_checks (species_id, checked_at desc);
 
+-- Weather (Phase 8): one row per date at the sites from Open-Meteo, written by the functions
+-- (/api/daily at 06:00, /api/weather from Today): past days as Open-Meteo's model estimates (not a
+-- rain gauge), coming days as forecast.
+-- `skipped` counts the waterings the 06:00 rain skip closed on that date; a refresh leaves it alone.
+create table weather_days (
+  day         date primary key,
+  tmax        real,
+  tmin        real,
+  rain_mm     real,
+  rain_prob   integer,
+  wind_kmh    real,
+  gust_kmh    real,
+  wind_dir    integer,                              -- the dominant direction the wind blows from
+  rh_min      integer,
+  et0_mm      real,
+  spray       jsonb not null default '[]'::jsonb,   -- [{from, to}] hours that suit spraying
+  forecast    boolean not null default true,
+  skipped     integer not null default 0,
+  lat         double precision,
+  lng         double precision,
+  fetched_at  timestamptz not null default now()
+);
+
 -- updated_at maintenance
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
@@ -161,6 +184,7 @@ alter table push_subscriptions enable row level security;
 alter table settings           enable row level security;
 alter table questions          enable row level security;
 alter table planting_checks    enable row level security;
+alter table weather_days       enable row level security;
 
 create policy owner_all on species            for all to authenticated using (true) with check (true);
 create policy owner_all on plants             for all to authenticated using (true) with check (true);
@@ -170,6 +194,7 @@ create policy owner_all on push_subscriptions for all to authenticated using (tr
 create policy owner_all on settings           for all to authenticated using (true) with check (true);
 create policy owner_all on questions          for all to authenticated using (true) with check (true);
 create policy owner_all on planting_checks    for all to authenticated using (true) with check (true);
+create policy owner_all on weather_days       for all to authenticated using (true) with check (true);
 
 -- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
 -- read through signed URLs and delete in it. Both are safe to re-run, and the policy never

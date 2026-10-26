@@ -14,6 +14,7 @@ export interface MockState {
   photos: Row[];
   questions: Row[];
   planting_checks: Row[];
+  weather_days: Row[];
   push_subscriptions: Row[];
   settings: Row[];
   /** Storage objects of the photos bucket, by path. */
@@ -46,6 +47,7 @@ const FK: Record<string, string> = { species: "species_id", plants: "plant_id" }
 const UNIQUE: Record<string, string[][]> = {
   tasks: [["plant_id", "rule_key", "due_on"]],
   push_subscriptions: [["endpoint"]],
+  weather_days: [["day"]],
   species: [["scientific_name", "cultivar"]],
 };
 
@@ -69,6 +71,8 @@ function defaults(table: string): Row {
   if (table === "photos") return { ...base, note: "", ai_result: null, taken_at: nextTime() };
   if (table === "questions") return { ...base, asked_at: nextTime() };
   if (table === "planting_checks") return { ...base, checked_at: nextTime(), zone: "", note: "" };
+  // weather_days is keyed on `day`, not an id.
+  if (table === "weather_days") return { spray: [], forecast: true, skipped: 0, fetched_at: nextTime() };
   if (table === "species") return { ...base, cultivar: "", user_edits: {}, confirmed: false, created_at: nextTime(), updated_at: nextTime() };
   if (table === "push_subscriptions") return { ...base, created_at: nextTime() };
   return base;
@@ -112,6 +116,7 @@ export function makeState(partial: Partial<MockState> = {}): MockState {
     photos: [],
     questions: [],
     planting_checks: [],
+    weather_days: [],
     push_subscriptions: [],
     settings: [],
     objects: new Set<string>(),
@@ -464,6 +469,6 @@ export function makeClient(state: MockState, options: MockOptions = {}): Supabas
 export const sharedState: MockState = makeState();
 
 export function resetState(state: MockState): void {
-  for (const table of ["plants", "species", "tasks", "photos", "questions", "planting_checks", "push_subscriptions", "settings"] as const) state[table].length = 0;
+  for (const table of ["plants", "species", "tasks", "photos", "questions", "planting_checks", "weather_days", "push_subscriptions", "settings"] as const) state[table].length = 0;
   state.objects.clear();
 }

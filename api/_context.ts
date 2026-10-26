@@ -1,8 +1,9 @@
 // The text that puts one plant's own context in front of Claude: the date, the species profile,
 // the plant record and its tasks. /api/diagnose and /api/ask build their user message from these
 // blocks, so both calls describe a plant the same way.
-import { ageInMonths, ageStage, parseIso } from "../src/lib/dates.js";
-import { MONTHS_SHORT, type CareRule, type Pest, type PlantWithSpecies, type Species, type Task } from "../src/types.js";
+import { addDays, ageInMonths, ageStage, parseIso } from "../src/lib/dates.js";
+import { alertsFor, type AlertKind } from "../src/lib/weather.js";
+import { MONTHS_SHORT, type CareRule, type Pest, type PlantWithSpecies, type Species, type Task, type WeatherDay } from "../src/types.js";
 
 /** Tasks this far back go into the context. */
 export const RECENT_DAYS = 30;
@@ -119,4 +120,64 @@ export function taskLine(task: RecentTask): string {
   const day = task.acted_at ? task.acted_at.slice(0, 10) : task.due_on;
   const note = task.note ? ` ("${task.note}")` : "";
   return `- ${day}: ${label}, ${task.status}${note}`;
+}
+
+/** Days of weather before today and after it that go into a message. */
+export const WEATHER_PAST_DAYS = 7;
+export const WEATHER_COMING_DAYS = 3;
+
+const ALERT_WORDS: Record<AlertKind, string> = { heat: "heat", sirocco: "sirocco", frost: "frost", gale: "gale", heavy_rain: "heavy rain" };
+
+function round(v: number | null): string {
+  return v === null ? "?" : String(Math.round(v));
+}
+
+function alertText(day: WeatherDay): string {
+  return alertsFor(day)
+    .map((a) => `${ALERT_WORDS[a.kind]} ${a.value}${a.kind === "gale" ? " km/h" : a.kind === "heavy_rain" ? " mm" : " °C"}`)
+    .join(", ");
+}
+
+/**
+ * The weather at the sites from the stored Open-Meteo rows: the last WEATHER_PAST_DAYS days in one
+ * line (rain, extremes, alert days), then today and the next WEATHER_COMING_DAYS days one line each.
+ * Null or no rows (the table missing, nothing fetched yet) says so.
+ */
+export function weatherBlock(days: WeatherDay[] | null, today: string): string {
+  const from = addDays(today, -WEATHER_PAST_DAYS);
+  const until = addDays(today, WEATHER_COMING_DAYS);
+  const past = (days ?? []).filter((d) => d.day >= from && d.day < today);
+  const coming = (days ?? []).filter((d) => d.day >= today && d.day <= until);
+  if (past.length === 0 && coming.length === 0) return "No weather data is stored for the sites.";
+  // The forecast is as old as its last fetch; past days are Open-Meteo's model estimates, not gauge readings.
+  const fetched = [...past, ...coming].map((d) => d.fetched_at).filter(Boolean).sort().pop() ?? "";
+  const fetchedDay = fetched.slice(0, 10);
+  const stale = fetchedDay !== "" && fetchedDay < addDays(today, -1) ? " The forecast is out of date: the last fetch failed since." : "";
+  const lines = [`Weather at the sites (Open-Meteo model data, fetched ${fetched.slice(0, 16).replace("T", " ")} UTC).${stale}`];
+  if (past.length > 0) {
+    const rainy = past.filter((d) => (d.rain_mm ?? 0) >= 1);
+    const total = Math.round(past.reduce((s, d) => s + (d.rain_mm ?? 0), 0) * 10) / 10;
+    const highs = past.map((d) => d.tmax).filter((v): v is number => v !== null);
+    const lows = past.map((d) => d.tmin).filter((v): v is number => v !== null);
+    const alerts = past.map((d) => (alertText(d) ? `${alertText(d)} on ${d.day}` : "")).filter(Boolean);
+    lines.push(
+      `Last ${past.length} days: rain ${total} mm` +
+        (rainy.length > 0 ? ` (${rainy.map((d) => `${d.day}: ${round(d.rain_mm)} mm`).join(", ")})` : "") +
+        (highs.length > 0 ? `; highest ${round(Math.max(...highs))} °C` : "") +
+        (lows.length > 0 ? `, lowest ${round(Math.min(...lows))} °C` : "") +
+        (alerts.length > 0 ? `; ${alerts.join("; ")}` : "") +
+        ".",
+    );
+  }
+  for (const d of coming) {
+    const prob = d.rain_prob !== null ? ` (${d.rain_prob} %)` : "";
+    const dir = d.wind_dir !== null ? ` from ${d.wind_dir}°` : "";
+    const rh = d.rh_min !== null ? `, lowest humidity ${d.rh_min} %` : "";
+    const alerts = alertText(d);
+    lines.push(
+      `- ${d.day}${d.day === today ? " (today)" : ""}: ${round(d.tmax)}/${round(d.tmin)} °C, rain ${round(d.rain_mm)} mm${prob}, ` +
+        `wind ${round(d.wind_kmh)} km/h, gusts ${round(d.gust_kmh)} km/h${dir}${rh}${alerts ? `; ${alerts}` : ""}`,
+    );
+  }
+  return lines.join("\n");
 }

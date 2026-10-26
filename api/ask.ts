@@ -19,9 +19,13 @@ import {
   speciesBlock,
   taskLine,
   todayLine,
+  WEATHER_COMING_DAYS,
+  WEATHER_PAST_DAYS,
+  weatherBlock,
   type RecentTask,
 } from "./_context.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { loadWeather } from "./_weather.js";
 import { addDays, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import {
   ASK_MAX_HISTORY,
@@ -32,6 +36,7 @@ import {
   type AskTurn,
   type CommonNames,
   type PlantWithSpecies,
+  type WeatherDay,
 } from "../src/types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -87,6 +92,8 @@ export interface AskContext {
   plant: PlantWithSpecies;
   /** The Tunis date, YYYY-MM-DD. */
   today: string;
+  /** The stored weather around today; null when there is none. */
+  weather: WeatherDay[] | null;
   /** The newest done task of each type, whatever its date, newest first; `more` when the scan of the rarer types hit its limit. */
   lastDone: TaskList;
   /** Acted on in the last RECENT_DAYS days, newest first. */
@@ -180,6 +187,7 @@ export function describeAsk(ctx: AskContext): string {
   parts.push(pestsBlock(s));
   parts.push(guildUsesBlock(s));
   parts.push(plantLine(plant, today));
+  parts.push(weatherBlock(ctx.weather, today));
   parts.push(neighboursBlock(plant, ctx.neighbours));
 
   const never = ctx.lastDone.more ? "" : " (a kind not listed was never marked done)";
@@ -338,16 +346,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
 
-    const [lastDone, recent, coming, neighbours, diagnoses] = await Promise.all([
+    const [lastDone, recent, coming, neighbours, diagnoses, weather] = await Promise.all([
       lastDoneTasks(db, plant.id),
       recentTasks(db, plant.id, today),
       comingTasks(db, plant.id, today),
       zoneNeighbours(db, plant),
       pastDiagnoses(db, plant.id),
+      loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS)),
     ]);
     const text = describeAsk({
       plant,
       today,
+      weather,
       lastDone,
       recent,
       coming,

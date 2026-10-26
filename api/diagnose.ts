@@ -11,12 +11,16 @@ import {
   speciesBlock,
   taskLine,
   todayLine,
+  WEATHER_COMING_DAYS,
+  WEATHER_PAST_DAYS,
+  weatherBlock,
   type RecentTask,
 } from "./_context.js";
 import { parseImages } from "./_images.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { loadWeather } from "./_weather.js";
 import { addDays, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
-import type { DiagnoseRequest, Diagnosis, PlantWithSpecies } from "../src/types.js";
+import type { DiagnoseRequest, Diagnosis, PlantWithSpecies, WeatherDay } from "../src/types.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_TASKS = 30;
@@ -26,13 +30,15 @@ export interface DiagnoseContext {
   plant: PlantWithSpecies;
   /** Newest first: acted in the last 30 days, or still pending with a due date up to today. */
   tasks: RecentTask[];
+  /** The stored weather around today; null when there is none. */
+  weather: WeatherDay[] | null;
   note: string;
   /** The Tunis date, YYYY-MM-DD. */
   today: string;
 }
 
 /** The text after the images: today, the species profile, the plant, its recent tasks and the note. */
-export function describeContext({ plant, tasks, note, today }: DiagnoseContext): string {
+export function describeContext({ plant, tasks, weather, note, today }: DiagnoseContext): string {
   const s = plant.species;
   const parts: string[] = [];
 
@@ -40,6 +46,7 @@ export function describeContext({ plant, tasks, note, today }: DiagnoseContext):
   parts.push(speciesBlock(s));
   parts.push(pestsBlock(s));
   parts.push(plantLine(plant, today));
+  parts.push(weatherBlock(weather, today));
 
   parts.push(
     tasks.length > 0
@@ -100,7 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       .limit(MAX_TASKS);
     if (taskErr) throw taskErr;
 
-    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], note, today });
+    const weather = await loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS));
+    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today });
     const result = await callJson<Diagnosis>({
       rules: readPrompt("diagnose.md"),
       schema: readSchema("diagnose.schema.json"),

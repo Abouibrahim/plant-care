@@ -17,6 +17,7 @@ import {
   type ProfileRequest,
   type PushSubscribeResponse,
   type PushSubscriptionJson,
+  type WeatherResponse,
 } from "../types";
 
 export class ApiError extends Error {
@@ -92,6 +93,8 @@ export const api = {
     if (expansionChanged(r)) notifyTasksChanged();
     return r;
   },
+  /** Fetches the forecast for the sites now and stores it (Today, when the stored one is missing or old). */
+  weather: () => callApi<WeatherResponse>("weather", {}, EXPAND_TIMEOUT_MS),
   /** Stores this browser's push subscription for the daily digest. */
   pushSubscribe: (subscription: PushSubscriptionJson) =>
     callApi<PushSubscribeResponse>("push-subscribe", { subscription }, EXPAND_TIMEOUT_MS),

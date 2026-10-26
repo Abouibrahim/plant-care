@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Bell,
   CircleUser,
+  CloudSun,
   Download,
   Info,
   Languages,
@@ -18,10 +19,22 @@ import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { lang, LANGS, storeLang, t, type Lang } from "../i18n";
 import { useAuth } from "../lib/auth-context";
-import { emptyZones, loadZones, recentZones, saveZones, SettingsUnavailable } from "../lib/db";
+import { localIsoDate } from "../lib/dates";
+import {
+  emptyZones,
+  listWeather,
+  loadWeatherSettings,
+  loadZones,
+  recentZones,
+  saveWeatherSettings,
+  saveZones,
+  SettingsUnavailable,
+  WeatherUnavailable,
+} from "../lib/db";
 import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
-import { SITES, type Site, type ZoneLists } from "../types";
+import { TOWN } from "../lib/weather";
+import { RAIN_SKIP_CHOICES, SITES, type Site, type WeatherDay, type WeatherSettings, type ZoneLists } from "../types";
 import { APP_VERSION } from "../version";
 
 function message(err: unknown): string {
@@ -168,6 +181,131 @@ const Z = t.settings.zones;
  * used on plants but not listed yet are offered as one-tap additions. Without the table (the ★ SQL
  * of PHASE5.md not run yet) the card shows the instruction instead of the lists.
  */
+/** Weather (Phase 8): the rain skip and its threshold, the point the forecast is read for, the last fetch. */
+function WeatherSettingsCard() {
+  const W = t.weather;
+  const [settings, setSettings] = useState<WeatherSettings | null>(null);
+  const [settingsMissing, setSettingsMissing] = useState(false);
+  const [latest, setLatest] = useState<WeatherDay | null | undefined>(undefined);
+  const [weatherMissing, setWeatherMissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    loadWeatherSettings()
+      .then((s) => {
+        if (active) setSettings(s);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof SettingsUnavailable) setSettingsMissing(true);
+        else setError(message(err));
+      });
+    const today = localIsoDate();
+    listWeather(today, today)
+      .then((rows) => {
+        if (active) setLatest(rows[0] ?? null);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        // A failed read says nothing about what is stored: show neither the point nor "not yet".
+        if (err instanceof WeatherUnavailable) setWeatherMissing(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function change(next: WeatherSettings) {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      setSettings(await saveWeatherSettings(next));
+    } catch (err) {
+      setError(`${W.saveFailed}: ${message(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const town = latest && latest.lat === TOWN.lat && latest.lng === TOWN.lng;
+  return (
+    <div className="card">
+      <CardHead icon={CloudSun} tone="water" title={W.settingsTitle} />
+      {weatherMissing && <Banner kind="warn">{W.unavailable}</Banner>}
+      {settingsMissing && <Banner kind="warn">{t.settings.zones.missingTable}</Banner>}
+      {settings && (
+        <div className="stack">
+          <div className="field">
+            <span className="small muted" style={{ display: "block", marginBottom: 4 }}>
+              {W.rainSkipLabel}
+            </span>
+            <div className="segmented" role="radiogroup" aria-label={W.rainSkipLabel}>
+              {[true, false].map((on) => (
+                <button
+                  type="button"
+                  key={String(on)}
+                  role="radio"
+                  aria-checked={settings.rain_skip === on}
+                  className={settings.rain_skip === on ? "active" : ""}
+                  disabled={saving}
+                  onClick={() => void change({ ...settings, rain_skip: on })}
+                >
+                  {on ? W.on : W.off}
+                </button>
+              ))}
+            </div>
+          </div>
+          {settings.rain_skip && (
+            <div className="field">
+              <span className="small muted" style={{ display: "block", marginBottom: 4 }}>
+                {W.thresholdLabel}
+              </span>
+              <div className="chips" role="group" aria-label={W.thresholdLabel}>
+                {RAIN_SKIP_CHOICES.map((mm) => (
+                  <button
+                    type="button"
+                    key={mm}
+                    className={`chip ${settings.rain_mm === mm ? "active" : ""}`}
+                    aria-pressed={settings.rain_mm === mm}
+                    disabled={saving}
+                    onClick={() => void change({ ...settings, rain_mm: mm })}
+                  >
+                    {mm} mm
+                  </button>
+                ))}
+              </div>
+              <p className="small" style={{ margin: 0 }}>
+                {W.rainSkipBody(settings.rain_mm)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+      {error && <Banner kind="error">{error}</Banner>}
+      {!weatherMissing && latest !== undefined && (
+        <p className="small muted" style={{ margin: "8px 0 0" }}>
+          {latest ? (
+            <>
+              {town || latest.lat === null || latest.lng === null ? W.pointTown : W.pointFarm(latest.lat, latest.lng)}{" "}
+              {W.lastFetch(new Date(latest.fetched_at).toLocaleString())}
+            </>
+          ) : (
+            W.never
+          )}
+        </p>
+      )}
+      <p className="small muted" style={{ margin: "4px 0 0" }}>
+        <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+          {W.credit}
+        </a>
+      </p>
+    </div>
+  );
+}
+
 function ZonesCard() {
   const [zones, setZones] = useState<ZoneLists | null>(null);
   const [missing, setMissing] = useState(false);
@@ -377,6 +515,7 @@ export function SettingsScreen() {
       <h1>{t.settings.title}</h1>
 
       <RemindersCard />
+      <WeatherSettingsCard />
       <LanguageCard />
       <ZonesCard />
       <ExportCard />

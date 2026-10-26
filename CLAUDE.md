@@ -22,7 +22,8 @@ api/                 Vercel functions (one file per route)
   _supabase.ts       service-role client, verifyUser(req), handleError()
   _tasks.ts          the task expansion (rule keys, windows, waterings, stale tasks), runExpansion()
   _push.ts           the digest (loadDigestTasks, composeDigest, sendDigest)
-  _context.ts        the plant and species text blocks shared by diagnose and ask
+  _context.ts        the plant, species and weather text blocks shared by diagnose, ask and check
+  _weather.ts        Open-Meteo: the point, fetch and parse, weather_days, the rain skip, the weather push (Phase 8)
   _images.ts         image validation shared by identify and diagnose
   _http.ts           the request and response types
   identify.ts        POST → candidates
@@ -30,13 +31,14 @@ api/                 Vercel functions (one file per route)
   diagnose.ts        POST → diagnosis
   ask.ts             POST → answer to a free question about one plant (Phase 6)
   check.ts           POST → planting check of a species against the sites and their plants (Phase 7)
+  weather.ts         POST → fetch and store the forecast now, bearer-checked (Phase 8)
   expand.ts          POST → runExpansion now (one plant, or all), bearer-checked
-  daily.ts           cron: expand tasks, then send the digest
+  daily.ts           cron: fetch the weather, expand tasks, skip waterings after rain, send the weather push and the digest
   push-subscribe.ts  POST → store a push subscription
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, check.md, *.schema.json
 src/                 the PWA (screens: Today, Capture, Check, Plant, Plants, Species, Settings)
 supabase/schema.sql  tables, enums, RLS
-tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes and the planting check (mockdb.ts imitates the query builder)
+tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes, the planting check and the weather (mockdb.ts imitates the query builder)
 docs/SPEC.md         the design spec
 PHASE1.md            first milestone with acceptance tests
 ```
@@ -93,7 +95,7 @@ export async function callJson(opts: {
 3. For the next 90 days: window rules (every type except water) create one task on the first day of the first month in `months` that falls in range, `due_on` = that day, `window_end` = last day of the last listed month; water rules create a task every `every_days` on days whose month is in `months`.
 4. Insert only when no task exists with the same `plant_id`, `rule_key` (`${type}:${months.join("-")}:${age}`, with `:${every_days}` appended for a periodic watering, the months sorted) and `due_on`.
 5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three lines in digest order (early notices, late, due today, open windows), each `title · tag`. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
-6. Store nothing about weather; it is out of scope.
+6. Weather (Phase 8; the spec had it out of scope, Mohamed asked for it on 2026-10-26): the run first fetches Open-Meteo into `weather_days` (a failure is reported, the rest runs), and after the expansion closes the waterings due today or overdue as skipped when the last two days' rain, or today's likely rain, reaches the `weather` setting's threshold. Alerts (heat, sirocco, frost, gale, heavy rain) for today and tomorrow, and the skip, go out as one more push. The rules live in `src/lib/weather.ts`, shared with Today's card.
 
 ## Working agreements
 

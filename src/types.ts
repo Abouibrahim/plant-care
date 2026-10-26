@@ -420,14 +420,18 @@ export interface PushSubscribeResponse {
 }
 
 /** One notification of the digest: a site and its tasks for the day. */
-export interface DigestMessage {
-  site: Site;
+/** What one push notification carries; public/push-sw.js shows it. */
+export interface PushMessage {
   title: string;
   body: string;
-  /** Notification tag, one per site, so Farm and Backyard do not replace each other. */
+  /** Notification tag: a later message with the same tag replaces the earlier one. */
   tag: string;
   /** Opened on tap. */
   url: string;
+}
+
+export interface DigestMessage extends PushMessage {
+  site: Site;
   /** Tasks in the message (title, body shows the first three). */
   tasks: number;
 }
@@ -443,7 +447,66 @@ export interface DailyResponse extends ExpandResponse {
   digest: DigestMessage[];
   /** Set when subscriptions exist but the digest could not be sent (VAPID variables missing). */
   digest_error?: string;
+  /** The 06:00 weather: whether the forecast was fetched and stored, why not, what the rain skipped, the push. */
+  weather: { fetched: boolean; error?: string; skipped: number; message: PushMessage | null };
   dry_run: boolean;
+}
+
+// ---- weather -------------------------------------------------------------------
+
+/** Hours that suit spraying, local time, the end exclusive: { from: "06:00", to: "10:00" }. */
+export interface SprayWindow {
+  from: string;
+  to: string;
+}
+
+/** A row of the weather_days table: one date at the sites from Open-Meteo's model, a past day's estimate or a forecast (no rain gauge). */
+export interface WeatherDay {
+  /** YYYY-MM-DD, Tunis time. */
+  day: string;
+  tmax: number | null;
+  tmin: number | null;
+  rain_mm: number | null;
+  /** The highest chance of rain in the day, %; null for a past day. */
+  rain_prob: number | null;
+  wind_kmh: number | null;
+  gust_kmh: number | null;
+  /** The dominant direction the wind blows from, degrees (180 is from the south). */
+  wind_dir: number | null;
+  /** The lowest relative humidity of the day, %. */
+  rh_min: number | null;
+  et0_mm: number | null;
+  /** Filled for today and the next two days at the time of the fetch. */
+  spray: SprayWindow[];
+  /** True when the date was the fetch day or later: a forecast rather than a past day's model estimate. */
+  forecast: boolean;
+  /** Waterings the 06:00 rain skip closed on this date. */
+  skipped: number;
+  lat: number | null;
+  lng: number | null;
+  fetched_at: string;
+}
+
+/** The value of the `weather` row of the settings table. */
+export interface WeatherSettings {
+  rain_skip: boolean;
+  /** Rain over the last two days (or forecast for today) that skips the waterings due, mm. */
+  rain_mm: number;
+}
+
+export const DEFAULT_WEATHER_SETTINGS: WeatherSettings = { rain_skip: true, rain_mm: 10 };
+export const RAIN_SKIP_CHOICES = [5, 10, 15, 20];
+
+/** Where the forecast is read: the farm plants' GPS when they have it, otherwise the town. */
+export interface WeatherPoint {
+  lat: number;
+  lng: number;
+  source: "farm" | "town";
+}
+
+export interface WeatherResponse {
+  days: WeatherDay[];
+  point: WeatherPoint;
 }
 
 // ---- settings ---------------------------------------------------------------

@@ -5,9 +5,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { VercelRequest, VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema } from "./_claude.js";
-import { calendarBlock, guildUsesBlock, pestsBlock, profileStatusLine, siteWords, speciesBlock, todayLine } from "./_context.js";
+import {
+  calendarBlock,
+  guildUsesBlock,
+  pestsBlock,
+  profileStatusLine,
+  siteWords,
+  speciesBlock,
+  todayLine,
+  WEATHER_COMING_DAYS,
+  WEATHER_PAST_DAYS,
+  weatherBlock,
+} from "./_context.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
-import { ageInMonths, ageStage, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
+import { loadWeather } from "./_weather.js";
+import { addDays, ageInMonths, ageStage, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import {
   CHECK_MAX_NOTE_CHARS,
   CHECK_MAX_ZONE_CHARS,
@@ -17,6 +29,7 @@ import {
   type PlantingCheck,
   type Site,
   type Species,
+  type WeatherDay,
   type ZoneLists,
 } from "../src/types.js";
 
@@ -56,6 +69,8 @@ export interface CheckContext {
   plants: InventoryPlant[];
   /** The zone lists from Settings; empty lists when the settings row or table is missing. */
   zones: ZoneLists;
+  /** The stored weather around today, for "is now a good time"; null when there is none. */
+  weather: WeatherDay[] | null;
 }
 
 function clean(text: string): string {
@@ -170,6 +185,7 @@ export function describeCheck(ctx: CheckContext): string {
   parts.push(sameSpeciesLine(s.id, ctx.plants, ctx.today));
   parts.push(intentLine(ctx));
   parts.push(ctx.note ? `Grower's note: "${ctx.note}"` : "The grower left no note.");
+  parts.push(weatherBlock(ctx.weather, ctx.today));
   for (const site of SITE_ORDER) parts.push(siteBlock(site, ctx.plants, ctx.zones));
   if (ctx.lang === "fr") parts.push("Write every text field in French as used in Tunisia; keep the enum values in English.");
   parts.push("Check whether this species suits this site before it is bought or planted.");
@@ -232,8 +248,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       sendError(res, 404, "Species not found");
       return;
     }
-    const [plants, zones] = await Promise.all([inventory(db), zoneLists(db)]);
-    const text = describeCheck({ ...input, species: row as Species, today: isoDateIn(SITE_TIME_ZONE), plants, zones });
+    const today = isoDateIn(SITE_TIME_ZONE);
+    const [plants, zones, weather] = await Promise.all([
+      inventory(db),
+      zoneLists(db),
+      loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS)),
+    ]);
+    const text = describeCheck({ ...input, species: row as Species, today, plants, zones, weather });
 
     const result = await callJson<PlantingCheck>({
       rules: readPrompt("check.md"),

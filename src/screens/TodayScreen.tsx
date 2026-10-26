@@ -15,6 +15,7 @@ import { completeTask, countDoneSince, listDueTasks, reopenTask, skipTask, snooz
 import { buzz, checkIn, dayPhase, dueNow, greetingFor, isLate, prefersReducedMotion, sortByDue } from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
 import { RoundCard } from "./today/RoundCard";
+import { WeatherCard } from "./today/WeatherCard";
 import { WeekStrip, type WeekDay } from "./today/WeekStrip";
 
 /** Today plus the next six days: the week strip and the list. */
@@ -28,12 +29,17 @@ const LEAVE_MS = 800;
 const TOAST_MS = 5000;
 const CELEBRATE_MS = 2600;
 const SITE_KEY = "plantcare.todaySite";
+/** The 06:00 run (cron at 05:00 UTC) plus a few minutes, local time in Tunis. */
+const MORNING_RUN_HOUR = 6;
+const MORNING_RUN_MINUTE = 5;
 
 type SiteFilter = "all" | Site;
 type ActionKind = TaskAction["kind"];
 
 interface Loaded {
   today: string;
+  /** When the list was read (ms), so a return after the 06:00 run reads it again. */
+  at: number;
   tasks: TaskWithPlant[];
   /** Tasks marked done since midnight on the phone. */
   doneToday: number;
@@ -144,7 +150,7 @@ export function TodayScreen() {
     Promise.all([listDueTasks(addDays(today, WEEK_DAYS - 1)), countDoneSince(startOfDay(today)).catch(() => 0)])
       .then(([tasks, doneToday]) => {
         if (!active) return;
-        setLoaded({ today, tasks, doneToday });
+        setLoaded({ today, tasks, doneToday, at: Date.now() });
         setError(null);
       })
       .catch((err: unknown) => {
@@ -173,6 +179,7 @@ export function TodayScreen() {
   // midnight, the clock is read again for the greeting, the scene and the streak, and when the date
   // turned the list, the round and the badge are fetched for the new day.
   const loadedToday = loaded?.today ?? null;
+  const loadedAt = loaded?.at ?? null;
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -183,20 +190,32 @@ export function TodayScreen() {
       if (loadedToday !== null && loadedToday !== iso) {
         setDay(null);
         setAttempt((n) => n + 1);
+        return;
+      }
+      // Read before the 06:00 run on the same date: the run may have skipped waterings after rain
+      // and fetched a new forecast since, so the list and the weather are read again.
+      const morningRun = new Date(now);
+      morningRun.setHours(MORNING_RUN_HOUR, MORNING_RUN_MINUTE, 0, 0);
+      if (loadedAt !== null && loadedAt < morningRun.getTime() && now.getTime() >= morningRun.getTime()) {
+        setAttempt((n) => n + 1);
       }
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") tick();
     };
     document.addEventListener("visibilitychange", onVisible);
-    const midnight = new Date();
-    midnight.setHours(24, 0, 5, 0);
-    const timer = window.setTimeout(tick, Math.max(1000, midnight.getTime() - Date.now()));
+    // The next midnight, or the next morning run if it comes first.
+    const next = new Date();
+    next.setHours(24, 0, 5, 0);
+    const run = new Date();
+    run.setHours(MORNING_RUN_HOUR, MORNING_RUN_MINUTE, 0, 0);
+    const at = run.getTime() > Date.now() && run.getTime() < next.getTime() ? run : next;
+    const timer = window.setTimeout(tick, Math.max(1000, at.getTime() - Date.now()));
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       window.clearTimeout(timer);
     };
-  }, [loadedToday]);
+  }, [loadedToday, loadedAt]);
 
   useEffect(() => {
     if (!toast) return;
@@ -249,13 +268,21 @@ export function TodayScreen() {
       dueNow(task, loaded.today) &&
       !loaded.tasks.some((x) => x.id !== task.id && dueNow(x, loaded.today) && !leaving[x.id]);
     try {
-      const save =
+      const save: Promise<boolean | string> =
         action.kind === "done"
-          ? completeTask(task.id).then(() => null)
+          ? completeTask(task.id)
           : action.kind === "skip"
-            ? skipTask(task.id, action.reason).then(() => null)
+            ? skipTask(task.id, action.reason)
             : snoozeTask(task, action.days, localIsoDate());
-      const [, movedTo] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), save]);
+      const [, saved] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), save]);
+      if (saved === false) {
+        // Not pending any more: closed by the 06:00 rain skip or from another screen. Nothing changed
+        // here, so no toast, no count and no Undo (which would reopen the closed task).
+        setRefreshNote(t.today.alreadyClosed);
+        reload();
+        return;
+      }
+      const movedTo = typeof saved === "string" ? saved : null;
       setLoaded((prev) =>
         prev
           ? {
@@ -343,6 +370,7 @@ export function TodayScreen() {
       </header>
 
       {loaded && <RoundCard done={doneToday} total={doneToday + dueToday} streak={streak} today={today} />}
+      {loaded && <WeatherCard today={today} hour={hour} reloadKey={attempt} />}
 
       {error && (
         <Banner kind="error">
