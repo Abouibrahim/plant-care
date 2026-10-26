@@ -1,0 +1,40 @@
+{
+  "type": "object",
+  "properties": {
+    "factors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "factor": { "type": "string", "enum": ["salinity", "water", "heat", "cold", "soil", "animals", "space", "pests"] },
+          "status": { "type": "string", "enum": ["good", "caution", "problem"] },
+          "note": { "type": "string" }
+        },
+        "required": ["factor", "status", "note"],
+        "additionalProperties": false
+      }
+    },
+    "verdict": { "type": "string", "enum": ["plant", "plant_with_care", "avoid"] },
+    "best_site": { "type": "string", "enum": ["farm", "backyard", "either", "neither"] },
+    "summary": { "type": "string" },
+    "placement": { "type": "string" },
+    "planting_time": { "type": "string" },
+    "buying_tips": { "type": "string" },
+    "first_year": { "type": "string" },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "scientific_name": { "type": "string" },
+          "why": { "type": "string" }
+        },
+        "required": ["name", "scientific_name", "why"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["factors", "verdict", "best_site", "summary", "placement", "planting_time", "buying_tips", "first_year", "alternatives"],
+  "additionalProperties": false
+}

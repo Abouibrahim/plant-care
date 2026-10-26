@@ -9,6 +9,7 @@ import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
 import { confirmSpecies, deleteSpeciesIfUnused, getSpecies, speciesPlantCounts } from "../lib/db";
 import { isRefusal, type Species } from "../types";
+import { BeforePlantingCard } from "./species/BeforePlantingCard";
 import { GUILD_TARGETS, IDENTITY_TARGETS, NEEDS_TARGETS, type EditTarget } from "./species/fields";
 import { ListCard, type FollowUp } from "./species/ListCard";
 import { PestEditor } from "./species/PestEditor";
@@ -261,6 +262,8 @@ function SpeciesView({ id }: { id: string }) {
       )}
       {actionError?.action === "confirm" && <Banner kind="error">{actionError.message}</Banner>}
       {doneLink && <div style={{ marginBottom: 12 }}>{doneLink}</div>}
+
+      <BeforePlantingCard speciesId={s.id} />
 
       <SectionCard title={t.species.sections.identity} targets={IDENTITY_TARGETS} {...cardProps}>
         <IdentityBlock species={s} />

@@ -5,6 +5,7 @@ import { Spinner } from "./components/Spinner";
 import { LoginScreen } from "./screens/LoginScreen";
 import { TodayScreen } from "./screens/TodayScreen";
 import { CaptureScreen } from "./screens/CaptureScreen";
+import { CheckRoute } from "./screens/CheckScreen";
 import { PlantScreen } from "./screens/PlantScreen";
 import { PlantsScreen } from "./screens/PlantsScreen";
 import { SpeciesListScreen } from "./screens/SpeciesListScreen";
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="plants/:id" element={<PlantScreen />} />
         <Route path="species" element={<SpeciesListScreen />} />
         <Route path="species/:id" element={<SpeciesScreen />} />
+        <Route path="check" element={<CheckRoute />} />
         <Route path="settings" element={<SettingsScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

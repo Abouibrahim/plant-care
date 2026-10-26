@@ -5,11 +5,14 @@ import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
   SITES,
+  VERDICTS,
+  type CheckSummary,
   type JournalEntry,
   type Photo,
   type PhotoInsert,
   type Plant,
   type PlantInsert,
+  type PlantingCheckRow,
   type PlantWithSpecies,
   type Question,
   type Site,
@@ -18,6 +21,7 @@ import {
   type Task,
   type TaskStatus,
   type TaskWithPlant,
+  type Verdict,
   type ZoneLists,
 } from "../types";
 
@@ -537,6 +541,67 @@ export async function listThread(threadId: string): Promise<Question[]> {
 export async function insertQuestion(row: Question): Promise<void> {
   const { error } = await supabase.from("questions").insert(row);
   if (error && error.code !== "23505") throw questionsError(error);
+}
+
+// ---- planting checks ----------------------------------------------------------
+// One row per "Check before planting" (Phase 7), written once Claude answered, under an id and a
+// time made on the phone. Until the SQL that creates the table has been run, reads and writes fail
+// with ChecksUnavailable: the check screen still shows the verdict and says it is not kept.
+
+export class ChecksUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChecksUnavailable";
+  }
+}
+
+function checksError(error: { code?: string; message: string }): Error {
+  return missingTable(error, "planting_checks") ? new ChecksUnavailable(error.message) : new Error(error.message);
+}
+
+/** The checks of one species, newest first. */
+export async function listChecks(speciesId: string): Promise<PlantingCheckRow[]> {
+  const r = await supabase.from("planting_checks").select("*").eq("species_id", speciesId).order("checked_at", { ascending: false });
+  if (r.error) throw checksError(r.error);
+  return (r.data ?? []) as PlantingCheckRow[];
+}
+
+export async function getCheck(id: string): Promise<PlantingCheckRow | null> {
+  const r = await supabase.from("planting_checks").select("*").eq("id", id).maybeSingle();
+  if (r.error) throw checksError(r.error);
+  return (r.data as PlantingCheckRow | null) ?? null;
+}
+
+/**
+ * The newest check of each species, keyed by species id, for the library's verdict pills. Only the
+ * verdict is read out of each result: the table only grows, and the pills need nothing else.
+ */
+export async function latestChecks(): Promise<Map<string, CheckSummary>> {
+  const latest = new Map<string, CheckSummary>();
+  for (let from = 0; ; from += PAGE) {
+    const r = await supabase
+      .from("planting_checks")
+      .select("id, species_id, checked_at, verdict:result->>verdict")
+      .order("checked_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (r.error) throw checksError(r.error);
+    const page = (r.data ?? []) as Array<Omit<CheckSummary, "verdict"> & { verdict: string | null }>;
+    for (const row of page) {
+      if (latest.has(row.species_id) || !VERDICTS.includes(row.verdict as Verdict)) continue;
+      latest.set(row.species_id, { ...row, verdict: row.verdict as Verdict });
+    }
+    if (page.length < PAGE) return latest;
+  }
+}
+
+/**
+ * Saves one check under the id the app made for it. A retry after a save whose reply was lost on
+ * the way back finds the row already there (unique id) and counts as saved.
+ */
+export async function insertCheck(row: PlantingCheckRow): Promise<void> {
+  const { error } = await supabase.from("planting_checks").insert(row);
+  if (error && error.code !== "23505") throw checksError(error);
 }
 
 // ---- export -----------------------------------------------------------------

@@ -13,6 +13,7 @@ export interface MockState {
   tasks: Row[];
   photos: Row[];
   questions: Row[];
+  planting_checks: Row[];
   push_subscriptions: Row[];
   settings: Row[];
   /** Storage objects of the photos bucket, by path. */
@@ -67,6 +68,7 @@ function defaults(table: string): Row {
   if (table === "plants") return { ...base, zone: "", quantity: 1, lat: null, lng: null, planted_on: null, source: "existing", rootstock: "", created_at: nextTime(), updated_at: nextTime() };
   if (table === "photos") return { ...base, note: "", ai_result: null, taken_at: nextTime() };
   if (table === "questions") return { ...base, asked_at: nextTime() };
+  if (table === "planting_checks") return { ...base, checked_at: nextTime(), zone: "", note: "" };
   if (table === "species") return { ...base, cultivar: "", user_edits: {}, confirmed: false, created_at: nextTime(), updated_at: nextTime() };
   if (table === "push_subscriptions") return { ...base, created_at: nextTime() };
   return base;
@@ -109,6 +111,7 @@ export function makeState(partial: Partial<MockState> = {}): MockState {
     tasks: [],
     photos: [],
     questions: [],
+    planting_checks: [],
     push_subscriptions: [],
     settings: [],
     objects: new Set<string>(),
@@ -294,7 +297,12 @@ class Builder implements PromiseLike<Result> {
         Object.assign(out, row);
       } else {
         const [name, source] = item.includes(":") ? item.split(":").map((s) => s.trim()) : [item, item];
-        out[name] = row[source];
+        if (source.includes("->>")) {
+          // `alias:column->>key`: one text field of a jsonb column, as PostgREST returns it.
+          const [column, key] = source.split("->>").map((s) => s.trim());
+          const value = (row[column] as Row | null | undefined)?.[key];
+          out[name] = value === undefined || value === null ? null : String(value);
+        } else out[name] = row[source];
       }
     }
     void table;
@@ -342,6 +350,11 @@ class Builder implements PromiseLike<Result> {
         // `references plants(id) on delete cascade` in the schema.
         const ids = new Set(gone.map((r) => r.id));
         for (const child of ["photos", "tasks", "questions"] as const) this.state[child] = this.state[child].filter((r) => !ids.has(r.plant_id));
+      }
+      if (this.table === "species") {
+        // `references species(id) on delete cascade` on planting_checks.
+        const ids = new Set(gone.map((r) => r.id));
+        this.state.planting_checks = this.state.planting_checks.filter((r) => !ids.has(r.species_id));
       }
       return this.finish(this.returning ? gone.map((r) => this.project(r, this.columns, this.table)) : null);
     }
@@ -451,6 +464,6 @@ export function makeClient(state: MockState, options: MockOptions = {}): Supabas
 export const sharedState: MockState = makeState();
 
 export function resetState(state: MockState): void {
-  for (const table of ["plants", "species", "tasks", "photos", "questions", "push_subscriptions", "settings"] as const) state[table].length = 0;
+  for (const table of ["plants", "species", "tasks", "photos", "questions", "planting_checks", "push_subscriptions", "settings"] as const) state[table].length = 0;
   state.objects.clear();
 }

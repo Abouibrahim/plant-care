@@ -119,6 +119,19 @@ create table questions (
 create index questions_plant_idx on questions (plant_id, asked_at desc);
 create index questions_thread_idx on questions (thread_id, asked_at);
 
+-- Check before planting (Phase 7): one row per check of a species, written by the app once Claude
+-- answered. A species with no plant is listed as "not planted yet"; its checks are kept here.
+create table planting_checks (
+  id          uuid primary key default gen_random_uuid(),
+  species_id  uuid not null references species(id) on delete cascade,
+  checked_at  timestamptz not null default now(),
+  site        site_t,                              -- the site asked about; null when none was chosen
+  zone        text not null default '',
+  note        text not null default '',
+  result      jsonb not null                       -- the check schema's JSON plus the usage
+);
+create index planting_checks_species_idx on planting_checks (species_id, checked_at desc);
+
 -- updated_at maintenance
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
@@ -147,6 +160,7 @@ alter table tasks              enable row level security;
 alter table push_subscriptions enable row level security;
 alter table settings           enable row level security;
 alter table questions          enable row level security;
+alter table planting_checks    enable row level security;
 
 create policy owner_all on species            for all to authenticated using (true) with check (true);
 create policy owner_all on plants             for all to authenticated using (true) with check (true);
@@ -155,6 +169,7 @@ create policy owner_all on tasks              for all to authenticated using (tr
 create policy owner_all on push_subscriptions for all to authenticated using (true) with check (true);
 create policy owner_all on settings           for all to authenticated using (true) with check (true);
 create policy owner_all on questions          for all to authenticated using (true) with check (true);
+create policy owner_all on planting_checks    for all to authenticated using (true) with check (true);
 
 -- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
 -- read through signed URLs and delete in it. Both are safe to re-run, and the policy never

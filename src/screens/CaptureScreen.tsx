@@ -2,6 +2,7 @@
 // One small state machine; every Claude call goes through api.ts, every row through db.ts.
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { ClipboardCheck } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { LOW_CONFIDENCE } from "../components/ConfidenceBar";
 import { emptyRecord, RecordForm, type RecordValues } from "../components/RecordForm";
@@ -357,6 +358,16 @@ export function CaptureScreen() {
     setPhase("result");
   }
 
+  /**
+   * Not planted yet: the confirmed species goes to the planting check instead of a plant record.
+   * Its profile is kept (taken out of the rows an abandoned capture deletes); it stays in the
+   * library as "not planted yet".
+   */
+  function checkInstead(speciesId: string) {
+    createdRef.current.delete(speciesId);
+    navigate(`/check?${new URLSearchParams({ species: speciesId, site }).toString()}`);
+  }
+
   function initialRecord(c: Choice): RecordValues {
     return {
       ...emptyRecord(site),
@@ -617,6 +628,12 @@ export function CaptureScreen() {
           </RecordForm>
 
           <div style={{ marginTop: 12 }}>{usageLine}</div>
+          {phase === "confirmed" && !plantSaved && profile.status === "ready" && (
+            <button type="button" className="block" onClick={() => checkInstead(profile.response.species.id)}>
+              <ClipboardCheck size={18} aria-hidden />
+              {t.check.fromCapture}
+            </button>
+          )}
           {phase === "confirmed" && !plantSaved && (
             <button type="button" className="link block" onClick={startOver}>
               {t.capture.startOver}

@@ -161,6 +161,73 @@ export interface Question {
   answer: Answer & Usage;
 }
 
+// ---- planting check ---------------------------------------------------------------
+
+export type Verdict = "plant" | "plant_with_care" | "avoid";
+export const VERDICTS: Verdict[] = ["plant", "plant_with_care", "avoid"];
+export type BestSite = Site | "either" | "neither";
+/** The factors a check rates, in the order the prompt asks for them and the card shows them. */
+export type CheckFactor = "salinity" | "water" | "heat" | "cold" | "soil" | "animals" | "space" | "pests";
+export const CHECK_FACTORS: CheckFactor[] = ["salinity", "water", "heat", "cold", "soil", "animals", "space", "pests"];
+export type FactorStatus = "good" | "caution" | "problem";
+
+/** Exactly what prompts/check.schema.json returns. */
+export interface PlantingCheck {
+  factors: Array<{ factor: CheckFactor; status: FactorStatus; note: string }>;
+  verdict: Verdict;
+  best_site: BestSite;
+  summary: string;
+  placement: string;
+  planting_time: string;
+  buying_tips: string;
+  first_year: string;
+  /** Better-suited species or cultivars; empty when the verdict is plant. */
+  alternatives: Array<{ name: string; scientific_name: string; why: string }>;
+}
+
+/**
+ * Longest zone and note /api/check accepts; the check screen's fields stop at the same lengths. The
+ * zone cap is generous because a zone chip carries a Settings name, and Settings has no cap of its own.
+ */
+export const CHECK_MAX_ZONE_CHARS = 200;
+export const CHECK_MAX_NOTE_CHARS = 300;
+
+export interface CheckRequest {
+  species_id: string;
+  /** The site the grower has in mind; omitted, the check compares both. */
+  site?: Site;
+  zone?: string;
+  /** What the plant is for, or anything else the grower wants weighed. */
+  note?: string;
+  /** The language of the text fields; English when omitted. */
+  lang?: "en" | "fr";
+}
+
+export type CheckResponse = (PlantingCheck & Usage) | ({ refusal: string } & Usage);
+
+/** The newest check of a species as the library's pills need it: the verdict only, not the whole result. */
+export interface CheckSummary {
+  id: string;
+  species_id: string;
+  checked_at: string;
+  verdict: Verdict;
+}
+
+/**
+ * A row of the planting_checks table: one check of a species, saved by the app once Claude
+ * answered, under an id and a time made on the phone so a retried save cannot write it twice.
+ */
+export interface PlantingCheckRow {
+  id: string;
+  species_id: string;
+  checked_at: string;
+  /** The site asked about; null when none was chosen. */
+  site: Site | null;
+  zone: string;
+  note: string;
+  result: PlantingCheck & Usage;
+}
+
 // ---- species profile -------------------------------------------------------
 
 export interface CareRule {

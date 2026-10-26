@@ -5,6 +5,8 @@ import {
   expansionChanged,
   type AskRequest,
   type AskResponse,
+  type CheckRequest,
+  type CheckResponse,
   type DiagnoseRequest,
   type DiagnoseResponse,
   type ExpandRequest,
@@ -82,6 +84,8 @@ export const api = {
   diagnose: (req: DiagnoseRequest) => callApi<DiagnoseResponse>("diagnose", req),
   /** A free question about one plant, with the earlier exchanges of the conversation; the app saves the answer. */
   ask: (req: AskRequest) => callApi<AskResponse>("ask", req),
+  /** Before planting: the species read against the sites and what grows there; the app saves the check. */
+  check: (req: CheckRequest) => callApi<CheckResponse>("check", req),
   /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
   expand: async (req: ExpandRequest = {}) => {
     const r = await callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS);

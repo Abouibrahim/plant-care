@@ -1507,3 +1507,15 @@ button.card.tappable {
   border-color: var(--accent);
   font-weight: 600;
 }
+
+/* ---- check before planting -------------------------------------------------- */
+
+.verdict-pill {
+  font-size: 1rem;
+  padding: 4px 12px;
+}
+.factor + .factor {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
