@@ -1,8 +1,12 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useId, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { t } from "../i18n";
 import { SiteLabel } from "./TypeIcon";
 import { emptyZones, loadZones, recentZones } from "../lib/db";
 import { PLANT_SOURCES, SITES, type PlantInsert, type PlantSource, type Site, type ZoneLists } from "../types";
+
+// The position sheet brings Leaflet: it loads when the sheet opens.
+const PositionSheet = lazy(() => import("../screens/map/PositionSheet"));
 
 /** The user-editable part of a plant row; species_id is attached by the caller. */
 export type RecordValues = Omit<PlantInsert, "species_id">;
@@ -22,15 +26,18 @@ interface Props {
   canSubmit?: boolean;
   /** Extra content rendered just above the submit button (status lines, errors). */
   children?: React.ReactNode;
+  /** The plant being edited, left out of the dots when placing it; absent for a new plant. */
+  plantId?: string | null;
 }
 
-export function RecordForm({ initial, onChange, onSubmit, submitLabel, submitting = false, canSubmit = true, children }: Props) {
+export function RecordForm({ initial, onChange, onSubmit, submitLabel, submitting = false, canSubmit = true, children, plantId = null }: Props) {
   const [values, setValues] = useState<RecordValues>(initial);
   // The quantity is typed as text so the field can be emptied before a new number is entered.
   const [quantityText, setQuantityText] = useState(String(initial.quantity));
   const [zones, setZones] = useState<string[]>([]);
   const [zoneLists, setZoneLists] = useState<ZoneLists>(emptyZones);
   const [error, setError] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
   const zoneListId = useId();
 
   useEffect(() => {
@@ -189,12 +196,32 @@ export function RecordForm({ initial, onChange, onSubmit, submitLabel, submittin
           {t.record.gps}:{" "}
           {values.lat !== null && values.lng !== null ? `${values.lat.toFixed(5)}, ${values.lng.toFixed(5)}` : t.record.gpsNone}
         </span>
-        {values.lat !== null && (
-          <button type="button" className="link small" onClick={() => update({ lat: null, lng: null })}>
-            {t.record.gpsClear}
+        <span className="row" style={{ gap: 12 }}>
+          <button type="button" className="link small" onClick={() => setPlacing(true)}>
+            {t.record.gpsSet}
           </button>
-        )}
+          {values.lat !== null && (
+            <button type="button" className="link small" onClick={() => update({ lat: null, lng: null })}>
+              {t.record.gpsClear}
+            </button>
+          )}
+        </span>
       </div>
+      {/* On the page's root, not inside the form's card, so nothing around it can clip the full-screen sheet. */}
+      {placing &&
+        createPortal(
+          <Suspense fallback={null}>
+            <PositionSheet
+              title={values.tag.trim() ? t.position.title(values.tag.trim()) : t.position.titleNew}
+              plantId={plantId}
+              site={values.site}
+              initial={values.lat !== null && values.lng !== null ? { lat: values.lat, lng: values.lng } : null}
+              onSave={(position) => update({ lat: position.lat, lng: position.lng })}
+              onClose={() => setPlacing(false)}
+            />
+          </Suspense>,
+          document.body,
+        )}
 
       {children}
       {error && <div className="banner error">{error}</div>}

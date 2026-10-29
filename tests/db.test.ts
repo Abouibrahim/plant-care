@@ -12,7 +12,7 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments } = await import("../src/lib/db");
+const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments, findPlantsByTagCode, listPlantSpots } = await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -190,6 +190,22 @@ describe("listRecentTreatments", () => {
     expect(await listRecentTreatments("2026-10-15T00:00:00Z")).toEqual([
       { tag: "OL-01", text: "No spray is needed: water 20 L at dawn", spray: false, kind: "water" },
       { tag: "FIG-01", text: "White oil at 2 % in the cool of the evening", spray: null, kind: "pest" },
+    ]);
+  });
+});
+
+describe("findPlantsByTagCode and listPlantSpots", () => {
+  it("finds the plant whose id starts with a tag's code, and nothing for a code no plant carries", async () => {
+    sharedState.plants.push({ id: "0d6f2c1e-8a7b-4c3d-9e2f-1a2b3c4d5e6f", species_id: "s1", tag: "OL-01", site: "farm", planted_on: null, lat: 36.68, lng: 10.58 });
+    sharedState.plants.push({ id: "0d6f2c1f-0000-4000-8000-000000000000", species_id: "s1", tag: "OL-02", site: "farm", planted_on: null, lat: null, lng: null });
+    sharedState.plants.push({ id: "0d6f2c1d-ffff-4fff-bfff-ffffffffffff", species_id: "s1", tag: "FIG-01", site: "farm", planted_on: null, lat: null, lng: null });
+
+    expect(await findPlantsByTagCode("0d6f2c1e")).toEqual([{ id: "0d6f2c1e-8a7b-4c3d-9e2f-1a2b3c4d5e6f", tag: "OL-01", site: "farm" }]);
+    expect(await findPlantsByTagCode("aaaaaaaa")).toEqual([]);
+    expect((await listPlantSpots()).map((p) => [p.tag, p.lat])).toEqual([
+      ["OL-01", 36.68],
+      ["OL-02", null],
+      ["FIG-01", null],
     ]);
   });
 });

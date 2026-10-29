@@ -163,6 +163,7 @@ export const fr: Strings = {
     gps: "GPS",
     gpsClear: "Effacer",
     gpsNone: "Pas de point GPS",
+    gpsSet: "Placer",
     profileWriting: "Rédaction de la fiche espèce avec Claude…",
     profileReconnecting: "La connexion a été coupée pendant la rédaction. Vérification de l'arrivée de la fiche…",
     profileReady: "Fiche espèce rédigée",
@@ -212,6 +213,9 @@ export const fr: Strings = {
     deleteConfirm: (tag) => `Supprimer ${tag} ? Ses photos, ses tâches et ses questions partent avec elle.`,
     deleting: "Suppression…",
     deleteFailed: "La plante n'a pas pu être supprimée",
+    position: "Position",
+    tag: "Étiquette",
+    showOnMap: "Voir sur la carte",
   },
 
   /** Le diagnostic depuis l'écran de la plante ; les titres de tâches et les notes qu'il écrit sont ici aussi. */
@@ -438,6 +442,73 @@ export const fr: Strings = {
     empty: "Pas encore de plante. Touchez l'appareil photo pour ajouter la première.",
     emptyFiltered: "Aucune plante ne correspond",
     count: (n) => (n === 1 ? "1 plante" : `${n} plantes`),
+    view: "Affichage",
+    viewList: "Liste",
+    viewMap: "Carte",
+    printTags: "Imprimer les étiquettes",
+    noPosition: "Sans position",
+    noPositionClear: "Afficher de nouveau toutes les plantes",
+  },
+
+  map: {
+    loading: "Chargement de la carte…",
+    satellite: "Satellite",
+    street: "Plan",
+    switchLayer: "Passer de la vue satellite au plan",
+    whereAmI: "Où suis-je",
+    nonePlaced: "Aucune plante n'a encore de position. Ouvrez une plante et touchez Position pour la placer.",
+    nonePlacedFiltered: "Aucune de ces plantes n'a encore de position.",
+    tasksLoading: "Lecture des tâches…",
+    tasksFailed: "Les tâches n'ont pas pu être lues : les repères restent sans couleur.",
+    satelliteFailed: "La vue satellite ne s'est pas chargée (pas de connexion, ou clé de carte erronée ou expirée) : plan affiché.",
+    legendTitle: "Couleurs des repères",
+    legend: { overdue: "En retard", today: "Pour aujourd'hui", open: "Période en cours", none: "Rien à faire" },
+    more: (n) => (n === 1 ? "+1 autre" : `+${n} autres`),
+    open: "Ouvrir",
+    accuracy: (m) => `Vous êtes ici, ±${m} m`,
+    missing: (n) => (n === 1 ? "1 plante n'a pas encore de position" : `${n} plantes n'ont pas encore de position`),
+    showMissing: "Les afficher",
+    streetOnly: "Plan seulement : la vue satellite demande une clé ArcGIS (VITE_ARCGIS_API_KEY) dans Vercel.",
+  },
+
+  position: {
+    title: (tag) => `Position de ${tag}`,
+    titleNew: "Position de la nouvelle plante",
+    hint: "Déplacez la carte jusqu'à ce que la croix soit sur l'arbre, puis enregistrez.",
+    useMyLocation: "Ma position",
+    listening: (m) => (m === null ? "Lecture du GPS…" : `Lecture du GPS… ±${m} m`),
+    found: (m) => `Votre position, ±${m} m. Si la croix n'est pas sur l'arbre, déplacez la carte dessus.`,
+    coarse: (m) => `Position seulement approximative (±${m} m) : réglez l'accès à la position de ce site sur Précise dans Chrome.`,
+    errors: {
+      unsupported: "Ce navigateur ne peut pas lire la position. Placez l'arbre sur la carte.",
+      denied: "La position est bloquée pour cette application : autorisez-la dans les paramètres du site de Chrome, ou placez l'arbre sur la carte.",
+      unavailable: "Aucune lecture GPS n'est venue. Sortez de sous les arbres, ou placez l'arbre sur la carte.",
+    },
+    save: "Enregistrer ici",
+    saving: "Enregistrement…",
+    remove: "Retirer la position",
+    saveFailed: "La position n'a pas pu être enregistrée",
+  },
+
+  tags: {
+    title: "Étiquettes des arbres",
+    print: "Imprimer",
+    none: "Aucune plante à imprimer.",
+    toPlants: "Aller aux plantes",
+    summary: (n, skipped) =>
+      `${n === 1 ? "1 étiquette" : `${n} étiquettes`} sur A4, 40 × 50 mm${skipped > 0 ? ` (${skipped} laissée${skipped > 1 ? "s" : ""} de côté)` : ""}`,
+    hint: "Touchez une étiquette pour la laisser de côté. Imprimez, puis Enregistrer en PDF ou une imprimante, en taille réelle ; plastifiez les étiquettes pour l'extérieur.",
+    calibration: "50 mm en taille réelle",
+    tagOf: (tag) => `Étiquette de ${tag}`,
+  },
+
+  tagRoute: {
+    title: "Étiquette d'arbre",
+    looking: "Recherche de la plante…",
+    invalid: "Ce n'est pas une étiquette de plante.",
+    notFound: "Aucune plante ne porte cette étiquette. Elle a peut-être été supprimée.",
+    several: "Cette étiquette correspond à plusieurs plantes :",
+    toPlants: "Aller aux plantes",
   },
 
   species: {
@@ -559,9 +630,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 8",
+    phaseTitle: "Phase 9",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, et maintenant la météo : arrosages passés après la pluie, alertes et créneaux de traitement.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, et maintenant la carte des plantes et les étiquettes QR des arbres.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt, et une notification météo quand une alerte ou un arrosage passé après la pluie le justifie.",

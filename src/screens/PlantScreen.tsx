@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BookOpen, ChevronLeft, ImagePlus, MapPin, MessageCircleQuestionMark, Pencil, Stethoscope, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ImagePlus, MapPin, MapPinned, MessageCircleQuestionMark, Pencil, QrCode, Stethoscope, Trash2, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { storedAnswer } from "../lib/ask";
@@ -22,6 +22,7 @@ import {
 } from "../lib/db";
 import { problemResult, URGENCY_PILL } from "../lib/diagnosis";
 import { prepareImage } from "../lib/image";
+import { hasPosition, type LatLng } from "../lib/map";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { PhotoImg } from "../components/PhotoImg";
@@ -33,6 +34,9 @@ import { AskPanel } from "./plant/AskPanel";
 import { DiagnosePanel } from "./plant/DiagnosePanel";
 import { PastDiagnoses } from "./plant/PastDiagnoses";
 import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Question, Task, TaskStatus, TaskType } from "../types";
+
+// The position sheet brings Leaflet: it loads when the sheet opens.
+const PositionSheet = lazy(() => import("./map/PositionSheet"));
 
 /** The diagnosis panel: a new diagnosis, or a saved one reopened from the journal or the Health tab. */
 type DiagnoseState = { kind: "new" } | { kind: "open"; photo: Photo } | null;
@@ -94,6 +98,7 @@ export function PlantScreen() {
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
   const [diagnose, setDiagnose] = useState<DiagnoseState>(null);
   const [ask, setAsk] = useState<AskState>(null);
+  const [placing, setPlacing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -176,6 +181,13 @@ export function PlantScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  /** A position from the sheet, or null to remove it. No new tasks follow from a position, so no expansion. */
+  async function savePosition(position: LatLng | null) {
+    if (!plant) return;
+    const saved = await updatePlant(plant.id, { lat: position?.lat ?? null, lng: position?.lng ?? null });
+    setLoaded((prev) => (prev && prev.id === plant.id && prev.plant ? { ...prev, plant: { ...prev.plant, lat: saved.lat, lng: saved.lng } } : prev));
   }
 
   async function actOnTask(task: Task, action: TaskAction) {
@@ -301,6 +313,12 @@ export function PlantScreen() {
             {plant.zone}
           </span>
         )}
+        {hasPosition(plant) && (
+          <Link to={`/plants?focus=${plant.id}`} className="site-label link">
+            <MapPinned size={16} aria-hidden />
+            {t.plant.showOnMap}
+          </Link>
+        )}
       </p>
 
       <div className="stack" style={{ gap: 2, marginBottom: 8 }}>
@@ -347,6 +365,16 @@ export function PlantScreen() {
           <Stethoscope size={18} aria-hidden />
           {t.plant.diagnose}
         </button>
+        {/* Not while the record form is open: its own GPS line places the plant, and saving the form
+            afterwards would put back the position it was opened with. */}
+        <button type="button" className="small" onClick={() => setPlacing(true)} disabled={busy || editing}>
+          <MapPinned size={18} aria-hidden />
+          {t.plant.position}
+        </button>
+        <Link to={`/tags?ids=${plant.id}`} className="btn small">
+          <QrCode size={18} aria-hidden />
+          {t.plant.tag}
+        </Link>
         <button type="button" className="small span-2" onClick={() => setAsk({ threadId: null })} disabled={busy}>
           <MessageCircleQuestionMark size={18} aria-hidden />
           {t.plant.ask}
@@ -383,6 +411,7 @@ export function PlantScreen() {
             onSubmit={saveRecord}
             submitLabel={t.common.save}
             submitting={saving}
+            plantId={plant.id}
           />
         </div>
       )}
@@ -470,6 +499,19 @@ export function PlantScreen() {
         />
       )}
       {ask && <AskPanel plant={plant} threadId={ask.threadId} onChanged={reloadExtras} onClose={() => setAsk(null)} />}
+      {placing && (
+        <Suspense fallback={null}>
+          <PositionSheet
+            title={t.position.title(plant.tag)}
+            plantId={plant.id}
+            site={plant.site}
+            initial={hasPosition(plant) ? { lat: plant.lat, lng: plant.lng } : null}
+            onSave={savePosition}
+            onClear={() => savePosition(null)}
+            onClose={() => setPlacing(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

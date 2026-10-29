@@ -2,6 +2,7 @@
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
 import { problemResult, topCause } from "./diagnosis";
+import { tagIdRange } from "./map";
 import { weatherSettings, type SprayTreatment } from "./weather";
 import { t } from "../i18n";
 import {
@@ -76,6 +77,25 @@ export async function insertPlant(input: PlantInsert, id?: string): Promise<Plan
 export async function updatePlant(id: string, patch: Partial<PlantInsert>): Promise<Plant> {
   const r = await supabase.from("plants").update(patch).eq("id", id).select("*").single();
   return must(r) as Plant;
+}
+
+/** A plant on a map: enough to draw it as a dot and name it. */
+export type PlantSpot = Pick<Plant, "id" | "tag" | "site" | "lat" | "lng">;
+
+/** Every plant's position, for the dots the position sheet places a tree against (no species profiles). */
+export async function listPlantSpots(): Promise<PlantSpot[]> {
+  const r = await supabase.from("plants").select("id, tag, site, lat, lng");
+  return must(r) as PlantSpot[];
+}
+
+/**
+ * The plants a tag's code points to: those whose id starts with the code's 8 hex digits, found as a
+ * range on the uuid column. Usually one; none when the plant was deleted.
+ */
+export async function findPlantsByTagCode(code: string): Promise<Array<Pick<Plant, "id" | "tag" | "site">>> {
+  const { from, to } = tagIdRange(code);
+  const r = await supabase.from("plants").select("id, tag, site").gte("id", from).lte("id", to);
+  return must(r) as Array<Pick<Plant, "id" | "tag" | "site">>;
 }
 
 /**

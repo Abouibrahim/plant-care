@@ -1546,3 +1546,388 @@ button.card.tappable {
 .weather-alert {
   margin: 8px 0;
 }
+
+/* ---- farm map and tree tags (Phase 9) ------------------------------------------ */
+
+.view-switch button {
+  min-height: 40px;
+  padding: 6px 14px;
+}
+.clamp-1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.danger-text {
+  color: var(--danger);
+}
+.site-label.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pulse {
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
+/* Leaflet's panes and controls use z-index 400 to 1000: the map keeps them in its own stacking
+   context, so it never draws over the tab bar, the toasts or a sheet. */
+.map-wrap {
+  position: relative;
+  isolation: isolate;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.map-wrap .map {
+  position: absolute;
+  inset: 0;
+}
+.map-wrap .leaflet-container {
+  background: var(--surface-2);
+  font: inherit;
+}
+.plant-map {
+  /* Leaves room under the map for the legend and the "no position yet" line above the tab bar. */
+  height: max(300px, calc(100dvh - var(--nav-h) - 370px - env(safe-area-inset-bottom)));
+}
+.position-sheet .screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.position-map {
+  flex: 1;
+  min-height: 300px;
+}
+.map-tools {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.map-tool {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+/* Beside Leaflet's zoom buttons (top left) and the map tools (top right), not over them. */
+.map-empty {
+  position: absolute;
+  top: 10px;
+  left: 56px;
+  right: 64px;
+  z-index: 1000;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.map-card {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 1000;
+  margin: 0;
+  box-shadow: var(--shadow-lift);
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+@media (prefers-color-scheme: dark) {
+  .map-wrap .leaflet-bar a {
+    background: var(--surface);
+    color: var(--text);
+    border-bottom-color: var(--border);
+  }
+  .map-wrap .leaflet-control-attribution {
+    background: rgba(17, 23, 19, 0.8);
+    color: var(--muted);
+  }
+  .map-wrap .leaflet-control-attribution a {
+    color: var(--text);
+  }
+}
+
+/* Pins: a dot in the state's colour, ringed in white so it shows on imagery and on the street map. */
+.pin-icon {
+  background: none;
+  border: none;
+}
+.pin {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pin-overdue {
+  --pin-c: var(--late);
+}
+.pin-today {
+  --pin-c: var(--ok);
+}
+.pin-open {
+  --pin-c: var(--c-harvest);
+}
+.pin-none,
+.pin-neighbour {
+  --pin-c: #ffffff;
+}
+.pin-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  background: var(--pin-c);
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s;
+}
+.pin-none .pin-dot {
+  border-color: #26302a;
+}
+.pin.selected .pin-dot {
+  transform: scale(1.4);
+}
+.pin-qty {
+  position: absolute;
+  left: 26px;
+  top: 0;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111111;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.pin-label {
+  display: none;
+  position: absolute;
+  left: 34px;
+  top: 11px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111111;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.map-labels .pin-label {
+  display: block;
+}
+.pin-neighbour .pin-dot {
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-width: 2px;
+  border-color: #26302a;
+  opacity: 0.85;
+}
+.pin-neighbour .pin-label {
+  left: 20px;
+  top: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+.pin-dot-inline {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pin-c);
+  box-shadow: 0 0 0 1.5px var(--border);
+}
+.pin-dot-inline.pin-none {
+  box-shadow: 0 0 0 1.5px #26302a;
+}
+.me-dot {
+  fill: #1a73e8;
+  fill-opacity: 1;
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+.me-accuracy {
+  fill: #1a73e8;
+  fill-opacity: 0.15;
+  stroke: #1a73e8;
+  stroke-opacity: 0.6;
+  stroke-width: 1;
+}
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.9));
+}
+
+/* The tag sheet: tags at their printed size in millimetres, white like the paper in both themes. */
+.tag-sheet {
+  overflow-x: auto;
+  padding: 4mm;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: #111111;
+}
+.calibration {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  margin-bottom: 3mm;
+  font-size: 2.6mm;
+  color: #444444;
+}
+/* A border, not a background: Chrome leaves backgrounds out of a print unless asked, Android has no switch. */
+.calibration-bar {
+  display: inline-block;
+  flex: none;
+  width: 50mm;
+  height: 0;
+  border-top: 2mm solid #111111;
+}
+.tag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 40mm);
+  grid-auto-rows: 50mm;
+  gap: 2mm;
+  justify-content: center;
+}
+.tree-tag {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.4mm;
+  box-sizing: border-box;
+  width: 40mm;
+  height: 50mm;
+  min-height: 0;
+  padding: 1.5mm 2mm;
+  border: 0.3mm dashed #9a9a9a;
+  border-radius: 0;
+  background: #ffffff;
+  color: #111111;
+  font-weight: 400;
+  text-align: center;
+  overflow: hidden;
+}
+.tree-tag:active:not(:disabled) {
+  transform: none;
+}
+.tree-tag .qr {
+  flex: none;
+  width: 30mm;
+  height: 30mm;
+}
+/* The QR code and four lines fill the 50 mm (about 0.6 mm to spare): none may shrink, or flexbox
+   would clip its letters. */
+.tree-tag > span {
+  flex: none;
+  max-width: 100%;
+  line-height: 1.2;
+}
+.tree-tag-name,
+.tree-tag-species,
+.tree-tag-place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-tag-name {
+  font-family: var(--font-display);
+  font-size: 4.2mm;
+  font-weight: 600;
+}
+.tree-tag-species {
+  font-size: 2.8mm;
+}
+.tree-tag-place,
+.tree-tag-code {
+  font-size: 2.4mm;
+  color: #444444;
+}
+.tree-tag-code {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: 0.3mm;
+}
+.tree-tag.skipped {
+  opacity: 0.25;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #ffffff !important;
+  }
+  .nav,
+  .update-banner,
+  .toast,
+  .leaf-fall,
+  .no-print {
+    display: none !important;
+  }
+  .screen {
+    max-width: none;
+    padding: 0;
+  }
+  .tag-sheet {
+    overflow: visible;
+    padding: 0;
+    border-radius: 0;
+  }
+  .tag-grid {
+    grid-template-columns: repeat(4, 40mm);
+    justify-content: start;
+  }
+  .tree-tag {
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .tree-tag.skipped {
+    display: none;
+  }
+}

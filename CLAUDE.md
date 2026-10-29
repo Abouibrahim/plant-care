@@ -36,9 +36,9 @@ api/                 Vercel functions (one file per route)
   daily.ts           cron: fetch the weather, expand tasks, skip waterings after rain, send the weather push and the digest
   push-subscribe.ts  POST → store a push subscription
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, check.md, *.schema.json
-src/                 the PWA (screens: Today, Capture, Check, Plant, Plants, Species, Settings)
+src/                 the PWA (screens: Today, Capture, Check, Plant, Plants with its map, Species, Settings, Tags; map/ holds the Leaflet screens, loaded lazily)
 supabase/schema.sql  tables, enums, RLS
-tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes, the planting check and the weather (mockdb.ts imitates the query builder)
+tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes, the planting check, the weather and the map and tags (mockdb.ts imitates the query builder)
 docs/SPEC.md         the design spec
 PHASE1.md            first milestone with acceptance tests
 ```

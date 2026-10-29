@@ -2,6 +2,28 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-30 — Phase 9: Farm map and tree tags
+
+The spec stores a GPS pin per plant (block B) but never shows it, and maps and tags are outside it. Mohamed asked for item 3 of the feature review of 2026-10-25.
+
+- **Satellite tiles need a key; the street map does not.** At farm scale a street map shows empty fields. Esri World Imagery has 0.34 m imagery around Menzel Bouzelfa (June 2025) in which single olive trees show.
+  - Its keyless address is not licensed for an app like this one, so the satellite layer appears only with a free ArcGIS Location Platform key (`VITE_ARCGIS_API_KEY`, a ★ step).
+  - Without the key, the maps show OpenStreetMap's standard tiles, credited as its policy asks.
+  - MapTiler's free plan was the runner-up; its imagery here is coarser.
+- **The key is public on purpose.** A `VITE_` variable ends up in the app's code that anyone can read; that is how tile keys work. The referrer lock set in the ArcGIS portal limits it to the app's address, and pay-as-you-go left off means usage past the free 2 million tiles a month is refused, never billed. CLAUDE.md's rule that secrets live only in Vercel and `.env.local` still holds for the value itself.
+- **No tiles kept for offline use.** Esri and OpenStreetMap both forbid storing tiles for offline use. The service worker therefore has no tile rule; the browser's ordinary cache applies. At the farm without signal the map shows the pins on a blank background.
+- **Leaflet, loaded only with a map.** Leaflet 1.9.4 was chosen over MapLibre GL (about 46 KB gzip against 430 KB, and no WebGL2 needed).
+  - It is called directly in a lazy chunk, without react-leaflet (whose licence is not OSI-approved, and whose React 19 support is unproven).
+  - Pins are HTML dots, not Leaflet's PNG markers, whose image paths break under Vite.
+  - The main bundle grows by the strings and helpers only.
+- **Placing a tree by hand.** "Use my location" listens to the GPS for up to 20 seconds, keeps the most precise reading, stops at 5 m or better, and ignores a reading made before it started. A phone under trees is often 5 to 15 m off, so it only starts the placing. The position sheet then shows a fixed cross on the map, with the site's other plants as dots, and saves the point under the cross. Placing also moves the forecast point (the mean of the farm plants' positions), which is intended.
+- **Tag codes without a new column.** A tag's QR code holds `https://<app>/t/<code>`, where the code is the first 8 hex digits of the plant's id.
+  - The `/t/` route finds the plant by a range on the uuid column, so there is no SQL step.
+  - The whole `/plants/<id>` link would need a QR code of version 7 at correction Q (45 modules) instead of version 5 (37), and so smaller modules on a 30 mm code.
+  - Two plants share a code once in about four billion pairs; the route lists both if it happens.
+- **Correction Q and 40 × 50 mm tags.** Q survives about a quarter of the code being dirty or scratched. The sheet prints 20 tags per A4 page, with a 50 mm bar to check that nothing was scaled. Tags are printed from the app with Android's print dialog (Save as PDF or a printer); nothing confirms that printing works from the installed app, so it is a phone test.
+- **Scanning.** Android's camera hands a link to the default browser, and Chrome then opens the installed app when it can. Google Lens may open its own browser tab instead. Each of these shares Chrome's storage, so the grower is signed in either way. The `handle_links` manifest field never shipped and is not used.
+
 ## 2026-10-29 — Lost replies on long Claude calls (0.8.2)
 
 Mohamed confirmed a European pear in the backyard, on mobile data, and got "The profile could not be written: Network error", twice, Retry included. The server had finished: the `Pyrus communis` row was written at 20:03:16 UTC with nothing in the function logs. The phone had lost the reply. A new profile takes Fable a minute or more at medium effort, the connection carries nothing meanwhile, and a mobile network (or a switch between Wi-Fi and mobile data) drops a connection like that. Vercel does not cancel a function when its client goes away (cancellation is opt-in), so the work was done and paid for, then lost. A Retry before the first call ended paid for the profile again.

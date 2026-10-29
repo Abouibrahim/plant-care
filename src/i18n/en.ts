@@ -164,6 +164,7 @@ export const en = {
     gps: "GPS",
     gpsClear: "Clear",
     gpsNone: "No GPS pin",
+    gpsSet: "Set position",
     profileWriting: "Writing the species profile with Claude…",
     profileReconnecting: "The connection dropped while Claude was writing. Checking whether the profile has arrived…",
     profileReady: "Species profile written",
@@ -213,6 +214,9 @@ export const en = {
     deleteConfirm: (tag: string) => `Delete ${tag}? Its photos, tasks and questions go with it.`,
     deleting: "Deleting…",
     deleteFailed: "The plant could not be deleted",
+    position: "Position",
+    tag: "Tag",
+    showOnMap: "Show on map",
   },
 
   /** The diagnosis flow on the Plant screen; the task titles and notes it writes live here too. */
@@ -440,6 +444,77 @@ export const en = {
     empty: "No plants yet. Tap the camera to add the first one.",
     emptyFiltered: "No plants match",
     count: (n: number) => (n === 1 ? "1 plant" : `${n} plants`),
+    view: "View",
+    viewList: "List",
+    viewMap: "Map",
+    printTags: "Print tags",
+    noPosition: "No position",
+    noPositionClear: "Show all plants again",
+  },
+
+  /** The Plants map (Phase 9). */
+  map: {
+    loading: "Loading the map…",
+    satellite: "Satellite",
+    street: "Street map",
+    switchLayer: "Switch between the satellite view and the street map",
+    whereAmI: "Where am I",
+    nonePlaced: "No plant has a position yet. Open a plant and tap Position to place it.",
+    nonePlacedFiltered: "None of these plants has a position yet.",
+    tasksLoading: "Reading what is due…",
+    tasksFailed: "What is due could not be read: the pins show no colours.",
+    satelliteFailed: "The satellite view did not load (no connection, or the map key is wrong or expired): street map shown.",
+    legendTitle: "Pin colours",
+    legend: { overdue: "Late", today: "Due today", open: "Window open", none: "Nothing due" },
+    more: (n: number) => `+${n} more`,
+    open: "Open",
+    accuracy: (m: number) => `You are here, ±${m} m`,
+    missing: (n: number) => (n === 1 ? "1 plant has no position yet" : `${n} plants have no position yet`),
+    showMissing: "Show them",
+    streetOnly: "Street map only: the satellite view needs an ArcGIS key (VITE_ARCGIS_API_KEY) in Vercel.",
+  },
+
+  /** Placing a plant on the map (Phase 9). */
+  position: {
+    title: (tag: string) => `Position of ${tag}`,
+    titleNew: "Position of the new plant",
+    hint: "Move the map until the cross sits on the tree, then save.",
+    useMyLocation: "Use my location",
+    listening: (m: number | null) => (m === null ? "Listening to the GPS…" : `Listening to the GPS… ±${m} m`),
+    found: (m: number) => `Your position, ±${m} m. If the cross is off the tree, move the map onto it.`,
+    coarse: (m: number) => `Only an approximate position (±${m} m): set this site's location access to Precise in Chrome.`,
+    errors: {
+      unsupported: "This browser cannot read the location. Place the tree on the map.",
+      denied: "Location is blocked for this app: allow it in Chrome's site settings, or place the tree on the map.",
+      unavailable: "No GPS reading came. Step out from under the trees, or place the tree on the map.",
+    },
+    save: "Save here",
+    saving: "Saving…",
+    remove: "Remove the position",
+    saveFailed: "The position could not be saved",
+  },
+
+  /** The tree tag sheet (Phase 9). */
+  tags: {
+    title: "Tree tags",
+    print: "Print",
+    none: "No plants to print.",
+    toPlants: "Go to the plants",
+    summary: (n: number, skipped: number) =>
+      `${n === 1 ? "1 tag" : `${n} tags`} on A4, 40 × 50 mm${skipped > 0 ? ` (${skipped} left out)` : ""}`,
+    hint: "Tap a tag to leave it out. Print, then Save as PDF or a printer, at actual size; laminate the tags for the outdoors.",
+    calibration: "50 mm at actual size",
+    tagOf: (tag: string) => `Tag of ${tag}`,
+  },
+
+  /** A scanned tag's link, /t/<code> (Phase 9). */
+  tagRoute: {
+    title: "Tree tag",
+    looking: "Finding the plant…",
+    invalid: "This is not a plant tag.",
+    notFound: "No plant has this tag. The plant may have been deleted.",
+    several: "This tag matches several plants:",
+    toPlants: "Go to the plants",
   },
 
   species: {
@@ -562,9 +637,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 8",
+    phaseTitle: "Phase 9",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, and now the weather: rain skip, alerts and spray windows.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, and now the plant map and QR tags for the trees.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon, and a weather notification when an alert or a rain skip applies.",
