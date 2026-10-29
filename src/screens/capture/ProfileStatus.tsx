@@ -5,13 +5,14 @@ import type { ProfileResponse } from "../../types";
 
 /** Where the species-profile request stands while the record form is open. */
 export type ProfileState =
-  | { status: "pending" }
+  /** reconnecting: the reply was lost and the app is asking whether the profile was stored. */
+  | { status: "pending"; reconnecting?: boolean }
   | { status: "ready"; response: ProfileResponse }
   | { status: "failed"; message: string };
 
 export function ProfileStatus({ state, onRetry }: { state: ProfileState; onRetry: () => void }) {
   if (state.status === "pending") {
-    return <Spinner label={t.record.profileWriting} />;
+    return <Spinner label={state.reconnecting ? t.record.profileReconnecting : t.record.profileWriting} />;
   }
   if (state.status === "ready") {
     const r = state.response;

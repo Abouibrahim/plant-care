@@ -25,7 +25,7 @@ api/                 Vercel functions (one file per route)
   _context.ts        the plant, species and weather text blocks shared by diagnose, ask and check
   _weather.ts        Open-Meteo: the point, fetch and parse, weather_days, the rain skip, the weather push (Phase 8)
   _images.ts         image validation shared by identify and diagnose
-  _http.ts           the request and response types
+  _http.ts           the request and response types, keepAlive() and reply()
   identify.ts        POST → candidates
   profile.ts         POST → species profile, upsert
   diagnose.ts        POST → diagnosis
@@ -49,6 +49,7 @@ PHASE1.md            first milestone with acceptance tests
 - `/api/daily` accepts only `Authorization: Bearer ${process.env.CRON_SECRET}` (Vercel sends it automatically for cron invocations).
 - Request bodies carry images as `{ media_type, data }` base64; the client has already resized to 1,280 px on the long edge, JPEG quality 0.85, and read GPS from EXIF (package `exifr`) before resizing.
 - Responses are the parsed JSON from Claude plus `{ model, input_tokens, output_tokens }` so usage stays visible.
+- Call `keepAlive(res)` (`api/_http.ts`) before a Claude call and answer through `reply()` or `sendError()`, never `res.status().json()` after it: a call that runs past 10 s sends its 200 early and a space every 15 s so a mobile network does not drop the silent connection, and an error after that goes in the body as `{ error, status }`, which `src/lib/api.ts` reads as that status.
 
 ## Claude call conventions
 

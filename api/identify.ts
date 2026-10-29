@@ -1,5 +1,5 @@
 // POST /api/identify  { images: [{ media_type, data }], site? }  ->  IdentifyResult + usage
-import type { VercelRequest, VercelResponse } from "./_http.js";
+import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
 import { parseImages } from "./_images.js";
 import { handleError, sendError, verifyUser } from "./_supabase.js";
@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         ? `Identify this plant, photographed ${where}. The two images show the same plant.`
         : `Identify this plant, photographed ${where}.`;
 
+    keepAlive(res);
     const result = await callJson<IdentifyResult>({
       rules: readPrompt("identify.md"),
       schema: readSchema("identify.schema.json"),
@@ -40,10 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     });
 
     if (!result.ok) {
-      res.status(200).json({ refusal: result.refusal, ...result.usage });
+      reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    res.status(200).json({ ...result.data, ...result.usage });
+    reply(res, 200, { ...result.data, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

@@ -148,6 +148,8 @@ export function CaptureScreen() {
   const runRef = useRef(0);
   // Bumped per profile request so a retry or "pick another" ignores the earlier answer.
   const profileSeqRef = useRef(0);
+  // Stops the current profile request's lookups after a lost reply once its answer is not wanted.
+  const profileAbortRef = useRef<AbortController | null>(null);
   // Every preview object URL created on this screen; revoked on reset, save and unmount.
   const urlsRef = useRef(new Set<string>());
   const saveRef = useRef<SaveProgress>(freshProgress());
@@ -161,6 +163,7 @@ export function CaptureScreen() {
     const urls = urlsRef.current;
     const run = runRef;
     const seq = profileSeqRef;
+    const lookup = profileAbortRef;
     const created = createdRef.current;
     const mounted = mountedRef;
     mounted.current = true;
@@ -169,6 +172,7 @@ export function CaptureScreen() {
       mounted.current = false;
       run.current += 1;
       seq.current += 1;
+      lookup.current?.abort();
       for (const u of urls) URL.revokeObjectURL(u);
       urls.clear();
       for (const id of created) void deleteSpeciesIfUnused(id).catch(() => undefined);
@@ -211,6 +215,7 @@ export function CaptureScreen() {
   function startOver() {
     runRef.current += 1;
     profileSeqRef.current += 1;
+    profileAbortRef.current?.abort();
     discardCreatedSpecies();
     revokeAll();
     saveRef.current = freshProgress();
@@ -301,9 +306,15 @@ export function CaptureScreen() {
     const run = runRef.current;
     const seq = profileSeqRef.current + 1;
     profileSeqRef.current = seq;
+    profileAbortRef.current?.abort();
+    const lookup = new AbortController();
+    profileAbortRef.current = lookup;
     setProfileReq(req);
     setProfile({ status: "pending" });
-    api.profile(req).then(
+    const onReconnecting = () => {
+      if (runRef.current === run && profileSeqRef.current === seq) setProfile({ status: "pending", reconnecting: true });
+    };
+    api.profile(req, { onReconnecting, signal: lookup.signal }).then(
       (res) => {
         const stale = runRef.current !== run || profileSeqRef.current !== seq;
         if (!isRefusal(res) && res.created) {
@@ -351,6 +362,7 @@ export function CaptureScreen() {
 
   function pickAnother() {
     profileSeqRef.current += 1; // drop the in-flight profile answer; created rows stay until the capture ends
+    profileAbortRef.current?.abort();
     setChoice(null);
     setProfileReq(null);
     setProfile({ status: "pending" });

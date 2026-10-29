@@ -3,7 +3,7 @@
 // grower's sites as they are, with every plant already recorded grouped by site and zone, and the
 // site and zone the grower has in mind. The app saves the check; this route only reads.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { VercelRequest, VercelResponse } from "./_http.js";
+import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema } from "./_claude.js";
 import {
   calendarBlock,
@@ -256,6 +256,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     ]);
     const text = describeCheck({ ...input, species: row as Species, today, plants, zones, weather });
 
+    keepAlive(res);
     const result = await callJson<PlantingCheck>({
       rules: readPrompt("check.md"),
       schema: readSchema("check.schema.json"),
@@ -268,10 +269,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     });
 
     if (!result.ok) {
-      res.status(200).json({ refusal: result.refusal, ...result.usage });
+      reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    res.status(200).json({ ...result.data, ...result.usage });
+    reply(res, 200, { ...result.data, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

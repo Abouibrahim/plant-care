@@ -2,8 +2,9 @@
 //   { scientific_name, cultivar?, common_names?, site? }   a confirmed candidate
 //   { name, site? }                                        a name typed by the user
 //   { regenerate_species_id }                              rewrite, keeping user_edits
+//   either of the first two with lookup_only: true         the stored row or 404, never Claude
 // Returns { species, created, ...usage }. Claude is called only when no species row matches.
-import type { VercelRequest, VercelResponse } from "./_http.js";
+import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema, ZERO_USAGE } from "./_claude.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import { mergeDuplicateRules } from "./_tasks.js";
@@ -154,11 +155,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
       }
       const row = existing as Species;
+      keepAlive(res);
       const result = await writeProfile(
         describe({ scientific_name: row.scientific_name, cultivar: row.cultivar, common_names: row.common_names }),
       );
       if (!result.ok) {
-        res.status(200).json({ refusal: result.refusal, ...result.usage });
+        reply(res, 200, { refusal: result.refusal, ...result.usage });
         return;
       }
       // Re-read the edits: the user may have saved a field while Claude was writing.
@@ -184,7 +186,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         .select("*")
         .single();
       if (updErr) throw updErr;
-      res.status(200).json({ species: updated, created: true, ...result.usage });
+      reply(res, 200, { species: updated, created: true, ...result.usage });
       return;
     }
 
@@ -203,14 +205,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const existing = scientific ? await findSpecies(scientific, cultivar) : await findByAnyName(typed);
     if (existing) {
-      res.status(200).json({ species: existing, created: false, ...ZERO_USAGE });
+      reply(res, 200, { species: existing, created: false, ...ZERO_USAGE });
+      return;
+    }
+    if (body.lookup_only) {
+      // The app asking whether a request whose reply it lost has stored its profile yet.
+      sendError(res, 404, "No profile for this species yet");
       return;
     }
 
     // --- write it ---------------------------------------------------------------
+    keepAlive(res);
     const result = await writeProfile(describe({ ...body, scientific_name: scientific || undefined, cultivar }));
     if (!result.ok) {
-      res.status(200).json({ refusal: result.refusal, ...result.usage });
+      reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
     const profile = result.data;
@@ -226,7 +234,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     // A parallel request may have inserted the same species meanwhile.
     const race = await findSpecies(profile.scientific_name, profile.cultivar);
     if (race) {
-      res.status(200).json({ species: race, created: false, ...result.usage });
+      reply(res, 200, { species: race, created: false, ...result.usage });
       return;
     }
 
@@ -245,13 +253,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       if (insErr.code === "23505") {
         const again = await findByScientificName(profile.scientific_name, profile.cultivar);
         if (again) {
-          res.status(200).json({ species: again, created: false, ...result.usage });
+          reply(res, 200, { species: again, created: false, ...result.usage });
           return;
         }
       }
       throw insErr;
     }
-    res.status(200).json({ species: inserted, created: true, ...result.usage });
+    reply(res, 200, { species: inserted, created: true, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

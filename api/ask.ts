@@ -5,7 +5,7 @@
 // the treatments logged for them. The app keeps the conversation, sends the earlier exchanges back
 // with each question and saves the answers; this route only reads.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { VercelRequest, VercelResponse } from "./_http.js";
+import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema } from "./_claude.js";
 import {
   calendarBlock,
@@ -367,6 +367,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       question: input.question,
     });
 
+    keepAlive(res);
     const result = await callJson<Answer>({
       rules: readPrompt("ask.md"),
       schema: readSchema("ask.schema.json"),
@@ -379,10 +380,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     });
 
     if (!result.ok) {
-      res.status(200).json({ refusal: result.refusal, ...result.usage });
+      reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    res.status(200).json({ ...result.data, ...result.usage });
+    reply(res, 200, { ...result.data, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

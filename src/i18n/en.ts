@@ -165,6 +165,7 @@ export const en = {
     gpsClear: "Clear",
     gpsNone: "No GPS pin",
     profileWriting: "Writing the species profile with Claude…",
+    profileReconnecting: "The connection dropped while Claude was writing. Checking whether the profile has arrived…",
     profileReady: "Species profile written",
     profileExisting: "Species profile already in the library",
     profileFailed: "The profile could not be written",

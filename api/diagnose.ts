@@ -1,7 +1,7 @@
 // POST /api/diagnose  { plant_id, images: [{ media_type, data }], note? }  ->  Diagnosis + usage
 // The problem photo is read against the plant's own context: its species profile, its age and
 // site, and what was done (or left undone) for it in the last 30 days.
-import type { VercelRequest, VercelResponse } from "./_http.js";
+import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
 import {
   pestsBlock,
@@ -109,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     const weather = await loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS));
     const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today });
+    keepAlive(res);
     const result = await callJson<Diagnosis>({
       rules: readPrompt("diagnose.md"),
       schema: readSchema("diagnose.schema.json"),
@@ -120,10 +121,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     });
 
     if (!result.ok) {
-      res.status(200).json({ refusal: result.refusal, ...result.usage });
+      reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    res.status(200).json({ ...result.data, ...result.usage });
+    reply(res, 200, { ...result.data, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

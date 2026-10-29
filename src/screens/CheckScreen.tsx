@@ -88,6 +88,8 @@ function CheckScreen() {
   const [profileCall, setProfileCall] = useState<{ usage: Usage; created: boolean } | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
   const mountedRef = useRef(true);
+  // Stops the profile lookups after a lost reply when the screen is left.
+  const leftRef = useRef(new AbortController());
   // The check on screen, for the one more save given to it when the screen is left unsaved.
   const shownRef = useRef<Shown | null>(null);
 
@@ -98,9 +100,12 @@ function CheckScreen() {
   useEffect(() => {
     const mounted = mountedRef;
     const latest = shownRef;
+    const left = leftRef;
     mounted.current = true;
+    if (left.current.signal.aborted) left.current = new AbortController(); // remounted (StrictMode)
     return () => {
       mounted.current = false;
+      left.current.abort();
       // Left with a save that failed: one more try on the way out, since the check was paid for.
       retryUnsaved(latest.current);
     };
@@ -179,6 +184,7 @@ function CheckScreen() {
         setPhase("profiling");
         const res = await api.profile(
           scientific ? { scientific_name: scientific, site: site ?? undefined } : { name: typed, site: site ?? undefined },
+          { signal: leftRef.current.signal },
         );
         if (!mountedRef.current) return; // left: a new profile stays in the library, no check is run
         if (isRefusal(res)) {

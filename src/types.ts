@@ -298,6 +298,8 @@ export interface ProfileRequest {
   site?: Site;
   /** Regenerate an existing profile, keeping the fields listed in user_edits. */
   regenerate_species_id?: string;
+  /** Only look the species up: the stored row, or 404 when there is none yet. Never calls Claude. */
+  lookup_only?: boolean;
 }
 
 export interface ProfileResponse extends Usage {

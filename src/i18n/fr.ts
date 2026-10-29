@@ -164,6 +164,7 @@ export const fr: Strings = {
     gpsClear: "Effacer",
     gpsNone: "Pas de point GPS",
     profileWriting: "Rédaction de la fiche espèce avec Claude…",
+    profileReconnecting: "La connexion a été coupée pendant la rédaction. Vérification de l'arrivée de la fiche…",
     profileReady: "Fiche espèce rédigée",
     profileExisting: "Fiche espèce déjà dans la bibliothèque",
     profileFailed: "La fiche n'a pas pu être rédigée",
