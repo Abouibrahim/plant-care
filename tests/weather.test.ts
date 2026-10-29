@@ -16,8 +16,8 @@ import {
   storeWeather,
   type OpenMeteo,
 } from "../api/_weather.js";
-import { alertsFor, isFresh, rainBefore, rainDecision, TOWN, upcomingAlerts, weatherSettings } from "../src/lib/weather";
-import type { WeatherDay } from "../src/types";
+import { alertsFor, callsForSpray, isFresh, markWindows, rainBefore, rainDecision, sprayCallers, TOWN, upcomingAlerts, weatherSettings } from "../src/lib/weather";
+import type { CauseKind, TaskType, WeatherDay } from "../src/types";
 import { makeClient, makeState, type Row } from "./mockdb";
 
 const TODAY = "2026-07-10";
@@ -366,5 +366,113 @@ describe("the weather block for Claude", () => {
   it("says when there is nothing stored", () => {
     expect(weatherBlock(null, TODAY)).toBe("No weather data is stored for the sites.");
     expect(weatherBlock([], TODAY)).toBe("No weather data is stored for the sites.");
+  });
+});
+
+describe("the spray line", () => {
+  it("knows the words that mean spraying, and not the ones that only look like it", () => {
+    expect(callsForSpray("act on first sighting with savon noir and a trunk band")).toBe(true);
+    expect(callsForSpray("Spray neem at dusk")).toBe(true);
+    expect(callsForSpray("a white oil spray in winter")).toBe(true);
+    expect(callsForSpray("pulvériser du savon noir le soir")).toBe(true);
+    expect(callsForSpray("Hang a Medfly trap and remove fallen fruit")).toBe(false);
+    expect(callsForSpray("Mulch the soil and press the olives for oil")).toBe(false);
+    expect(callsForSpray("Bouillie bordelaise after the first autumn rain")).toBe(true);
+    expect(callsForSpray("Récolter et presser pour l'huile d'olive")).toBe(false);
+    expect(callsForSpray("huile blanche en hiver")).toBe(true);
+    expect(callsForSpray("Look under the young leaves; soapy water if colonies are found.")).toBe(true);
+  });
+
+  it("does not count a text that says not to spray", () => {
+    for (const text of [
+      "Stop the savon noir sprays; give 30 L of rainwater at dusk and do not spray again until days are below 28 C",
+      "No spray is needed: this is drought stress. Water 20 L at dawn and mulch.",
+      "Avoid foliar sprays in the heat",
+      "stop kaolin sprays three weeks before picking",
+      "Deep-water weekly and mulch; do not spray or feed a stressed tree",
+      "Renew the trunk band; don't spray, the ants are the cause.",
+      "Recovered; no further spraying needed.",
+      "Band the trunk. Spraying is not needed while ladybirds work.",
+      "A spray isn't necessary this year",
+      "Use sticky bands instead of sprays",
+      "Ne pas pulvériser pendant la floraison",
+      "Évitez de traiter au savon noir en plein soleil",
+    ]) {
+      expect(callsForSpray(text), text).toBe(false);
+    }
+  });
+
+  it("still counts a spray asked for beside a refusal or a limit", () => {
+    expect(callsForSpray("Avoid spraying at midday, spray savon noir at dusk")).toBe(true);
+    expect(callsForSpray("Spray neem at dusk, not in the heat")).toBe(true);
+    expect(callsForSpray("Spray at dusk but never in full sun")).toBe(true);
+    expect(callsForSpray("No more than two sprays of savon noir, 7 days apart")).toBe(true);
+    expect(callsForSpray("Spray white oil not before the leaves fall")).toBe(true);
+    expect(callsForSpray("Do not prune now. Spray savon noir on the colonies.")).toBe(true);
+  });
+
+  it("reads the realistic texts of the corpus as expected, but for the misreadings it knows", () => {
+    // Texts written to probe the rule (treatments, cautions, pre-harvest intervals, heat, water and
+    // salt diagnoses, French edits), each with whether it asks for a spray. The harvest texts are
+    // also kept off the line by their task type, the heat and salt ones by the diagnosis's answer.
+    const KNOWN_MISREADINGS = new Set([
+      "The scorch came from savon noir applied in full sun; rinse the leaves with rainwater at dusk and let the new growth harden.",
+      "Scout for aphid colonies on the new flush; if ladybird or hoverfly larvae are present, leave them, as savon noir kills the larvae too.",
+      "Work 10 L of mature compost into the mulch ring and keep the well water share under a third; foliar sprays give only a brief green-up on calcareous soil.",
+      "Wash fruit that was sprayed with kaolin before eating or selling it.",
+      "Pick the fruit when ripe; any fruit sprayed with neem in the past 3 days must be washed.",
+      "Harvest from September; respect a 7-day interval after neem.",
+      "Paint large cuts with lime; this replaces the copper spray some growers use.",
+      "Wind scorch from the sirocco: water deeply and add a shade net; spraying in sirocco wind drifts and burns.",
+      "Récolter 7 jours après le dernier traitement au savon noir.",
+      "dont spray in summer, water at dawn",
+    ]);
+    const corpus = JSON.parse(readFileSync(new URL("./data/spray-texts.json", import.meta.url), "utf8")) as Array<{ text: string; spray: boolean }>;
+    const wrong = corpus.filter((c) => callsForSpray(c.text) !== c.spray).map((c) => c.text);
+    expect(wrong.filter((text) => !KNOWN_MISREADINGS.has(text))).toEqual([]);
+    expect([...KNOWN_MISREADINGS].filter((text) => !wrong.includes(text))).toEqual([]);
+  });
+
+  it("names the plants whose tasks due by tomorrow, or latest diagnoses, ask for a spray, once each", () => {
+    const task = (tag: string, instruction: string, due_on = TODAY, type: TaskType = "scout", rule_key = "scout:5-6:any") => ({ type, rule_key, title: "Scout", instruction, due_on, plant: { tag } });
+    const diagnosis = (tag: string, text: string, spray: boolean | null, kind: CauseKind | null = "pest") => ({ tag, text, spray, kind });
+    const tags = sprayCallers(
+      [
+        task("Loquat", "knock back aphids with savon noir"),
+        task("Papaya", "Inspect fruit for stings"),
+        task("Loquat", "renew trunk bands; spray savon noir", "2026-07-01"),
+        task("Fig", "spray neem on the new flush", "2026-07-12"),
+        task("Lemon", "spray savon noir", "2026-07-11", "protect"),
+        task("Plum", "Take a new photo of the same part.", TODAY, "scout", "diagnosis:ph1"),
+        { type: "scout" as const, rule_key: "diagnosis:ph2", title: "Re-photograph Mango: Spray scorch from savon noir", instruction: "Take a new photo.", due_on: TODAY, plant: { tag: "Mango" } },
+        task("Quince", "Do not spray while the bees work the flowers"),
+        task("Carob", "Pick the pods; leave 7 days after a neem spray before eating", TODAY, "harvest"),
+        task("Walnut", "Copper on the cuts after pruning, a Bordeaux spray", TODAY, "prune"),
+      ],
+      [
+        diagnosis("Olive", "Savon noir 2 %, evening spray, repeat in 7 days", true),
+        diagnosis("Pomegranate", "Remove and burn the infected fruit", false),
+        diagnosis("Vine", "Spray wettable sulphur at dawn", false),
+        diagnosis("Peach", "Hand-pick the leaves; neem if the curl spreads", true, "disease"),
+        diagnosis("Apricot", "Savon noir at 2 % at dusk on the colonies", null),
+        diagnosis("Almond", "A savon noir spray at dusk", null, "sun_heat"),
+        diagnosis("Citrus", "Flush the basin; spray kaolin at dusk", null, "salinity"),
+      ],
+      TODAY,
+    );
+    expect(tags).toEqual(["Loquat", "Lemon", "Walnut", "Olive", "Peach", "Apricot"]);
+    expect(sprayCallers([], [], TODAY)).toEqual([]);
+  });
+
+  it("marks today's windows passed, now or ahead against the hour", () => {
+    const windows = [
+      { from: "06:00", to: "10:00" },
+      { from: "13:00", to: "15:00" },
+      { from: "16:00", to: "19:00" },
+    ];
+    expect(markWindows(windows, 14).map((w) => w.state)).toEqual(["passed", "now", "ahead"]);
+    expect(markWindows(windows, 10).map((w) => w.state)).toEqual(["passed", "ahead", "ahead"]);
+    expect(markWindows(windows, 5).map((w) => w.state)).toEqual(["ahead", "ahead", "ahead"]);
+    expect(markWindows(windows, 20).map((w) => w.state)).toEqual(["passed", "passed", "passed"]);
   });
 });

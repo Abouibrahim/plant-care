@@ -5,6 +5,7 @@ Rules
 - Consider the site first: salinity from well water, heat and sun stress in June to September, over- or under-watering during establishment, ant-aphid colonies, and the pests listed in the profile.
 - checks_to_do: two to four quick checks the grower can do on site to confirm (turn a leaf, scrape bark, check soil moisture at 10 cm, look for ants on the trunk).
 - organic_treatment: the treatment to apply now, with product, dose or dilution, timing and what to avoid. Organic inputs only; protect beneficial insects.
+- spray: true when organic_treatment asks the grower to spray the plant in the next two weeks (savon noir, an oil, neem, copper, sulphur, kaolin, Bt or any other spray), now or if the checks find the pest; false when it names no spray, only mentions one to rule it out, or says not to spray. The app shows the coming spray windows when it is true.
 - prevention: what to change so it does not return.
 - urgency: today when the plant may be lost or the pest spreads fast; this_week for most pest and disease cases; watch for cosmetic or weather-related damage.
 - rephotograph_in_days: when to take the next photo to judge the treatment.

@@ -18,10 +18,11 @@
     },
     "checks_to_do": { "type": "array", "items": { "type": "string" } },
     "organic_treatment": { "type": "string" },
+    "spray": { "type": "boolean" },
     "prevention": { "type": "string" },
     "urgency": { "type": "string", "enum": ["watch", "this_week", "today"] },
     "rephotograph_in_days": { "type": "integer" }
   },
-  "required": ["summary", "likely_causes", "checks_to_do", "organic_treatment", "prevention", "urgency", "rephotograph_in_days"],
+  "required": ["summary", "likely_causes", "checks_to_do", "organic_treatment", "spray", "prevention", "urgency", "rephotograph_in_days"],
   "additionalProperties": false
 }

@@ -39,6 +39,7 @@ export function problemResult(ai: unknown): ProblemAiResult | null {
     })),
     checks_to_do: Array.isArray(r.checks_to_do) ? r.checks_to_do.filter((c): c is string => typeof c === "string") : [],
     organic_treatment: typeof r.organic_treatment === "string" ? r.organic_treatment : "",
+    ...(typeof r.spray === "boolean" ? { spray: r.spray } : {}),
     prevention: typeof r.prevention === "string" ? r.prevention : "",
     urgency: URGENCIES.has(r.urgency ?? "") ? (r.urgency as Urgency) : "watch",
     rephotograph_in_days: num(r.rephotograph_in_days),

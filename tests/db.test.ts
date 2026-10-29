@@ -1,4 +1,4 @@
-// The app's task writes (src/lib/db.ts) against the in-memory tables, with the browser client mocked.
+// The app's task writes and reads (src/lib/db.ts) against the in-memory tables, with the browser client mocked.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runExpansion } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
@@ -12,7 +12,7 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks } = await import("../src/lib/db");
+const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments } = await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -170,5 +170,26 @@ describe("deletePlant", () => {
     expect(sharedState.photos).toHaveLength(0);
     expect([...sharedState.objects]).toEqual(["p2/1.jpg"]);
     expect(sharedState.species).toHaveLength(1);
+  });
+});
+
+describe("listRecentTreatments", () => {
+  it("reads each plant's latest recent diagnosis, with Claude's spray answer when it has one and the leading cause", async () => {
+    sharedState.plants.push({ id: "p1", species_id: "s1", tag: "OL-01", site: "farm", planted_on: null });
+    sharedState.plants.push({ id: "p2", species_id: "s1", tag: "FIG-01", site: "farm", planted_on: null });
+    sharedState.plants.push({ id: "p3", species_id: "s1", tag: "LEM-01", site: "backyard", planted_on: null });
+    const cause = (kind: string, likelihood: number) => ({ cause: kind, kind, likelihood, evidence: "" });
+    const diagnosis = (id: string, plant_id: string, taken_at: string, ai_result: unknown) =>
+      sharedState.photos.push({ id, plant_id, storage_path: `${plant_id}/${id}.jpg`, kind: "problem", taken_at, ai_result, note: "" });
+    diagnosis("old", "p1", "2026-10-20T08:00:00Z", { summary: "Aphids", likely_causes: [cause("pest", 0.8)], organic_treatment: "Savon noir 2 % at dusk", spray: true });
+    diagnosis("new", "p1", "2026-10-27T08:00:00Z", { summary: "Drought", likely_causes: [cause("pest", 0.2), cause("water", 0.7)], organic_treatment: "No spray is needed: water 20 L at dawn", spray: false });
+    diagnosis("pre", "p2", "2026-10-25T08:00:00Z", { summary: "Scale", likely_causes: [cause("pest", 0.6)], organic_treatment: "White oil at 2 % in the cool of the evening" });
+    diagnosis("stale", "p3", "2026-10-01T08:00:00Z", { summary: "Old", likely_causes: [cause("pest", 0.9)], organic_treatment: "Neem", spray: true });
+    sharedState.photos.push({ id: "journal", plant_id: "p3", storage_path: "p3/j.jpg", kind: "journal", taken_at: "2026-10-28T08:00:00Z", ai_result: null, note: "" });
+
+    expect(await listRecentTreatments("2026-10-15T00:00:00Z")).toEqual([
+      { tag: "OL-01", text: "No spray is needed: water 20 L at dawn", spray: false, kind: "water" },
+      { tag: "FIG-01", text: "White oil at 2 % in the cool of the evening", spray: null, kind: "pest" },
+    ]);
   });
 });

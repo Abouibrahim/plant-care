@@ -217,6 +217,15 @@ export function TodayScreen() {
     };
   }, [loadedToday, loadedAt]);
 
+  // While the screen stays open, the hour is read again on the hour, so the greeting and the weather
+  // card's "(passed)" and "(now)" marks follow the clock; each new hour arms the next read.
+  useEffect(() => {
+    const next = new Date();
+    next.setHours(next.getHours() + 1, 0, 1, 0);
+    const timer = window.setTimeout(() => setHour(new Date().getHours()), Math.max(1000, next.getTime() - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [hour]);
+
   useEffect(() => {
     if (!toast) return;
     const timer = window.setTimeout(() => setToast(null), TOAST_MS);
@@ -370,7 +379,7 @@ export function TodayScreen() {
       </header>
 
       {loaded && <RoundCard done={doneToday} total={doneToday + dueToday} streak={streak} today={today} />}
-      {loaded && <WeatherCard today={today} hour={hour} reloadKey={attempt} />}
+      {loaded && <WeatherCard today={today} hour={hour} tasks={loaded.tasks} reloadKey={attempt} />}
 
       {error && (
         <Banner kind="error">

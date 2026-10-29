@@ -1,7 +1,8 @@
 // Typed access to the four tables, the journal view and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
-import { weatherSettings } from "./weather";
+import { problemResult, topCause } from "./diagnosis";
+import { weatherSettings, type SprayTreatment } from "./weather";
 import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
@@ -624,6 +625,29 @@ export async function listWeather(from: string, to: string): Promise<WeatherDay[
   const r = await supabase.from("weather_days").select("*").gte("day", from).lte("day", to).order("day", { ascending: true });
   if (r.error) throw missingTable(r.error, "weather_days") ? new WeatherUnavailable(r.error.message) : new Error(r.error.message);
   return (r.data ?? []) as WeatherDay[];
+}
+
+/**
+ * Each plant's latest diagnosis made since `sinceIso` (an ISO timestamp), with the plant's tag: the
+ * weather card's spray line shows when one of them asks for a spray. An older diagnosis of the same
+ * plant is left out, since the latest one says where it stands now.
+ */
+export async function listRecentTreatments(sinceIso: string): Promise<SprayTreatment[]> {
+  const r = await supabase
+    .from("photos")
+    .select("plant_id, ai_result, plant:plants(tag)")
+    .eq("kind", "problem")
+    .gte("taken_at", sinceIso)
+    .order("taken_at", { ascending: false });
+  const rows = must(r) as unknown as Array<{ plant_id: string; ai_result: unknown; plant: { tag: string } | null }>;
+  const seen = new Set<string>();
+  return rows.flatMap((row) => {
+    if (seen.has(row.plant_id)) return [];
+    seen.add(row.plant_id);
+    const result = problemResult(row.ai_result);
+    if (!result || !row.plant) return [];
+    return [{ tag: row.plant.tag, text: result.organic_treatment, spray: result.spray ?? null, kind: topCause(result)?.kind ?? null }];
+  });
 }
 
 export const WEATHER_KEY = "weather";

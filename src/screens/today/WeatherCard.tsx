@@ -1,20 +1,34 @@
 // Today's weather card (Phase 8): today and the next three days at the sites, the rain of the last
-// two days, the alerts with what to do, the spray windows still ahead, and what the 06:00 rain skip
-// closed. Read from weather_days whenever Today reloads; when today's forecast is missing or more
-// than six hours old it asks /api/weather, at most once every half hour, and reads again. Hidden
-// until the table exists.
+// two days, the alerts with what to do, the spray windows when a task or a recent treatment calls
+// for spraying (today's marked passed, now or ahead), and what the 06:00 rain skip closed. Read
+// from weather_days whenever Today reloads; when today's forecast is missing or more than six hours
+// old it asks /api/weather, at most once every half hour, and reads again. Hidden until the table
+// exists.
 import { useEffect, useState } from "react";
 import { CloudRain, CloudSun, Droplets, Snowflake, SprayCan, Sun, ThermometerSun, Wind, type LucideIcon } from "lucide-react";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { api } from "../../lib/api";
 import { addDays, toLocalDate } from "../../lib/dates";
-import { listWeather, WeatherUnavailable } from "../../lib/db";
-import { isFresh, rainBefore, RAIN_DAYS, upcomingAlerts, type AlertKind } from "../../lib/weather";
+import { listRecentTreatments, listWeather, WeatherUnavailable } from "../../lib/db";
+import {
+  isFresh,
+  markWindows,
+  rainBefore,
+  RAIN_DAYS,
+  SPRAY_DIAGNOSIS_DAYS,
+  sprayCallers,
+  upcomingAlerts,
+  type AlertKind,
+  type SprayTask,
+  type SprayTreatment,
+} from "../../lib/weather";
 import type { WeatherDay } from "../../types";
 
 /** Days after today shown in the row of small forecasts. */
 const NEXT_DAYS = 3;
+/** Plants named on the spray line before "+N". */
+const SPRAY_NAMES = 3;
 /** A refresh is tried at most this often, so a failing Open-Meteo or a phone offline is not hammered. */
 const REFRESH_EVERY_MS = 30 * 60_000;
 let lastRefreshAt = 0;
@@ -39,15 +53,33 @@ function DayIcon({ day, size }: { day: WeatherDay | undefined; size: number }) {
 
 interface Props {
   today: string;
-  /** The hour on the phone, so today's spray windows already past drop out. */
+  /** The hour on the phone, so today's spray windows read as passed, now or ahead. */
   hour: number;
+  /** Today's pending tasks: one that asks for a spray brings up the spray line. */
+  tasks: SprayTask[];
   /** Changes whenever Today reloads (Refresh, a return after the 06:00 run, a new day): the rows are read again. */
   reloadKey: number;
 }
 
-export function WeatherCard({ today, hour, reloadKey }: Props) {
+export function WeatherCard({ today, hour, tasks, reloadKey }: Props) {
   const [days, setDays] = useState<WeatherDay[] | null>(null);
   const [updating, setUpdating] = useState(false);
+  const [treatments, setTreatments] = useState<SprayTreatment[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    const since = new Date(Date.now() - SPRAY_DIAGNOSIS_DAYS * 86_400_000).toISOString();
+    listRecentTreatments(since)
+      .then((rows) => {
+        if (active) setTreatments(rows);
+      })
+      .catch(() => {
+        // Without them the spray line follows the tasks alone.
+      });
+    return () => {
+      active = false;
+    };
+  }, [today, reloadKey]);
 
   useEffect(() => {
     let active = true;
@@ -104,10 +136,21 @@ export function WeatherCard({ today, hour, reloadKey }: Props) {
   const next = days.filter((d) => d.day > today).slice(0, NEXT_DAYS);
   const alerts = upcomingAlerts(days, today, NEXT_DAYS);
   const when = (day: string) => (day === today ? t.weather.when.today : day === tomorrow ? t.weather.when.tomorrow : weekday(day));
-  const spray = [todayRow, days.find((d) => d.day === tomorrow)].filter((d): d is WeatherDay => d !== undefined);
-  // Today's windows that have already ended drop out; "HH:00" labels compare as strings.
-  const nowLabel = `${String(hour).padStart(2, "0")}:00`;
-  const ahead = (d: WeatherDay) => (d.day === today ? d.spray.filter((w) => w.to > nowLabel) : d.spray);
+  // The spray line shows only when something calls for spraying, and names the plants.
+  const callers = sprayCallers(tasks, treatments, today);
+  const spray = callers.length > 0 ? [todayRow, days.find((d) => d.day === tomorrow)].filter((d): d is WeatherDay => d !== undefined) : [];
+  const names = callers.slice(0, SPRAY_NAMES).join(", ") + (callers.length > SPRAY_NAMES ? ` ${t.weather.sprayMore(callers.length - SPRAY_NAMES)}` : "");
+  /** Today's windows with their state against the phone's hour; tomorrow's as they are. */
+  const windowsText = (d: WeatherDay): string => {
+    if (d.spray.length === 0) return t.weather.sprayNone;
+    if (d.day !== today) return d.spray.map((w) => t.weather.sprayWindow(w.from, w.to)).join(", ");
+    return markWindows(d.spray, hour)
+      .map((w) => {
+        const span = t.weather.sprayWindow(w.from, w.to);
+        return w.state === "passed" ? t.weather.sprayPassed(span) : w.state === "now" ? t.weather.sprayNow(span) : span;
+      })
+      .join(", ");
+  };
 
   return (
     <section className="card weather-card" aria-label={t.weather.title}>
@@ -169,10 +212,9 @@ export function WeatherCard({ today, hour, reloadKey }: Props) {
             <SprayCan size={16} aria-hidden />
             <strong>{t.weather.sprayTitle}</strong>
           </div>
+          <div className="muted">{t.weather.sprayFor(names)}</div>
           {spray.map((d) => (
-            <div key={d.day}>
-              {t.weather.sprayDay(when(d.day), ahead(d).length > 0 ? ahead(d).map((w) => t.weather.sprayWindow(w.from, w.to)).join(", ") : t.weather.sprayNone)}
-            </div>
+            <div key={d.day}>{t.weather.sprayDay(when(d.day), windowsText(d))}</div>
           ))}
         </div>
       )}

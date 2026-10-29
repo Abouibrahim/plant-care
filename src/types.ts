@@ -91,6 +91,8 @@ export interface Diagnosis {
   likely_causes: LikelyCause[];
   checks_to_do: string[];
   organic_treatment: string;
+  /** Whether organic_treatment asks for a spray in the next two weeks; absent on diagnoses saved before 0.8.1. */
+  spray?: boolean;
   prevention: string;
   urgency: Urgency;
   rephotograph_in_days: number;
