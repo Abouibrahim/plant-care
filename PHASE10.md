@@ -75,9 +75,9 @@ Reference: item 1.2 of the review. Since Phase 1 every table policy read `to aut
 - [x] `owners`, `owners_read` and `is_owner()` in `supabase/schema.sql`; the nine `owner_all` policies and the bucket policy read it.
 - [x] `isOwner()` in `src/lib/db.ts`; the banner in `src/components/Layout.tsx`; strings in `en.ts` and `fr.ts`; `tests/owner.test.ts`.
 - [x] README step 1 and step 12, CLAUDE.md, `docs/DECISIONS.md`.
-- [ ] Thumbnails at upload, batched signing and the photo cache on the phone (review 3.1 to 3.3): on its own branch.
-- [ ] Done-all, the note on Done and the manual care log (review 4.3, 6.1, 6.2): on its own branch.
-- [ ] Version 0.10.0 and the Settings phase card, with the release.
+- [x] Thumbnails at upload, batched signing and the photo cache on the phone (review 3.1 to 3.3): merged from `claude/frosty-curran-62d5e8`; its choices are in `docs/DECISIONS.md`. Not tested against the real bucket: a phone test.
+- [x] Done-all, the note on Done and the manual care log (review 4.3, 6.1, 6.2): merged from `claude/nifty-spence-0aeb95`; checked at phone width in both languages against the in-memory tables.
+- [x] Version 0.10.0 and the Settings phase card.
 
 ## Acceptance tests (phone, installed app on 0.10.0)
 

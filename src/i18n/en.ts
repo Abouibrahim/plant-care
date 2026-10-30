@@ -671,9 +671,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 9",
+    phaseTitle: "Phase 10",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, and now the plant map and QR tags for the trees.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, and now the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, and a log of care done by hand.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon, and a weather notification when an alert or a rain skip applies.",

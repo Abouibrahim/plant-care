@@ -661,9 +661,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 9",
+    phaseTitle: "Phase 10",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, et maintenant la carte des plantes et les étiquettes QR des arbres.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, et maintenant les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, et le journal des soins faits à la main.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt, et une notification météo quand une alerte ou un arrosage passé après la pluie le justifie.",
