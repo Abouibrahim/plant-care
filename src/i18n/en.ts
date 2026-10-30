@@ -3,7 +3,13 @@
 // `Strings` type below must accept the French text, so every literal widens to `string`.
 
 export const en = {
-  app: { name: "Plant Care", updateReady: "A new version is ready.", reload: "Reload" },
+  app: {
+    name: "Plant Care",
+    updateReady: "A new version is ready.",
+    reload: "Reload",
+    notOwner:
+      "This account is not listed as the owner, so the tables are closed to it. Sign in with the owner's account, or add this one to the owners table with the SQL in PHASE10.md.",
+  },
 
   nav: {
     today: "Today",

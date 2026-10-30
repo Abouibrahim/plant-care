@@ -682,6 +682,22 @@ export async function saveWeatherSettings(next: WeatherSettings): Promise<Weathe
   return clean;
 }
 
+// ---- owner --------------------------------------------------------------------
+// The owners table (Phase 10): the one account every policy accepts. The app asks it once per
+// sign-in to say when the tables are closed to this account, since empty lists would otherwise
+// read as an empty garden.
+
+/**
+ * Whether the signed-in account is listed in `owners`: true, false, or null when there is nothing
+ * to say, because the table does not exist yet (before the Phase 10 SQL, when the policies still
+ * trust any signed-in account) or the read failed. An account can read its own row only.
+ */
+export async function isOwner(): Promise<boolean | null> {
+  const r = await supabase.from("owners").select("user_id").limit(1).maybeSingle();
+  if (r.error) return null;
+  return r.data !== null;
+}
+
 // ---- export -----------------------------------------------------------------
 // The CSV exports (Settings) read whole tables. PostgREST answers at most 1,000 rows per request,
 // so the readers page through with range(); a single year of waterings passes that mark.

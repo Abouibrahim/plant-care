@@ -3,7 +3,13 @@
 import type { Strings } from "./en";
 
 export const fr: Strings = {
-  app: { name: "Plant Care", updateReady: "Une nouvelle version est prête.", reload: "Recharger" },
+  app: {
+    name: "Plant Care",
+    updateReady: "Une nouvelle version est prête.",
+    reload: "Recharger",
+    notOwner:
+      "Ce compte n'est pas inscrit comme propriétaire : les tables lui sont fermées. Connectez-vous avec le compte propriétaire, ou ajoutez celui-ci à la table owners avec le SQL de PHASE10.md.",
+  },
 
   nav: {
     today: "Aujourd'hui",

@@ -2,6 +2,16 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-30 — Phase 10: the tables pinned to the owner
+
+Item 1.2 of the review of 2026-10-30 (`docs/REVIEW-2026-10-30.md`). Since Phase 1 every policy read `to authenticated using (true)`: with the anon key in the app, the data was guarded by the "Allow new users to sign up" toggle alone, a ★ check that `PHASE6.md` still showed open. The 0.6.1 fixes closed the `/api` routes (`OWNER_USER_ID`) and left the policies as a follow-up.
+
+- **An `owners` table rather than a uuid in the schema.** The 0.6.1 entry declined a uuid checked into `schema.sql` because it would break a fresh setup; a table keeps the schema generic and the id in the database, inserted once by email after the user is created (README step 1). `is_owner()` (`language sql stable`, running with the caller's rights) is what the nine `owner_all` policies and the `photos` bucket policy call, so a change of owner is one row.
+- **An account reads its own row only.** `owners_read` (`user_id = auth.uid()`) is enough for `is_owner()` and for the app's question; another account learns nothing from the table but its own absence.
+- **`OWNER_USER_ID` stays on the functions.** They use the service role, which bypasses the policies, and a check against the table would add a database round trip before every Claude call. The variable and the row must name the same account.
+- **The app says when it is shut out.** `isOwner()` asks `owners` once per sign-in; a false answer shows a banner on every screen naming `PHASE10.md`, since empty lists would otherwise read as an empty garden. Before the ★ SQL the table does not exist (`PGRST205`), the answer is null and nothing is shown; the policies are then the old ones. A failed read is null too.
+- **The migration is wrapped like the schema's bucket policy.** Its storage statements run in a `do` block that turns `insufficient_privilege` into a notice, so an editor that may not write storage policies does not abort the rest; the same expressions are then set from Storage → Policies.
+
 ## 2026-10-30 — Phase 9: Farm map and tree tags
 
 The spec stores a GPS pin per plant (block B) but never shows it, and maps and tags are outside it. Mohamed asked for item 3 of the feature review of 2026-10-25.

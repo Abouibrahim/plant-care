@@ -155,6 +155,19 @@ create table weather_days (
   fetched_at  timestamptz not null default now()
 );
 
+-- The owner (Phase 10): the one account the policies accept. One row, inserted after the user is
+-- created (README step 1); the same id as OWNER_USER_ID on the functions. is_owner() runs with the
+-- caller's rights: an account reads its own row only (owners_read), so another account learns
+-- nothing from the table but its own absence.
+create table owners (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create or replace function is_owner() returns boolean
+  language sql stable
+  set search_path = public
+  as $$ select exists (select 1 from owners where user_id = auth.uid()) $$;
+
 -- updated_at maintenance
 create or replace function set_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
@@ -175,7 +188,9 @@ create view journal with (security_invoker = true) as
   select plant_id, asked_at as at, 'question', thread_id::text, question, id::text
     from questions;
 
--- Row level security: the single authenticated user owns everything.
+-- Row level security: the account listed in owners owns everything; any other signed-in account
+-- sees empty tables and cannot write. The functions use the service role, which bypasses this.
+alter table owners             enable row level security;
 alter table species            enable row level security;
 alter table plants             enable row level security;
 alter table photos             enable row level security;
@@ -186,26 +201,27 @@ alter table questions          enable row level security;
 alter table planting_checks    enable row level security;
 alter table weather_days       enable row level security;
 
-create policy owner_all on species            for all to authenticated using (true) with check (true);
-create policy owner_all on plants             for all to authenticated using (true) with check (true);
-create policy owner_all on photos             for all to authenticated using (true) with check (true);
-create policy owner_all on tasks              for all to authenticated using (true) with check (true);
-create policy owner_all on push_subscriptions for all to authenticated using (true) with check (true);
-create policy owner_all on settings           for all to authenticated using (true) with check (true);
-create policy owner_all on questions          for all to authenticated using (true) with check (true);
-create policy owner_all on planting_checks    for all to authenticated using (true) with check (true);
-create policy owner_all on weather_days       for all to authenticated using (true) with check (true);
+create policy owners_read on owners for select to authenticated using (user_id = auth.uid());
+create policy owner_all on species            for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on plants             for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on photos             for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on tasks              for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on push_subscriptions for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on settings           for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on questions          for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on planting_checks    for all to authenticated using (is_owner()) with check (is_owner());
+create policy owner_all on weather_days       for all to authenticated using (is_owner()) with check (is_owner());
 
--- Storage: the private bucket "photos" and the policy that lets the signed-in user upload,
--- read through signed URLs and delete in it. Both are safe to re-run, and the policy never
--- aborts the script: if the editor may not write storage policies, a notice says to add the
--- same policy from Storage -> Policies (bucket_id = 'photos', all operations).
+-- Storage: the private bucket "photos" and the policy that lets the owner upload, read through
+-- signed URLs and delete in it. Both are safe to re-run, and the policy never aborts the script:
+-- if the editor may not write storage policies, a notice says to add the same policy from
+-- Storage -> Policies (bucket_id = 'photos' and is_owner(), all operations).
 insert into storage.buckets (id, name, public) values ('photos', 'photos', false)
   on conflict (id) do nothing;
 do $$ begin
   create policy "owner photos" on storage.objects for all to authenticated
-    using (bucket_id = 'photos') with check (bucket_id = 'photos');
+    using (bucket_id = 'photos' and is_owner()) with check (bucket_id = 'photos' and is_owner());
 exception
   when duplicate_object then null;
-  when insufficient_privilege then raise notice 'Add the "owner photos" policy from Storage -> Policies';
+  when insufficient_privilege then raise notice 'Add the "owner photos" policy from Storage -> Policies: bucket_id = ''photos'' and is_owner()';
 end $$;

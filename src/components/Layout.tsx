@@ -4,7 +4,7 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 import { BookOpen, Camera, Settings, Sprout, Sun, type LucideIcon } from "lucide-react";
 import { t } from "../i18n";
 import { localIsoDate } from "../lib/dates";
-import { countDueTasks, TASKS_CHANGED } from "../lib/db";
+import { countDueTasks, isOwner, TASKS_CHANGED } from "../lib/db";
 
 interface Tab {
   to: string;
@@ -35,6 +35,33 @@ function UpdateBanner() {
       <button type="button" className="primary small" onClick={() => void updateServiceWorker(true)}>
         {t.app.reload}
       </button>
+    </div>
+  );
+}
+
+/**
+ * Shown when the owners table exists and this account has no row in it: the policies close every
+ * table to it (PHASE10.md). Asked once per sign-in; silent before the table exists or on a failed read.
+ */
+function OwnerBanner() {
+  const [shutOut, setShutOut] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    isOwner()
+      .then((owner) => {
+        if (active) setShutOut(owner === false);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (!shutOut) return null;
+  return (
+    <div className="banner warn update-banner" role="alert">
+      {t.app.notOwner}
     </div>
   );
 }
@@ -101,6 +128,7 @@ export function Layout() {
   return (
     <>
       <UpdateBanner />
+      <OwnerBanner />
       <Outlet />
       <nav className="nav">
         {LEFT_TABS.map(tabLink)}
