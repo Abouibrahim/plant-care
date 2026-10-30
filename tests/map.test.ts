@@ -7,6 +7,7 @@ import {
   formatTagCode,
   hasPosition,
   neighboursOf,
+  parseCaption,
   parseTagCode,
   pinStates,
   roundPosition,
@@ -16,6 +17,8 @@ import {
   tagIdRange,
   tagUrl,
   tileSources,
+  TOMTOM_CAPTION,
+  tomtomAttribution,
   TOWN_ZOOM,
   TREE_ZOOM,
 } from "../src/lib/map";
@@ -120,18 +123,53 @@ describe("tree tags", () => {
 
 describe("tile sources", () => {
   it("offers the street map alone without a key, and never the keyless Esri address", () => {
-    const sources = tileSources(undefined);
+    const sources = tileSources({});
     expect(sources.satellite).toBeNull();
     expect(sources.street.url).toContain("tile.openstreetmap.org");
-    expect(tileSources("   ").satellite).toBeNull();
+    expect(tileSources({ tomtom: "   ", arcgis: "" }).satellite).toBeNull();
   });
 
-  it("puts the key in the satellite address, with Esri's credit, and caps the imagery at zoom 18", () => {
-    const satellite = tileSources("abc+/=").satellite;
-    expect(satellite?.url).toContain("ibasemaps-api.arcgis.com");
-    expect(satellite?.url).toContain("token=abc%2B%2F%3D");
-    expect(satellite?.attribution).toContain("Powered by");
-    expect(satellite?.maxNativeZoom).toBe(18);
+  it("uses TomTom's satellite tiles with its key, to zoom 19, as cross-origin images", () => {
+    const satellite = tileSources({ tomtom: " abc+/= " }).satellite;
+    expect(satellite?.url).toBe("https://api.tomtom.com/maps/orbis/display/satellite/tile/{z}/{x}/{y}?apiVersion=2&key=abc%2B%2F%3D");
+    expect(satellite?.captionUrl).toBe("https://api.tomtom.com/maps/orbis/copyrights/caption?apiVersion=2&key=abc%2B%2F%3D");
+    expect(satellite?.maxNativeZoom).toBe(19);
+    // TomTom's domain lock reads the Origin header, which the browser sends only for cross-origin images.
+    expect(satellite?.crossOrigin).toBe(true);
+  });
+
+  it("credits TomTom, Vantor and EOX as TomTom's attributions ask", () => {
+    const attribution = tileSources({ tomtom: "k" }).satellite?.attribution ?? "";
+    expect(attribution).toContain(">©TomTom</a>");
+    expect(attribution).toContain("Satellite Imagery ©2025 Vantor.");
+    expect(attribution).toContain("by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)");
+  });
+
+  it("prefers TomTom when both keys are set, and keeps Esri for an ArcGIS key alone", () => {
+    expect(tileSources({ tomtom: "t", arcgis: "a" }).satellite?.url).toContain("api.tomtom.com");
+    const esri = tileSources({ arcgis: "abc+/=" }).satellite;
+    expect(esri?.url).toContain("ibasemaps-api.arcgis.com");
+    expect(esri?.url).toContain("token=abc%2B%2F%3D");
+    expect(esri?.attribution).toContain("Powered by");
+    expect(esri?.maxNativeZoom).toBe(18);
+    expect(esri?.crossOrigin).toBeUndefined();
+    expect(esri?.captionUrl).toBeUndefined();
+  });
+
+  it("reads TomTom's caption, and refuses anything else", () => {
+    expect(parseCaption({ formatVersion: "0.0.1", copyrightsCaption: "©TomTom, ©OpenStreetMap" })).toBe("©TomTom, ©OpenStreetMap");
+    expect(parseCaption({ copyrightsCaption: "  " })).toBeNull();
+    expect(parseCaption({ copyrightsCaption: 42 })).toBeNull();
+    expect(parseCaption({ copyrightsCaption: "x".repeat(201) })).toBeNull();
+    expect(parseCaption({ detailedError: { code: "Unauthorized" } })).toBeNull();
+    expect(parseCaption(null)).toBeNull();
+    expect(parseCaption("©TomTom")).toBeNull();
+  });
+
+  it("puts the caption first, escaped, and falls back to ©TomTom when it is blank", () => {
+    expect(tomtomAttribution("©TomTom, ©OpenStreetMap")).toContain(">©TomTom, ©OpenStreetMap</a> | Satellite Imagery");
+    expect(tomtomAttribution('<img src=x onerror="alert(1)">')).not.toContain("<img");
+    expect(tomtomAttribution(" ")).toContain(`>${TOMTOM_CAPTION}</a>`);
   });
 });
 

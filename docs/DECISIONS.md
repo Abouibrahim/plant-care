@@ -2,6 +2,29 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-30 — 0.9.1: satellite tiles from TomTom
+
+Mohamed could not activate the ArcGIS Location Platform account that Phase 9's satellite layer needs. The providers were compared on their sign-up, terms and imagery over the orchards around Menzel Bouzelfa.
+
+- **TomTom's Map Display API satellite tiles.**
+  - No card at sign-up. 200,000 raster tiles a month are free, and requests past that are refused (429), not billed.
+  - Its Vantor (ex-Maxar) imagery goes to zoom 19 and shows single trees around Menzel Bouzelfa in TomTom's own route planner. The API's tiles over the farm cannot be seen without a key; the 0.9.1 test in `PHASE9.md` checks them.
+- **Rejected:**
+  - HERE and Azure Maps: sharp, but both want a payment card at sign-up and bill use past the free tier.
+  - Mapbox: without a card, a trial whose token cannot be restricted.
+  - MapTiler: no card, but blurry here.
+  - Mapy.com: sharp on its own site, but its API serves aerial imagery outside Europe only to zoom 13 (about 15 m a pixel).
+  - Bing Maps: free keys ended on 2025-06-30.
+  - The keyless Esri and Bing addresses: not licensed for this use.
+  - Open imagery: nothing finer than 10 m for Cap Bon.
+- **The terms, as read on 2026-10-30.**
+  - The free licence is for "Evaluation Use only" (internal evaluation and testing) and can be revoked without notice, though TomTom's pricing page sells the free tier as having no time limit. The agreement also ends after 90 days without use. A one-user garden app fits the spirit, not plainly the letter. If TomTom ends it, the map falls back to the street map and says so.
+  - Clause 17.3 asks for the credit to come from TomTom's Copyright API. The app reads the caption (`/maps/orbis/copyrights/caption`) once per visit and shows "©TomTom" until it answers. The Product Attributions (2026.09) add "Satellite Imagery ©2025 Vantor." and the EOX Sentinel-2 cloudless line, which are written into `src/lib/map.ts`; their year follows TomTom's document.
+  - Caching only in the client and within the tiles' cache headers (11.4): the service worker still has no tile rule.
+  - Clause 11.6.1 bars a "secondary or derived database" built from the content. The saved positions are Mohamed's own trees placed by eye with the imagery as a backdrop, not data taken from it; noted as a grey area.
+- **The key, locked to the app's address.** TomTom's domain whitelist works through CORS, so the tiles are requested as cross-origin images (`crossOrigin`) and carry the app's origin; TomTom answers with `Access-Control-Allow-Origin`. A leaked key can at most use up the month's free tiles.
+- **Esri stays.** `VITE_ARCGIS_API_KEY` still selects Esri World Imagery when it is the only key; TomTom wins when both are set.
+
 ## 2026-10-30 — Phase 10: the tables pinned to the owner
 
 Item 1.2 of the review of 2026-10-30 (`docs/REVIEW-2026-10-30.md`). Since Phase 1 every policy read `to authenticated using (true)`: with the anon key in the app, the data was guarded by the "Allow new users to sign up" toggle alone, a ★ check that `PHASE6.md` still showed open. The 0.6.1 fixes closed the `/api` routes (`OWNER_USER_ID`) and left the policies as a follow-up.

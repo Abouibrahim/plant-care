@@ -4,11 +4,14 @@
 // they are built as DOM nodes so a tag is never read as HTML.
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { MAP_MAX_ZOOM, tileSources, type LatLng, type MapLayer, type PinState } from "../../lib/map";
+import { MAP_MAX_ZOOM, parseCaption, tileSources, tomtomAttribution, type LatLng, type MapLayer, type PinState } from "../../lib/map";
 
 export { L };
 
-const SOURCES = tileSources(import.meta.env.VITE_ARCGIS_API_KEY as string | undefined);
+const SOURCES = tileSources({
+  tomtom: import.meta.env.VITE_TOMTOM_API_KEY as string | undefined,
+  arcgis: import.meta.env.VITE_ARCGIS_API_KEY as string | undefined,
+});
 
 /** Whether a map key is set: without it the maps show the street map alone. */
 export const HAS_SATELLITE = SOURCES.satellite !== null;
@@ -59,17 +62,51 @@ export function removeMap(map: L.Map): void {
   }
 }
 
-/** Satellite tiles failing this many times before any loads: a wrong or expired key, or no connection. */
+/** Satellite tiles failing this many times before any loads: a wrong key, used-up tiles, or no connection. */
 const SATELLITE_FAILURES = 6;
 
+let captionRead: Promise<string | null> | null = null;
+
+/** TomTom's copyright caption, read once per visit; a failed read is tried again by the next map. */
+function readCaption(url: string): Promise<string | null> {
+  captionRead ??= fetch(url)
+    .then((res) => (res.ok ? (res.json() as Promise<unknown>) : null))
+    .then(parseCaption)
+    .catch(() => null)
+    .then((caption) => {
+      if (caption === null) captionRead = null;
+      return caption;
+    });
+  return captionRead;
+}
+
 /**
- * The tiles of a layer. On the satellite layer, `onSatelliteFailed` is called once if the first
- * tiles all fail, so the map can fall back to the street map instead of staying blank.
+ * Adds a layer's tiles to the map. On the satellite layer, `onSatelliteFailed` is called once if the
+ * first tiles all fail, so the map can fall back to the street map instead of staying blank.
  */
-export function tileLayer(layer: MapLayer, onSatelliteFailed?: () => void): L.TileLayer {
+export function addTiles(map: L.Map, layer: MapLayer, onSatelliteFailed?: () => void): L.TileLayer {
   const satellite = layer === "satellite" && SOURCES.satellite !== null;
   const source = satellite && SOURCES.satellite ? SOURCES.satellite : SOURCES.street;
-  const tiles = L.tileLayer(source.url, { attribution: source.attribution, maxNativeZoom: source.maxNativeZoom, maxZoom: MAP_MAX_ZOOM });
+  const tiles = L.tileLayer(source.url, {
+    attribution: source.attribution,
+    maxNativeZoom: source.maxNativeZoom,
+    maxZoom: MAP_MAX_ZOOM,
+    crossOrigin: source.crossOrigin ?? false,
+  });
+  if (source.captionUrl) {
+    // TomTom's terms ask for its credit to come from its Copyright API; "©TomTom" stands in until it answers.
+    void readCaption(source.captionUrl).then((caption) => {
+      if (!caption) return;
+      const before = tiles.options.attribution;
+      const after = tomtomAttribution(caption);
+      if (before === after) return;
+      tiles.options.attribution = after;
+      if (map.hasLayer(tiles) && map.attributionControl) {
+        if (before) map.attributionControl.removeAttribution(before);
+        map.attributionControl.addAttribution(after);
+      }
+    });
+  }
   if (satellite && onSatelliteFailed) {
     let loaded = 0;
     let failed = 0;
@@ -81,7 +118,7 @@ export function tileLayer(layer: MapLayer, onSatelliteFailed?: () => void): L.Ti
       if (loaded === 0 && failed === SATELLITE_FAILURES) onSatelliteFailed();
     });
   }
-  return tiles;
+  return tiles.addTo(map);
 }
 
 function span(className: string, text?: string): HTMLSpanElement {

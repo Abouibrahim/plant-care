@@ -469,7 +469,7 @@ export const en = {
     nonePlacedFiltered: "None of these plants has a position yet.",
     tasksLoading: "Reading what is due…",
     tasksFailed: "What is due could not be read: the pins show no colours.",
-    satelliteFailed: "The satellite view did not load (no connection, or the map key is wrong or expired): street map shown.",
+    satelliteFailed: "The satellite view did not load (no connection, a wrong map key, or this month's free tiles used up): street map shown.",
     legendTitle: "Pin colours",
     legend: { overdue: "Late", today: "Due today", open: "Window open", none: "Nothing due" },
     more: (n: number) => `+${n} more`,
@@ -477,7 +477,7 @@ export const en = {
     accuracy: (m: number) => `You are here, ±${m} m`,
     missing: (n: number) => (n === 1 ? "1 plant has no position yet" : `${n} plants have no position yet`),
     showMissing: "Show them",
-    streetOnly: "Street map only: the satellite view needs an ArcGIS key (VITE_ARCGIS_API_KEY) in Vercel.",
+    streetOnly: "Street map only: the satellite view needs a TomTom key (VITE_TOMTOM_API_KEY) in Vercel.",
   },
 
   /** Placing a plant on the map (Phase 9). */

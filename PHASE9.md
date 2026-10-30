@@ -11,8 +11,10 @@ Reference: item 3 of the feature review of 2026-10-25 (TreeSmith pins trees by G
 - **Tapping a pin** opens a card at the foot of the map with the plant's photo, tag, species and what is due, and an Open button.
 - **"Where am I"** on the map shows the phone's own position among the trees.
 - **Plants without a position** are counted under the map; a tap lists them.
-- **Satellite or street.** Satellite imagery (Esri World Imagery, 0.34 m around Menzel Bouzelfa, June 2025: single trees visible) when a map key is set, otherwise the OpenStreetMap street map. A switch on the map changes the layer, and the phone remembers the choice. The key is a free ArcGIS Location Platform key, a ★ step; until it is set, the street map works on its own.
-- **Tiles are not stored for offline use.** Both providers' terms forbid it. If the connection drops after the plants have loaded, the pins stay on a blank background; opened with no connection at all, the Plants screen has no plants to show.
+- **Satellite or street.** Satellite imagery when a map key is set, otherwise the OpenStreetMap street map. A switch on the map changes the layer, and the phone remembers the choice. The key is a ★ step; until it is set, the street map works on its own.
+  - Since 0.9.1, TomTom: Vantor imagery to zoom 19, single trees visible around Menzel Bouzelfa, free TomTom key.
+  - With an ArcGIS key alone: Esri World Imagery (0.34 m, June 2025).
+- **Tiles are not stored for offline use.** The providers' terms forbid it. If the connection drops after the plants have loaded, the pins stay on a blank background; opened with no connection at all, the Plants screen has no plants to show.
 - **Setting a position.** A full-screen map with a fixed crosshair: pan the map until the crosshair sits on the tree, then Save. "Use my location" listens to the phone's GPS for up to 20 seconds, keeps the most precise reading (stopping early at 5 m), and moves the map there with its accuracy circle. Under trees a phone is often 5 to 15 m off, so the satellite view is the real correction. The other plants of the site show as small dots to place against.
 - **Where to set it from:**
   - the plant's page ("Position");
@@ -30,14 +32,16 @@ Reference: item 3 of the feature review of 2026-10-25 (TreeSmith pins trees by G
 
 ## Setup (Mohamed does the parts marked ★, in this order)
 
-- [ ] ★ After the deploy, tap "Reload" on the update banner (or close and reopen the installed app) so the phone runs the 0.9.0 shell.
-- [ ] ★ Optional, for the satellite view:
-  1. Sign up for a free ArcGIS Location Platform account at https://location.arcgis.com. Leave pay-as-you-go off: use beyond the free 2 million tiles a month is then blocked, never billed.
-  2. Create an API key with the privilege Location services → Basemaps (static basemap tiles). Set its referrers to `https://plant-care-phi-fawn.vercel.app` and `http://localhost:5173`, and its expiry to one year.
-  3. In Vercel → plant-care → Settings → Environment Variables, add `VITE_ARCGIS_API_KEY` for Production (preview addresses are not in the key's referrers). Redeploy (the key is built into the app). Add it to `.env.local` too for local work.
-  4. Note the expiry date: a new key is needed each year.
+- [ ] ★ After the deploy, tap "Reload" on the update banner (or close and reopen the installed app) so the phone runs the 0.9.1 shell.
+- [ ] ★ Optional, for the satellite view (since 0.9.1, a TomTom key):
+  1. Sign up at https://my.tomtom.com. It is free and asks for no card. Do not add prepaid credit: without it, use beyond the free 200,000 tiles a month is blocked, never billed.
+  2. In MyTomTom → API keys, open the starter key (or create one). Give it the Map Display API, and set its allowed domains to `plant-care-phi-fawn.vercel.app` and `localhost`.
+  3. In Vercel → plant-care → Settings → Environment Variables, add `VITE_TOMTOM_API_KEY` for Production. Redeploy (the key is built into the app). Add it to `.env.local` too for local work.
+  4. Nothing to renew: the key does not expire. TomTom ends the free agreement after 90 days without use, which using the map prevents.
 
-  The key travels inside the app's code, which is how map tile keys work. The referrer lock is what keeps others from using it.
+  The key travels inside the app's code, which is how map tile keys work. The domain lock keeps other sites from using it; at worst a leaked key uses up the month's free tiles. If the map falls back to the street map ("The satellite view did not load") right after you set the domains, write them as `https://plant-care-phi-fawn.vercel.app` instead, or clear the list.
+
+  An ArcGIS Location Platform key still works instead (`VITE_ARCGIS_API_KEY`, Basemaps privilege, referrers set to the app's address): it is used when the TomTom key is blank.
 - [x] Nothing else: no SQL.
 
 ## Build
@@ -47,8 +51,9 @@ Reference: item 3 of the feature review of 2026-10-25 (TreeSmith pins trees by G
 - [x] The position sheet, from the plant's page and the record form; "Show on map" from the plant's page.
 - [x] The tags page and its print layout; the `/t/:code` route; "Print tags" and "Tag" entries.
 - [x] Strings in `en.ts` and `fr.ts`; Settings phase card; version 0.9.0; README, CLAUDE.md, `.env.example` and `docs/DECISIONS.md`.
+- [x] 0.9.1: satellite tiles from TomTom, with Esri kept for an ArcGIS key alone.
 
-## Acceptance tests (run on the phone, installed app on 0.9.0)
+## Acceptance tests (run on the phone, installed app on 0.9.1)
 
 1. Plants → Map: the plants with a position show as pins over the street map (or satellite after the ★ key). The farm and backyard chips frame each site. A late watering shows a red pin, a plant with nothing due a plain one. Under the map: "N plants have no position yet".
 2. Tap a pin: a card shows the plant, its photo and what is due; Open goes to its page. Back returns to the map.
@@ -59,12 +64,17 @@ Reference: item 3 of the feature review of 2026-10-25 (TreeSmith pins trees by G
 7. Plants → farm chip → Print tags: the sheet shows one tag per plant; tap one to leave it out; Print → Save as PDF. On the PDF, the 50 mm bar measures 50 mm at actual size. Print one tag, laminate it, and point the phone's camera (or Google Lens) at it: the plant's page opens (in the installed app, a Chrome tab or Lens' own browser; signed in in each).
 8. Open `/t/aaaaaaaa` by hand: "No plant has this tag". `/t/zzzzzzzz`: "This is not a plant tag".
 9. Settings → Français: the map, the position sheet and the tags are in French.
+10. After the ★ TomTom key: Plants → Map opens on satellite imagery.
+    - Zoomed in over the farm as far as it goes, single trees show.
+    - The corner reads "©TomTom, ©OpenStreetMap | Satellite Imagery ©2025 Vantor. | Sentinel-2 cloudless …" ("©TomTom" alone for a moment while it loads).
+    - The layers button switches to the street map and back.
+    - The position sheet shows the same imagery.
 
 ## Usage check
 
 No Claude call. Map tiles:
 - Street map: OpenStreetMap allows light use like this one; a map visit is a few dozen tiles.
-- Satellite: the free plan covers 2 million tiles a month; a busy day of use is under a thousand.
+- Satellite: TomTom's free tier covers 200,000 tiles a month (Esri's, 2 million); a busy day of use is under a thousand.
 
 Results (2026-10-30): typecheck, lint, `npm test` (144 tests, 14 of them for the map and tags) and build pass.
 
@@ -105,4 +115,21 @@ The screens were driven in the desktop app's browser at phone width, against an 
 
 Not checked here, so phone tests: the satellite layer (no key yet), printing from the installed app, and scanning a printed tag with the phone's camera.
 
-Tests 1 to 9 on the phone wait for Mohamed.
+### 0.9.1 (2026-10-30): satellite tiles from TomTom
+
+Mohamed could not activate the ArcGIS account, so the satellite layer now comes from TomTom's Map Display API: Vantor imagery to zoom 19, the credit read from TomTom's Copyright API, and the tiles requested as cross-origin images so the key's domain lock applies. Esri is still used when only `VITE_ARCGIS_API_KEY` is set (`docs/DECISIONS.md`, 2026-10-30). The map's credit line is now 10 px: at the app's text size, TomTom's credit took a third of a phone's map.
+
+Results (2026-10-30): typecheck, lint, `npm test` (151 tests, 18 of them for the map and tags) and build pass.
+
+A review workflow (three reviewers, each finding checked by a skeptic) found no fault in the code. It confirmed three stale lines in this file and in a comment, now fixed.
+
+Checked in the desktop app's browser at phone width, against the in-memory data, with a dummy TomTom key:
+- the tiles requested from TomTom's satellite address over the farm (zoom 15), as cross-origin images;
+- TomTom's 401 answers turning the map to the street map with its note, on the Plants map and in the position sheet;
+- the credit line reading "©TomTom, ©OpenStreetMap | Satellite Imagery ©2025 Vantor. | Sentinel-2 cloudless …" when the caption answers (simulated), "©TomTom | …" when it fails, and removed cleanly at the fallback;
+- the caption read once per visit, and read again after a failure;
+- without a key, the street map alone and the note naming `VITE_TOMTOM_API_KEY`.
+
+Not checked here, so test 10: real TomTom tiles over the farm, which need Mohamed's key.
+
+Tests 1 to 10 on the phone wait for Mohamed.

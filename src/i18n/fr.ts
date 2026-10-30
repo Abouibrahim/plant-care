@@ -466,7 +466,7 @@ export const fr: Strings = {
     nonePlacedFiltered: "Aucune de ces plantes n'a encore de position.",
     tasksLoading: "Lecture des tâches…",
     tasksFailed: "Les tâches n'ont pas pu être lues : les repères restent sans couleur.",
-    satelliteFailed: "La vue satellite ne s'est pas chargée (pas de connexion, ou clé de carte erronée ou expirée) : plan affiché.",
+    satelliteFailed: "La vue satellite ne s'est pas chargée (pas de connexion, clé de carte erronée, ou tuiles gratuites du mois épuisées) : plan affiché.",
     legendTitle: "Couleurs des repères",
     legend: { overdue: "En retard", today: "Pour aujourd'hui", open: "Période en cours", none: "Rien à faire" },
     more: (n) => (n === 1 ? "+1 autre" : `+${n} autres`),
@@ -474,7 +474,7 @@ export const fr: Strings = {
     accuracy: (m) => `Vous êtes ici, ±${m} m`,
     missing: (n) => (n === 1 ? "1 plante n'a pas encore de position" : `${n} plantes n'ont pas encore de position`),
     showMissing: "Les afficher",
-    streetOnly: "Plan seulement : la vue satellite demande une clé ArcGIS (VITE_ARCGIS_API_KEY) dans Vercel.",
+    streetOnly: "Plan seulement : la vue satellite demande une clé TomTom (VITE_TOMTOM_API_KEY) dans Vercel.",
   },
 
   position: {

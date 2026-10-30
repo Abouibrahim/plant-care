@@ -57,7 +57,7 @@ export function boundsOf(plants: Array<Pick<Plant, "lat" | "lng">>): [LatLng, La
 
 /** Zoom for a map with nothing to frame: the town, where both sites are. */
 export const TOWN_ZOOM = 15;
-/** Zoom when a map centres on one tree (the satellite imagery goes to 18; the map enlarges it). */
+/** Zoom when a map centres on one tree (TomTom's imagery goes to 19; Esri's stops at 18 and the map enlarges it). */
 export const TREE_ZOOM = 19;
 /** Zoom for the middle of a site when the plant being placed has no position yet. */
 export const SITE_ZOOM = 17;
@@ -131,29 +131,77 @@ export interface TileSource {
   attribution: string;
   /** The deepest zoom the provider has; Leaflet enlarges its tiles beyond it. */
   maxNativeZoom: number;
+  /** Load the tiles as cross-origin images, so the provider sees the app's address (TomTom's domain lock reads it). */
+  crossOrigin?: boolean;
+  /** TomTom's Copyright API: its caption replaces the default one at the head of `attribution`. */
+  captionUrl?: string;
+}
+
+/** The map keys the build carries; each is optional. */
+export interface MapKeys {
+  tomtom?: string;
+  arcgis?: string;
+}
+
+/** TomTom's caption until its Copyright API answers, or when it does not. */
+export const TOMTOM_CAPTION = "©TomTom";
+
+/** The imagery credits TomTom's Product Attributions (2026.09) ask for, after its own caption. */
+const TOMTOM_IMAGERY =
+  'Satellite Imagery ©2025 Vantor. | Sentinel-2 cloudless - <a href="https://s2maps.eu">https://s2maps.eu</a> by EOX IT Services GmbH (Contains modified Copernicus Sentinel data 2020)';
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** The satellite credit with TomTom's caption first; the caption comes from the network, so it is escaped. */
+export function tomtomAttribution(caption: string): string {
+  const text = caption.trim() || TOMTOM_CAPTION;
+  return `<a href="https://www.tomtom.com/en-gb/legal/product-attributions/">${escapeHtml(text)}</a> | ${TOMTOM_IMAGERY}`;
+}
+
+/** The caption in TomTom's Copyright API answer ({ copyrightsCaption: "©TomTom, ©OpenStreetMap" }), or null. */
+export function parseCaption(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const caption = (body as { copyrightsCaption?: unknown }).copyrightsCaption;
+  if (typeof caption !== "string") return null;
+  const text = caption.trim();
+  return text && text.length <= 200 ? text : null;
 }
 
 /**
- * Satellite: Esri World Imagery through an ArcGIS Location Platform key (0.34 m imagery around
- * Menzel Bouzelfa, real tiles to zoom 18; above it Esri sends a grey placeholder, hence the cap).
+ * Satellite, from the first key set:
+ * - TomTom (Map Display API, Vantor imagery to zoom 19; single trees show around Menzel Bouzelfa).
+ *   Its free tier blocks requests past 200,000 tiles a month instead of billing them.
+ * - Esri World Imagery through an ArcGIS Location Platform key (0.34 m imagery around Menzel
+ *   Bouzelfa, real tiles to zoom 18; above it Esri sends a grey placeholder, hence the cap).
  * Without a key there is no satellite layer: the keyless Esri address is not licensed for this use.
- * Street: OpenStreetMap's standard tiles. Neither may be stored for offline use, so the service
- * worker leaves them alone.
+ * Street: OpenStreetMap's standard tiles. None may be stored for offline use, so the service worker
+ * leaves them alone.
  */
-export function tileSources(arcgisKey: string | undefined): { street: TileSource; satellite: TileSource | null } {
-  const key = arcgisKey?.trim();
+export function tileSources(keys: MapKeys): { street: TileSource; satellite: TileSource | null } {
+  const tomtom = keys.tomtom?.trim();
+  const arcgis = keys.arcgis?.trim();
   return {
     street: {
       url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxNativeZoom: 19,
     },
-    satellite: key
+    satellite: tomtom
       ? {
-          url: `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${encodeURIComponent(key)}`,
-          attribution: 'Powered by <a href="https://www.esri.com">Esri</a> | Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',
-          maxNativeZoom: 18,
+          url: `https://api.tomtom.com/maps/orbis/display/satellite/tile/{z}/{x}/{y}?apiVersion=2&key=${encodeURIComponent(tomtom)}`,
+          attribution: tomtomAttribution(TOMTOM_CAPTION),
+          maxNativeZoom: 19,
+          crossOrigin: true,
+          captionUrl: `https://api.tomtom.com/maps/orbis/copyrights/caption?apiVersion=2&key=${encodeURIComponent(tomtom)}`,
         }
-      : null,
+      : arcgis
+        ? {
+            url: `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${encodeURIComponent(arcgis)}`,
+            attribution: 'Powered by <a href="https://www.esri.com">Esri</a> | Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community',
+            maxNativeZoom: 18,
+          }
+        : null,
   };
 }

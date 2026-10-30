@@ -11,7 +11,7 @@ import { dueState, sortByDue } from "../../lib/today";
 import { TOWN } from "../../lib/weather";
 import { PhotoImg } from "../../components/PhotoImg";
 import { TypePill } from "../../components/TypeIcon";
-import { createMap, drawMe, HAS_SATELLITE, L, pinIcon, readLayer, removeMap, tileLayer, writeLayer } from "./leaflet";
+import { addTiles, createMap, drawMe, HAS_SATELLITE, L, pinIcon, readLayer, removeMap, writeLayer } from "./leaflet";
 import type { Photo, PlantWithSpecies, TaskWithPlant } from "../../types";
 
 /** Tasks listed on a pin's card before "+N more": two keep the card short enough for the pin to show above it on a small phone. */
@@ -88,11 +88,11 @@ export default function PlantMap({ plants, photos, due, dueStatus, today, filter
     const map = mapRef.current;
     if (!map) return;
     tilesRef.current?.remove();
-    tilesRef.current = tileLayer(layer, () => {
-      // A wrong or expired key, or no connection: the street map, for this visit only.
+    tilesRef.current = addTiles(map, layer, () => {
+      // A wrong key, the month's free tiles used up, or no connection: the street map, for this visit only.
       setLayer("street");
       setLayerNote(t.map.satelliteFailed);
-    }).addTo(map);
+    });
   }, [layer]);
 
   useEffect(() => {

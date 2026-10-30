@@ -9,7 +9,7 @@ import { listPlantSpots } from "../../lib/db";
 import { neighboursOf, roundPosition, startView, TREE_ZOOM, type LatLng } from "../../lib/map";
 import { COARSE_M, LocateError, locate, type Fix } from "../../lib/location";
 import { useBackClose } from "../../lib/useBackClose";
-import { createMap, drawMe, HAS_SATELLITE, L, neighbourIcon, readLayer, removeMap, tileLayer, writeLayer } from "./leaflet";
+import { addTiles, createMap, drawMe, HAS_SATELLITE, L, neighbourIcon, readLayer, removeMap, writeLayer } from "./leaflet";
 import type { Site } from "../../types";
 
 interface Props {
@@ -92,11 +92,11 @@ export default function PositionSheet({ title, plantId, site, initial, onSave, o
     const map = mapRef.current;
     if (!map) return;
     tilesRef.current?.remove();
-    tilesRef.current = tileLayer(layer, () => {
-      // A wrong or expired key, or no connection: the street map, for this visit only.
+    tilesRef.current = addTiles(map, layer, () => {
+      // A wrong key, the month's free tiles used up, or no connection: the street map, for this visit only.
       setLayer("street");
       setLayerNote(t.map.satelliteFailed);
-    }).addTo(map);
+    });
   }, [layer]);
 
   function switchLayer() {
