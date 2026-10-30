@@ -346,6 +346,9 @@ export interface Photo {
 
 export type PhotoInsert = Omit<Photo, "id">;
 
+/** What a plant's tile needs of its newest photo (`latestPhotos`). */
+export type LatestPhoto = Pick<Photo, "plant_id" | "storage_path" | "taken_at">;
+
 export interface Task {
   id: string;
   plant_id: string;

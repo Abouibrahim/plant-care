@@ -12,7 +12,8 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments, findPlantsByTagCode, listPlantSpots } = await import("../src/lib/db");
+const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments, findPlantsByTagCode, listPlantSpots, latestPhotos, photoUrl, uploadThumbnail } =
+  await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -161,6 +162,7 @@ describe("deletePlant", () => {
     sharedState.plants.push({ id: "p2", species_id: "s1", tag: "Other", site: "farm", planted_on: null });
     sharedState.photos.push({ id: "ph1", plant_id: "p1", storage_path: "p1/1.jpg", kind: "identify" });
     sharedState.objects.add("p1/1.jpg");
+    sharedState.objects.add("p1/1.thumb.jpg");
     sharedState.objects.add("p2/1.jpg");
     await runExpansion(db, "2026-07-04");
     expect(pending().some((t) => t.plant_id === "p1")).toBe(true);
@@ -170,6 +172,61 @@ describe("deletePlant", () => {
     expect(sharedState.photos).toHaveLength(0);
     expect([...sharedState.objects]).toEqual(["p2/1.jpg"]);
     expect(sharedState.species).toHaveLength(1);
+  });
+});
+
+describe("latestPhotos", () => {
+  it("reads the three columns a tile needs, keeping each plant's newest", async () => {
+    const big = { candidates: new Array(50).fill({ name: "x" }) };
+    sharedState.photos.push({ id: "a", plant_id: "p1", storage_path: "p1/1.jpg", taken_at: "2026-01-01T00:00:00Z", kind: "identify", ai_result: big, note: "" });
+    sharedState.photos.push({ id: "b", plant_id: "p1", storage_path: "p1/2.jpg", taken_at: "2026-02-01T00:00:00Z", kind: "journal", ai_result: null, note: "" });
+    sharedState.photos.push({ id: "c", plant_id: "p2", storage_path: "p2/1.jpg", taken_at: "2026-01-15T00:00:00Z", kind: "problem", ai_result: big, note: "" });
+    const map = await latestPhotos(["p1", "p2", "p3"]);
+    expect(map.get("p1")).toEqual({ plant_id: "p1", storage_path: "p1/2.jpg", taken_at: "2026-02-01T00:00:00Z" });
+    expect(map.get("p2")).toEqual({ plant_id: "p2", storage_path: "p2/1.jpg", taken_at: "2026-01-15T00:00:00Z" });
+    expect(map.has("p3")).toBe(false);
+    expect(await latestPhotos([])).toEqual(new Map());
+  });
+});
+
+describe("photoUrl", () => {
+  it("signs the paths asked for in one tick in one request, and keeps each", async () => {
+    sharedState.objects.add("s1/1.jpg");
+    sharedState.objects.add("s1/2.jpg");
+    const urls = await Promise.all([photoUrl("s1/1.jpg"), photoUrl("s1/2.jpg"), photoUrl("s1/1.jpg")]);
+    expect(sharedState.signed).toEqual([["s1/1.jpg", "s1/2.jpg"]]);
+    expect(urls).toEqual(["https://signed.test/s1/1.jpg?ttl=3600", "https://signed.test/s1/2.jpg?ttl=3600", "https://signed.test/s1/1.jpg?ttl=3600"]);
+    // Kept: no second request for a path already signed.
+    expect(await photoUrl("s1/2.jpg")).toBe(urls[1]);
+    expect(sharedState.signed).toHaveLength(1);
+    // A later tick is its own request, for the new path only.
+    sharedState.objects.add("s1/3.jpg");
+    await Promise.all([photoUrl("s1/1.jpg"), photoUrl("s1/3.jpg")]);
+    expect(sharedState.signed).toEqual([
+      ["s1/1.jpg", "s1/2.jpg"],
+      ["s1/3.jpg"],
+    ]);
+  });
+
+  it("rejects a path the bucket does not hold while the others in its batch resolve", async () => {
+    sharedState.objects.add("s2/1.jpg");
+    const [ok, missing] = await Promise.allSettled([photoUrl("s2/1.jpg"), photoUrl("s2/1.thumb.jpg")]);
+    expect(sharedState.signed).toEqual([["s2/1.jpg", "s2/1.thumb.jpg"]]);
+    expect(ok).toEqual({ status: "fulfilled", value: "https://signed.test/s2/1.jpg?ttl=3600" });
+    expect(missing.status).toBe("rejected");
+    // Nothing kept for it: asked again, it is signed again.
+    await photoUrl("s2/1.thumb.jpg").catch(() => undefined);
+    expect(sharedState.signed).toHaveLength(2);
+  });
+});
+
+describe("uploadThumbnail", () => {
+  it("stores the thumbnail beside the original and swallows a refusal", async () => {
+    await uploadThumbnail("p1/5.jpg", new Blob(["t"], { type: "image/jpeg" }));
+    expect(sharedState.objects.has("p1/5.thumb.jpg")).toBe(true);
+    // The path is taken and this is not a retry (no upsert): refused with 409, which is not reported.
+    await expect(uploadThumbnail("p1/5.jpg", new Blob(["t"], { type: "image/jpeg" }))).resolves.toBeUndefined();
+    await expect(uploadThumbnail("p1/5.jpg", new Blob(["t"], { type: "image/jpeg" }), true)).resolves.toBeUndefined();
   });
 });
 

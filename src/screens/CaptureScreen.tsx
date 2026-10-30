@@ -10,7 +10,7 @@ import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
-import { deleteSpeciesIfUnused, insertPhoto, insertPlant, newId, photoPath, uploadPhoto } from "../lib/db";
+import { deleteSpeciesIfUnused, insertPhoto, insertPlant, newId, photoPath, uploadPhoto, uploadThumbnail } from "../lib/db";
 import { prepareImage, type PreparedImage } from "../lib/image";
 import {
   isRefusal,
@@ -422,7 +422,8 @@ export function CaptureScreen() {
           progress.planned.set(i, planned);
         }
         try {
-          await uploadPhoto(planned.path, img.blob, retry);
+          // The thumbnail goes up beside the original under the same rule; its failure is not one (a tile falls back to the original).
+          await Promise.all([uploadPhoto(planned.path, img.blob, retry), uploadThumbnail(planned.path, img.thumb, retry)]);
         } catch (err) {
           throw new UploadFailure(describeError(err));
         }

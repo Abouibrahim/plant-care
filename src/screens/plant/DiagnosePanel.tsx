@@ -9,7 +9,7 @@ import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { api, ApiError } from "../../lib/api";
 import { addDays, localIsoDate } from "../../lib/dates";
-import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, uploadPhoto } from "../../lib/db";
+import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, uploadPhoto, uploadThumbnail } from "../../lib/db";
 import { problemResult, rephotoDays, rephotoTask } from "../../lib/diagnosis";
 import { prepareImage, type PreparedImage } from "../../lib/image";
 import { useBackClose } from "../../lib/useBackClose";
@@ -187,7 +187,7 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
       }
       if (!planned.uploaded) {
         // Save again uploads over the path it chose before: the object may be there from a reply that was lost.
-        await uploadPhoto(planned.path, img.blob, true);
+        await Promise.all([uploadPhoto(planned.path, img.blob, true), uploadThumbnail(planned.path, img.thumb, true)]);
         planned.uploaded = true;
       }
       photoIdRef.current ??= newId();

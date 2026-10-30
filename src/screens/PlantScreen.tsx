@@ -19,6 +19,7 @@ import {
   snoozeTask,
   updatePlant,
   uploadPhoto,
+  uploadThumbnail,
 } from "../lib/db";
 import { problemResult, URGENCY_PILL } from "../lib/diagnosis";
 import { prepareImage } from "../lib/image";
@@ -238,7 +239,7 @@ export function PlantScreen() {
       const storage_path = photoPath(plant.id, takenAt);
       // The path is past every photo row this screen knows; an object already there is this photo's own,
       // from an earlier pick whose reply was lost, so it is written over rather than refused.
-      await uploadPhoto(storage_path, prepared.blob, true);
+      await Promise.all([uploadPhoto(storage_path, prepared.blob, true), uploadThumbnail(storage_path, prepared.thumb, true)]);
       await insertPhoto({
         plant_id: plant.id,
         taken_at: takenAt.toISOString(),
@@ -535,7 +536,7 @@ function PhotoEntry({ entry, photo, tag, onOpenDiagnosis }: PhotoEntryProps) {
   const pillClass = kind === "problem" ? "pill warn" : kind === "identify" ? "pill accent" : "pill";
   return (
     <div className="card row" style={{ alignItems: "flex-start" }}>
-      <PhotoImg path={entry.ref} alt={`${tag} · ${kindLabel}`} className="photo thumb" />
+      <PhotoImg path={entry.ref} alt={`${tag} · ${kindLabel}`} className="photo thumb" size="thumb" />
       <div className="grow">
         <div>{new Date(entry.at).toLocaleDateString()}</div>
         <span className={pillClass}>{kindLabel}</span>

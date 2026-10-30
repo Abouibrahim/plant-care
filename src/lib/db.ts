@@ -1,6 +1,7 @@
 // Typed access to the four tables, the journal view and the photos bucket. Screens import from here only.
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
+import { forgetCachedPhotos, readCachedPhoto, storeCachedPhoto, thumbPath } from "./photoCache";
 import { problemResult, topCause } from "./diagnosis";
 import { tagIdRange } from "./map";
 import { weatherSettings, type SprayTreatment } from "./weather";
@@ -11,6 +12,7 @@ import {
   VERDICTS,
   type CheckSummary,
   type JournalEntry,
+  type LatestPhoto,
   type Photo,
   type PhotoInsert,
   type Plant,
@@ -99,14 +101,16 @@ export async function findPlantsByTagCode(code: string): Promise<Array<Pick<Plan
 }
 
 /**
- * Removes a plant: the row first (its photos, tasks and questions cascade), then its files in the
- * photos bucket, which live under `<plant id>/`. A failure in Storage after the row is gone leaves
- * orphaned files and nothing else, so it is not reported. The species profile stays.
+ * Removes a plant: the row first (its photos, tasks and questions cascade), then its photos kept on
+ * the phone, then its files in the photos bucket, which live under `<plant id>/` (thumbnails
+ * included). A failure in Storage after the row is gone leaves orphaned files and nothing else, so
+ * it is not reported. The species profile stays.
  */
 export async function deletePlant(id: string): Promise<void> {
   const { error } = await supabase.from("plants").delete().eq("id", id);
   if (error) throw new Error(error.message);
   notifyTasksChanged();
+  await forgetCachedPhotos(id);
   try {
     const bucket = supabase.storage.from(PHOTOS_BUCKET);
     const { data } = await bucket.list(id, { limit: 1000 });
@@ -146,6 +150,23 @@ export function photoPath(plantId: string, takenAt: Date = new Date()): string {
 export async function uploadPhoto(storagePath: string, blob: Blob, upsert = false): Promise<void> {
   const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(storagePath, blob, { contentType: "image/jpeg", upsert, cacheControl: "3600" });
   if (error) throw new Error(error.message);
+  // The phone has the bytes already: keep them, so the plant's screen does not download its own photo.
+  void storeCachedPhoto(storagePath, blob);
+}
+
+/**
+ * Uploads a photo's thumbnail beside it, at `thumbPath(storagePath)`, under the original's upsert
+ * rule. A failure is not reported: the original is what matters, and a tile falls back to it when
+ * the thumbnail is missing.
+ */
+export async function uploadThumbnail(storagePath: string, thumb: Blob, upsert = false): Promise<void> {
+  const path = thumbPath(storagePath);
+  try {
+    const { error } = await supabase.storage.from(PHOTOS_BUCKET).upload(path, thumb, { contentType: "image/jpeg", upsert, cacheControl: "3600" });
+    if (!error) void storeCachedPhoto(path, thumb);
+  } catch {
+    // Not reported; see above.
+  }
 }
 
 /** Inserts a photo row; with an `id` made by the caller, an upsert on it, so a retry cannot add a second row. */
@@ -161,16 +182,20 @@ export async function listPhotos(plantId: string): Promise<Photo[]> {
   return must(r) as Photo[];
 }
 
-/** The newest photo of each plant in the list, keyed by plant id. */
-export async function latestPhotos(plantIds: string[]): Promise<Map<string, Photo>> {
-  const map = new Map<string, Photo>();
+/**
+ * The newest photo of each plant in the list, keyed by plant id: the three columns a tile needs,
+ * not the rows' `ai_result` (an identification or a diagnosis each), which would grow the read with
+ * every photo taken.
+ */
+export async function latestPhotos(plantIds: string[]): Promise<Map<string, LatestPhoto>> {
+  const map = new Map<string, LatestPhoto>();
   if (plantIds.length === 0) return map;
   const r = await supabase
     .from("photos")
-    .select("*")
+    .select("plant_id, storage_path, taken_at")
     .in("plant_id", plantIds)
     .order("taken_at", { ascending: false });
-  for (const photo of must(r) as Photo[]) {
+  for (const photo of must(r) as LatestPhoto[]) {
     if (!map.has(photo.plant_id)) map.set(photo.plant_id, photo);
   }
   return map;
@@ -179,15 +204,149 @@ export async function latestPhotos(plantIds: string[]): Promise<Map<string, Phot
 const SIGNED_TTL_S = 3600;
 const urlCache = new Map<string, { url: string; expires: number }>();
 
-/** A signed URL for a private photo; cached for most of its lifetime. */
-export async function photoUrl(storagePath: string): Promise<string> {
-  const now = Date.now();
+interface SignWaiter {
+  resolve: (url: string) => void;
+  reject: (err: Error) => void;
+}
+
+/** The paths asked for in the current tick, signed together once it ends. */
+let signQueue: Map<string, SignWaiter[]> | null = null;
+
+/**
+ * A signed URL for a private photo, cached for most of its lifetime. The paths asked for in the same
+ * tick are signed in one request, so a screen of sixty tiles costs one round trip to Storage, not
+ * sixty. A path Storage does not hold rejects on its own; the rest of its batch resolve.
+ */
+export function photoUrl(storagePath: string): Promise<string> {
   const hit = urlCache.get(storagePath);
-  if (hit && hit.expires > now) return hit.url;
-  const { data, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrl(storagePath, SIGNED_TTL_S);
-  if (error || !data) throw new Error(error?.message ?? "Could not sign the photo URL");
-  urlCache.set(storagePath, { url: data.signedUrl, expires: now + (SIGNED_TTL_S - 600) * 1000 });
-  return data.signedUrl;
+  if (hit && hit.expires > Date.now()) return Promise.resolve(hit.url);
+  return new Promise<string>((resolve, reject) => {
+    if (!signQueue) {
+      signQueue = new Map();
+      queueMicrotask(() => void signQueued());
+    }
+    const waiters = signQueue.get(storagePath);
+    if (waiters) waiters.push({ resolve, reject });
+    else signQueue.set(storagePath, [{ resolve, reject }]);
+  });
+}
+
+async function signQueued(): Promise<void> {
+  const batch = signQueue;
+  signQueue = null;
+  if (!batch) return;
+  const paths = [...batch.keys()];
+  const now = Date.now();
+  let signed: Array<{ path: string | null; signedUrl: string | null; error: string | null }>;
+  try {
+    const { data, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrls(paths, SIGNED_TTL_S);
+    if (error || !data) throw new Error(error?.message ?? "Could not sign the photo URLs");
+    signed = data;
+  } catch (err) {
+    const failure = err instanceof Error ? err : new Error(String(err));
+    for (const waiters of batch.values()) for (const w of waiters) w.reject(failure);
+    return;
+  }
+  paths.forEach((path, i) => {
+    // Storage answers in the order asked; an item names its path unless it failed.
+    const item = signed.find((s) => s.path === path) ?? signed[i];
+    const waiters = batch.get(path) ?? [];
+    if (item?.signedUrl) {
+      urlCache.set(path, { url: item.signedUrl, expires: now + (SIGNED_TTL_S - 600) * 1000 });
+      for (const w of waiters) w.resolve(item.signedUrl);
+    } else {
+      const failure = new Error(item?.error ?? `Could not sign ${path}`);
+      for (const w of waiters) w.reject(failure);
+    }
+  });
+}
+
+export type PhotoSize = "thumb" | "full";
+
+/** What `PhotoImg` shows: an object URL of the bytes kept on the phone, or the signed URL for the browser to load itself. */
+export interface PhotoSource {
+  url: string;
+  /** True for an object URL, which the caller revokes when done with it. */
+  objectUrl: boolean;
+}
+
+interface PhotoRequest {
+  /** The paths to try in order: the thumbnail then the original for a tile, the original alone for the full photo. */
+  candidates: string[];
+  resolve: (source: PhotoSource) => void;
+  reject: (err: Error) => void;
+}
+
+/** The photos asked for in the current tick, looked up together once it ends. */
+let photoQueue: PhotoRequest[] | null = null;
+
+/**
+ * A photo to show: the copy kept on the phone when there is one (a tile takes the thumbnail's, else
+ * the original's), otherwise downloaded through a signed URL and kept for the next time. The
+ * requests made in the same tick (a screen's tiles mounting together) are handled as one: their
+ * cache lookups run side by side, then the misses are signed in one request through `photoUrl`. A
+ * tile whose photo predates thumbnails (no `.thumb.jpg` beside it) falls back to the original.
+ */
+export function loadPhoto(storagePath: string, size: PhotoSize): Promise<PhotoSource> {
+  const candidates = size === "thumb" ? [thumbPath(storagePath), storagePath] : [storagePath];
+  return new Promise<PhotoSource>((resolve, reject) => {
+    if (!photoQueue) {
+      photoQueue = [];
+      queueMicrotask(() => void loadQueuedPhotos());
+    }
+    photoQueue.push({ candidates, resolve, reject });
+  });
+}
+
+async function loadQueuedPhotos(): Promise<void> {
+  const queue = photoQueue;
+  photoQueue = null;
+  if (!queue) return;
+  const cached = await Promise.all(
+    queue.map(async (req) => {
+      for (const path of req.candidates) {
+        const blob = await readCachedPhoto(path);
+        if (blob) return blob;
+      }
+      return null;
+    }),
+  );
+  // The misses start their downloads in this same tick, so `photoUrl` signs them together.
+  queue.forEach((req, i) => {
+    const blob = cached[i];
+    if (blob) req.resolve({ url: URL.createObjectURL(blob), objectUrl: true });
+    else void downloadPhoto(req);
+  });
+}
+
+/** Signs, downloads and keeps the first candidate Storage holds; when the download itself fails, the `<img>` gets the signed URL. */
+async function downloadPhoto(req: PhotoRequest): Promise<void> {
+  let failure: Error | null = null;
+  for (const path of req.candidates) {
+    let url: string;
+    try {
+      url = await photoUrl(path);
+    } catch (err) {
+      // Not stored (a thumbnail that was never made) or not signed: the next candidate, if any.
+      failure = err instanceof Error ? err : new Error(String(err));
+      continue;
+    }
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        failure = new Error(`${res.status} for ${path}`);
+        continue;
+      }
+      const blob = await res.blob();
+      void storeCachedPhoto(path, blob);
+      req.resolve({ url: URL.createObjectURL(blob), objectUrl: true });
+    } catch {
+      // A dropped connection or a blocked cross-origin read: the browser may still load the URL itself.
+      req.resolve({ url, objectUrl: false });
+    }
+    return;
+  }
+  req.reject(failure ?? new Error("No photo"));
 }
 
 // ---- species ----------------------------------------------------------------
