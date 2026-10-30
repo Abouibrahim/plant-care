@@ -12,7 +12,7 @@ import { TOWN } from "../../lib/weather";
 import { PhotoImg } from "../../components/PhotoImg";
 import { TypePill } from "../../components/TypeIcon";
 import { addTiles, createMap, drawMe, HAS_SATELLITE, L, pinIcon, readLayer, removeMap, writeLayer } from "./leaflet";
-import type { Photo, PlantWithSpecies, TaskWithPlant } from "../../types";
+import type { LatestPhoto, PlantWithSpecies, TaskWithPlant } from "../../types";
 
 /** Tasks listed on a pin's card before "+N more": two keep the card short enough for the pin to show above it on a small phone. */
 const CARD_TASKS = 2;
@@ -26,7 +26,7 @@ export type DueStatus = "loading" | "ready" | "failed";
 interface Props {
   /** The plants the Plants screen's filter and search keep, with or without a position. */
   plants: PlantWithSpecies[];
-  photos: Map<string, Photo>;
+  photos: Map<string, LatestPhoto>;
   /** Pending tasks due by today (late, due today, open windows). */
   due: TaskWithPlant[];
   dueStatus: DueStatus;
@@ -200,7 +200,7 @@ export default function PlantMap({ plants, photos, due, dueStatus, today, filter
         {plant && (
           <div ref={cardRef} className="map-card card" role="dialog" aria-label={plant.tag}>
             <div className="row" style={{ alignItems: "flex-start" }}>
-              <PhotoImg className="photo thumb" path={photos.get(plant.id)?.storage_path} alt={plant.tag} />
+              <PhotoImg className="photo thumb" size="thumb" path={photos.get(plant.id)?.storage_path} alt={plant.tag} />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 600 }}>
                   {plant.tag}

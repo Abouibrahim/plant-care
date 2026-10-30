@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Sprout } from "lucide-react";
-import { photoUrl } from "../lib/db";
+import { loadPhoto, type PhotoSize } from "../lib/db";
 import { t } from "../i18n";
 
-interface Resolved {
-  path: string;
-  url: string | null; // null once resolution failed
+interface Shown {
+  /** `${size}:${path}` of the request this answers, so a stale answer never shows for a new path. */
+  key: string;
+  src: string | null; // null once the load failed
 }
 
 /** A sprout on the photo's tile where there is no photo (or it could not be loaded). */
@@ -17,24 +18,46 @@ function NoPhoto({ className, alt }: { className: string; alt: string }) {
   );
 }
 
-/** Renders a photo from the private bucket through a signed URL. */
-export function PhotoImg({ path, alt, className = "photo" }: { path: string | null | undefined; alt: string; className?: string }) {
-  const [resolved, setResolved] = useState<Resolved | null>(null);
+interface Props {
+  path: string | null | undefined;
+  alt: string;
+  className?: string;
+  /** `thumb` for a tile: the 320 px copy stored beside the original, or the original itself for a photo that predates thumbnails. */
+  size?: PhotoSize;
+}
+
+/**
+ * A photo from the private bucket: the copy kept on the phone when there is one, otherwise
+ * downloaded through a signed URL and kept for the next time (`loadPhoto`). The object URL it shows
+ * is revoked when the photo changes or the tile goes.
+ */
+export function PhotoImg({ path, alt, className = "photo", size = "full" }: Props) {
+  const [shown, setShown] = useState<Shown | null>(null);
 
   useEffect(() => {
     if (!path) return;
+    const key = `${size}:${path}`;
     let active = true;
-    photoUrl(path)
-      .then((url) => active && setResolved({ path, url }))
-      .catch(() => active && setResolved({ path, url: null }));
+    let objectUrl: string | null = null;
+    loadPhoto(path, size)
+      .then((source) => {
+        if (!active) {
+          if (source.objectUrl) URL.revokeObjectURL(source.url);
+          return;
+        }
+        if (source.objectUrl) objectUrl = source.url;
+        setShown({ key, src: source.url });
+      })
+      .catch(() => active && setShown({ key, src: null }));
     return () => {
       active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [path]);
+  }, [path, size]);
 
   if (!path) return <NoPhoto className={className} alt={alt} />;
-  const current = resolved && resolved.path === path ? resolved : null;
+  const current = shown && shown.key === `${size}:${path}` ? shown : null;
   if (!current) return <div className={`${className} placeholder`} aria-busy />;
-  if (!current.url) return <NoPhoto className={className} alt={alt} />;
-  return <img className={className} src={current.url} alt={alt} loading="lazy" />;
+  if (!current.src) return <NoPhoto className={className} alt={alt} />;
+  return <img className={className} src={current.src} alt={alt} loading="lazy" decoding="async" />;
 }

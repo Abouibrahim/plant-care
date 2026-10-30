@@ -1,4 +1,5 @@
 import { t } from "../../i18n";
+import { PhotoImg } from "../../components/PhotoImg";
 import { problemResult, topCause, URGENCY_PILL } from "../../lib/diagnosis";
 import type { Photo } from "../../types";
 
@@ -18,6 +19,7 @@ export function PastDiagnoses({ photos, onOpen }: { photos: Photo[]; onOpen: (ph
         return (
           <button type="button" key={photo.id} className="card tappable" style={{ textAlign: "left", width: "100%", fontWeight: 400 }} onClick={() => onOpen(photo)}>
             <div className="row between" style={{ alignItems: "flex-start" }}>
+              <PhotoImg className="photo thumb" size="thumb" path={photo.storage_path} alt={t.plant.photoKinds.problem} />
               <div className="grow">
                 <div className="small muted">{new Date(photo.taken_at).toLocaleDateString()}</div>
                 {top && (

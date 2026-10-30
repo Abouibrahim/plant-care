@@ -10,7 +10,7 @@ import { Banner } from "../components/Banner";
 import { PhotoImg } from "../components/PhotoImg";
 import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
-import { SITES, type Photo, type PlantWithSpecies, type Site, type TaskWithPlant } from "../types";
+import { SITES, type LatestPhoto, type PlantWithSpecies, type Site, type TaskWithPlant } from "../types";
 import type { DueStatus } from "./map/PlantMap";
 
 // Leaflet loads with the first map, not with the app.
@@ -46,7 +46,7 @@ export function PlantsScreen() {
   // "Show on map" from a plant's page: the map, every site, centred on that plant.
   const focusId = params.get("focus");
   const [plants, setPlants] = useState<PlantWithSpecies[]>([]);
-  const [photos, setPhotos] = useState<Map<string, Photo>>(() => new Map());
+  const [photos, setPhotos] = useState<Map<string, LatestPhoto>>(() => new Map());
   // The tasks behind the pin colours, keyed by the day and the load they belong to; rows null when they failed.
   const [dueResult, setDueResult] = useState<{ key: string; rows: TaskWithPlant[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -251,7 +251,7 @@ export function PlantsScreen() {
           <p className="muted small">{t.plants.count(visible.length)}</p>
           {visible.map((p) => (
             <Link key={p.id} to={`/plants/${p.id}`} className="card tappable row">
-              <PhotoImg className="photo thumb" path={photos.get(p.id)?.storage_path} alt={p.tag} />
+              <PhotoImg className="photo thumb" size="thumb" path={photos.get(p.id)?.storage_path} alt={p.tag} />
               <div className="grow">
                 <div style={{ fontWeight: 600 }}>
                   {p.tag}

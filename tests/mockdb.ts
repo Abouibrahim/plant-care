@@ -19,6 +19,8 @@ export interface MockState {
   settings: Row[];
   /** Storage objects of the photos bucket, by path. */
   objects: Set<string>;
+  /** The paths of each signing request (`createSignedUrls`) made on the bucket, in order. */
+  signed: string[][];
 }
 
 export interface MockOptions {
@@ -120,6 +122,7 @@ export function makeState(partial: Partial<MockState> = {}): MockState {
     push_subscriptions: [],
     settings: [],
     objects: new Set<string>(),
+    signed: [],
     ...partial,
   };
 }
@@ -149,7 +152,7 @@ class Builder implements PromiseLike<Result> {
 
   constructor(
     private readonly state: MockState,
-    private readonly table: keyof Omit<MockState, "objects">,
+    private readonly table: keyof Omit<MockState, "objects" | "signed">,
     private readonly options: MockOptions,
   ) {}
 
@@ -293,7 +296,7 @@ class Builder implements PromiseLike<Result> {
       const embed = /^(?:(\w+):)?(\w+)\((.*)\)$/s.exec(item);
       if (embed) {
         const alias = embed[1] ?? embed[2];
-        const target = embed[2] as keyof Omit<MockState, "objects">;
+        const target = embed[2] as keyof Omit<MockState, "objects" | "signed">;
         const fk = FK[target];
         if (!fk) throw new Error(`mockdb: no foreign key for embed ${target}`);
         const parent = this.state[target].find((p) => p.id === row[fk]);
@@ -434,7 +437,19 @@ class StorageBucket {
 
   async createSignedUrl(path: string, ttl: number) {
     void this.options;
+    if (!this.state.objects.has(path)) return { data: null, error: { statusCode: "404", message: "Object not found" } };
     return { data: { signedUrl: `https://signed.test/${path}?ttl=${ttl}` }, error: null };
+  }
+
+  /** Signs a list in one request; a path the bucket does not hold gets its own error item, as Storage answers. */
+  async createSignedUrls(paths: string[], ttl: number) {
+    this.state.signed.push([...paths]);
+    const data = paths.map((path) =>
+      this.state.objects.has(path)
+        ? { error: null, path, signedUrl: `https://signed.test/${path}?ttl=${ttl}` }
+        : { error: "Either the object does not exist or you do not have access to it", path: null, signedUrl: null },
+    );
+    return { data, error: null };
   }
 }
 
@@ -442,8 +457,8 @@ class StorageBucket {
 export function makeDb(state: MockState, options: MockOptions = {}) {
   return {
     from(table: string) {
-      if (!(table in state) || table === "objects") throw new Error(`mockdb: unknown table ${table}`);
-      return new Builder(state, table as keyof Omit<MockState, "objects">, options);
+      if (!(table in state) || table === "objects" || table === "signed") throw new Error(`mockdb: unknown table ${table}`);
+      return new Builder(state, table as keyof Omit<MockState, "objects" | "signed">, options);
     },
     storage: {
       from(bucket: string) {
@@ -471,4 +486,5 @@ export const sharedState: MockState = makeState();
 export function resetState(state: MockState): void {
   for (const table of ["plants", "species", "tasks", "photos", "questions", "planting_checks", "weather_days", "push_subscriptions", "settings"] as const) state[table].length = 0;
   state.objects.clear();
+  state.signed.length = 0;
 }
