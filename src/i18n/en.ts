@@ -128,6 +128,26 @@ export const en = {
     doneAll: (n: number) => `Done: all ${n} waterings`,
     toastDoneAll: (n: number) => `Done: ${n} waterings`,
     someAlreadyClosed: "Some of those waterings had already been closed (by the rain skip, or on another screen); the list is up to date now.",
+    /** A zone batch (Phase 11): a zone's waterings that fall due together, in one card, counted in plants. */
+    batchPlants: (n: number) => (n === 1 ? "1 plant" : `${n} plants`),
+    litres: (n: number) => `${n} L`,
+    noAmount: "No amount",
+    litresTotal: (n: number) => `${n} L in all`,
+    batchLate: (n: number) => `${n} overdue`,
+    choose: "Choose",
+    chooseHint: "Untick the plants you leave out; they stay on the list.",
+    batchList: "Plants in this round",
+    leftOut: "(left out)",
+    openPlant: (tag: string) => `Open ${tag}`,
+    moreTags: (n: number) => `+${n}`,
+    /** "Done 14/15" when plants are left out; the button then drops its icon, so it fits a 360 px phone. */
+    batchDone: (n: number, of: number) => (n === of ? "Done" : `Done ${n}/${of}`),
+    skipThem: "Skip them",
+    /** One line beside Undo; a coming day goes first, so a narrow phone cuts the count and never the day: "Done: row 2 · 9 plants", "Skipped: Thu 5 Nov · row 2 · 9 plants". */
+    toastBatch: (done: boolean, zone: string, plants: number, day: string) =>
+      `${done ? "Done" : "Skipped"}: ${[day, zone, plants === 1 ? "1 plant" : `${plants} plants`].filter(Boolean).join(" · ")}`,
+    late: (date: string) => `Late · ${date}`,
+    undoNothing: "Nothing was reopened: those tasks changed meanwhile. The list is up to date now.",
   },
 
   capture: {
@@ -671,9 +691,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 10",
+    phaseTitle: "Phase 11",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, and now the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, and a log of care done by hand.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, a log of care done by hand, and now a zone's waterings in one card on Today and one line of the morning push.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon, and a weather notification when an alert or a rain skip applies.",
@@ -736,6 +756,9 @@ export const en = {
   digest: {
     title: (site: string, n: number) => `${site}: ${n === 1 ? "1 task" : `${n} tasks`}`,
     line: (title: string, tag: string) => (tag ? `${title} · ${tag}` : title),
+    /** A zone's waterings due together, in one line (Phase 11); `line` adds the zone, when the plants have one. */
+    batch: (plants: number, min: number | null, max: number | null) =>
+      `Water ${plants === 1 ? "1 plant" : `${plants} plants`}${min === null || max === null ? "" : ` (${min === max ? min : `${min}–${max}`} L each)`}`,
     soon: (date: string, line: string) => `From ${date}: ${line}`,
     more: (n: number) => `+${n} more`,
     openUrl: "/",

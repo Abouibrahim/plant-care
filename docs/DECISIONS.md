@@ -2,6 +2,35 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-30 — Phase 11: zone batches
+
+Item 1 of the feature review of 2026-10-25. Today groups tasks by site, and the digest gives each task its own line, so at farm scale the summer list of single waterings grows with every plant. Phase 10's Done-all (review 4.3) closes a site's waterings in one tap but still lists them one by one, and the push still spends its three lines on three trees. A batch is a display grouping only: Done and Skip write the same rows as before, so each plant's journal is unchanged. The push line partly brings back the spec's own digest example, "water 3 young trees" (`docs/SPEC.md`), which Phase 3 replaced with one line per task; CLAUDE.md step 5 now says so.
+
+- **What gathers, and why only waterings.**
+  - A batch is the periodic waterings the care calendar wrote (type water, no window) at one site and zone that fall due together: the late ones with today's, and each coming day's apart. These repeat every few days for every plant, which is what makes the list long.
+  - Windows (a feed, a harvest, a window watering) stay single: they last weeks, carry instructions that differ by species, and are few.
+  - So do the rows a person or a diagnosis wrote (`isAppWrittenRule`, the carve-out the stale-task cleanup uses). A "Remind me" watering keeps its own words, and its title has no litres.
+- **Two plants or more make a batch.** One plant's two waterings stay cards. Plants with no zone batch together, with no label, as the single card shows none. Zones are compared without case or outer spaces, as Ask and Check compare them, since the record form takes free text. The label is the spelling most of the plants use.
+- **Each plant counts once.** A plant can have two waterings due in one batch:
+  - yesterday's and today's, between midnight and the next expansion;
+  - two rules of different intervals.
+
+  "N plants" counts distinct plants, a group by its quantity, and the total takes each rule's newest watering once. Done still closes every row.
+- **Litres come from the title.** The expansion writes "(40 L)" at the end of a watering's title. Today and the push read them back there, so no species read is added, and a test in `tests/tasks.test.ts` ties the writer to the reader.
+  - The card shows each amount with its plants ("40 L · OL-01 OL-03" / "No amount · FIG-03"), because "8–40 L each" does not say which tree takes 40 at the hose.
+  - The total, and the push's range, appear only when every watering states its amount.
+  - A title is a snapshot: after a litres edit, pending waterings keep the old amount until they are written again (as before this phase).
+- **Units.** The card and its toast count plants ("Done: row 2 · 14 plants", "Done 14/15"). The round, the badge, the chips, Done-all and the push title count waterings (rows), as before.
+- **Leaving a plant out.**
+  - Choose lists the plants, each row one tap target, with a chevron that opens the plant on its Calendar tab (router state). A snooze, a note or a Skip of its own is done there on the plant's single card, which is why the batch has none of them. A snooze moves each task's own schedule (`snoozeTask`, several writes per row), and a note on Done would replace the title in every plant's journal.
+  - The ticks live in Today, keyed by task id and by day, not in the card, and are kept for the app session in a module variable (as `expandedThisSession` is) with a copy in sessionStorage. A reload of the list (Refresh, the 06:05 read) or a visit to a plant's page, which unmounts Today, would otherwise tick a left-out plant again, and the next Done would mark it watered. They are cleared after the batch's own Done or Skip, so the plants left behind come back ticked; an Undo of that action unticks them again. At midnight they are left behind with the day's batches.
+  - An earlier draft had "Show them one by one" to split a batch back into cards for the visit. Dropped: after one exception the other plants stayed single, which is what this phase removes.
+- **Set writes.** `skipTasks` writes one reason on each row. `completeTasks` writes no note, so a pending reminder Done-all closes keeps its words, as in 0.10.0. `reopenTasks(ids, status)` reopens only rows in the status the set was given: Undo of a Skip never reopens a row that was done, and Undo of a Done leaves the notes alone. Every id sent leaves the list at once, since an id not returned was not pending any more either.
+- **The site's Done-all stays.** It leaves out the plants unticked in a batch, and it is hidden when one batch due now already holds every watering it would close. Its rules are pure helpers in `src/lib/today.ts` (`doneAllIds`, `doneAllRepeatsBatch`), with `clearsTheDay` for the leaf fall: a coming day's batch never clears today.
+- **The push.** A batch line takes the place of its most pressing watering. The title still counts tasks, and "+N more" counts the tasks the lines leave out, so the numbers add up. The digest stays in English (review 4.2).
+- **One module.** `src/lib/batches.ts` serves both Today and `api/_push.ts`, so the two group alike. It has no strings and only `.js` imports, as the functions need.
+- **The name.** The review of 2026-10-30 suggested a "Phase 11" of robustness items (3.5, 2.1, 2.3, 5.3, 4.2). Those stay open for a later phase, with 4.1, 2.5 and 7.1 from its Phase 10 list.
+
 ## 2026-10-30 — 0.9.1: satellite tiles from TomTom
 
 Mohamed could not activate the ArcGIS Location Platform account that Phase 9's satellite layer needs. The providers were compared on their sign-up, terms and imagery over the orchards around Menzel Bouzelfa.

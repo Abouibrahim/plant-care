@@ -383,9 +383,9 @@ export interface Task {
 /** What the expansion writes; status, acted_at and note take their defaults. */
 export type TaskInsert = Pick<Task, "plant_id" | "type" | "rule_key" | "due_on" | "window_end" | "title" | "instruction">;
 
-/** A task with the bits of its plant the Today screen shows. */
+/** A task with the bits of its plant the Today screen shows; the quantity counts a group in a zone batch. */
 export interface TaskWithPlant extends Task {
-  plant: Pick<Plant, "id" | "tag" | "site" | "zone"> | null;
+  plant: Pick<Plant, "id" | "tag" | "site" | "zone" | "quantity"> | null;
 }
 
 /** One row of the `journal` view: a photo, an acted task or a question, in one dated stream per plant. */

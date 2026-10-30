@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { expandPlant, mergeDuplicateRules, monthRuns, periodOf, ruleKey, runExpansion, staleTasks, type StaleCandidate } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
+import { litresOf } from "../src/lib/batches";
 import { addDays } from "../src/lib/dates";
 import { dueDates, fixture, rule, water, window } from "./fixtures";
 
@@ -111,6 +112,17 @@ describe("expandPlant", () => {
   it("ignores malformed rules", () => {
     const bad = { type: "swim", months: [1], age: "any", title: "x" } as unknown as ReturnType<typeof rule>;
     expect(expandPlant(plant([bad]), "2026-01-10").seeds).toHaveLength(0);
+  });
+
+  it("writes the litres where the zone batches read them back (Phase 11)", () => {
+    const litres = (calendar: Parameters<typeof expandPlant>[0]["care_calendar"]) => litresOf(expandPlant(plant(calendar), "2026-06-10").seeds[0].title);
+    expect(litres([water([6, 7, 8], 7)])).toBe(40);
+    expect(litres([water([6, 7, 8], 7, { litres: 2.5 })])).toBe(2.5);
+    // Two rules of one key merge their titles, and the largest litres win.
+    const [merged] = mergeDuplicateRules([water([6, 7, 8], 7, { title: "Water young tree", litres: 20 }), water([6, 7, 8], 7, { title: "Deep watering", litres: 40 })]);
+    expect(litres([merged])).toBe(40);
+    // A rule with no litres writes none, and the batch shows the plant under "No amount".
+    expect(litres([water([6, 7, 8], 7, { litres: 0 })])).toBeNull();
   });
 });
 

@@ -1036,6 +1036,91 @@ a.task-body:active {
   font-weight: 600;
   gap: 6px;
 }
+
+/* A zone batch (Phase 11): under the due line, each amount with its plants ("40 L · OL-01 OL-03");
+   Choose lists the plants, each row one tap target with its tick, and a chevron to the plant. A plant
+   left out is struck through; one being saved is struck through and dimmed. */
+/* One grid for all the amounts, so their labels line up in a column as wide as the longest
+   ("Sans quantité" in French). */
+.batch-groups {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: baseline;
+  gap: 6px 8px;
+  margin-top: 10px;
+}
+.batch-group {
+  display: contents;
+}
+.batch-litres {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--c-water, var(--accent));
+}
+.batch-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.tag.out {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.batch-list {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.batch-list > p {
+  margin: 0 0 4px;
+}
+.batch-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.batch-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.batch-list li + li {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.batch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  min-height: var(--tap);
+  padding: 6px 0;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.batch-row input[type="checkbox"] {
+  margin: 0;
+}
+.batch-row-litres {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.batch-item-late {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--late);
+}
+.batch-list li.going .batch-row {
+  opacity: 0.6;
+}
+.batch-list li.going .tag {
+  text-decoration: line-through;
+}
+.btn.batch-open {
+  border: none;
+  background: none;
+  color: var(--muted);
+}
 .burst {
   position: absolute;
   left: 50%;

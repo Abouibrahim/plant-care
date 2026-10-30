@@ -2,8 +2,21 @@
 // the counts and the week strip, so "overdue" means the same thing everywhere), the time of day
 // (greeting and garden scene), the check-in streak kept on this phone, and the short vibration on
 // Done. Nothing here touches the data.
-import { addDays } from "./dates";
+import { DUE_NOW, type Batchable, type ListItem } from "./batches";
+import { addDays, toLocalDate } from "./dates";
 import { TASK_TYPES, type Task } from "../types";
+
+/** "21 Oct" in the phone's language, for the due lines of the cards. */
+export function shortDate(iso: string): string {
+  const d = toLocalDate(iso);
+  return d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : iso;
+}
+
+/** "Thu 23 Oct" in the phone's language, for a coming day. */
+export function weekdayDate(iso: string): string {
+  const d = toLocalDate(iso);
+  return d ? d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) : iso;
+}
 
 export type DueState = "overdue" | "open" | "today" | "upcoming";
 
@@ -40,6 +53,36 @@ export function sortByDue<T extends Pick<Task, "due_on" | "window_end" | "type" 
       TASK_TYPES.indexOf(a.type) - TASK_TYPES.indexOf(b.type) ||
       a.title.localeCompare(b.title),
   );
+}
+
+type Due = Pick<Task, "id" | "type" | "due_on" | "window_end">;
+
+/**
+ * The site heading's "Done: all N waterings": the site's waterings late or due today, less those
+ * `skip` names (plants left out of a batch, tasks already on their way out); none below two.
+ */
+export function doneAllIds(tasks: Due[], today: string, skip: (id: string) => boolean): string[] {
+  const ids = tasks.filter((x) => x.type === "water" && dueNow(x, today) && !skip(x.id)).map((x) => x.id);
+  return ids.length >= 2 ? ids : [];
+}
+
+/** Whether Done-all would repeat a batch's own Done: one batch due now holds every watering it would close. */
+export function doneAllRepeatsBatch<T extends Batchable>(ids: string[], items: ListItem<T>[]): boolean {
+  const now = items.flatMap((i) => (i.kind === "batch" && i.batch.day === DUE_NOW ? [i.batch] : []));
+  if (now.length !== 1) return false;
+  const held = new Set(now[0].tasks.map((x) => x.id));
+  return ids.length > 0 && ids.every((id) => held.has(id));
+}
+
+/**
+ * Whether closing `ids` clears the day, for the leaf fall: a Done that takes at least one task late
+ * or due today and leaves none behind that is not already on its way out. Open windows do not count,
+ * since they can stay open for months; a coming day's batch is not today's round.
+ */
+export function clearsTheDay(tasks: Due[], ids: string[], kind: "done" | "skip" | "snooze", today: string, leaving: (id: string) => boolean): boolean {
+  if (kind !== "done") return false;
+  const set = new Set(ids);
+  return tasks.some((x) => set.has(x.id) && dueNow(x, today)) && !tasks.some((x) => !set.has(x.id) && dueNow(x, today) && !leaving(x.id));
 }
 
 /** Sky of the garden scene: dawn 5–9 h, day 10–16 h, dusk 17–19 h, night 20–4 h. */

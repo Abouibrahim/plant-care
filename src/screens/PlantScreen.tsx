@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BookOpen, ChevronLeft, ClipboardPen, ImagePlus, MapPin, MapPinned, MessageCircleQuestionMark, Pencil, QrCode, Stethoscope, Trash2, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
@@ -85,10 +85,15 @@ function topCandidateName(ai: unknown): string | null {
 export function PlantScreen() {
   const { id = "" } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<{ id: string; message: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [tab, setTab] = useState<TabKey>("needs");
+  // A plant in a zone batch on Today opens on its Calendar tab, where its watering has a snooze.
+  const [tab, setTab] = useState<TabKey>(() => {
+    const wanted = (location.state as { tab?: unknown } | null)?.tab;
+    return TABS.find((key) => key === wanted) ?? "needs";
+  });
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);

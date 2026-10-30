@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
 import { HORIZON_DAYS, readAll, ruleKey } from "./_tasks.js";
 import { requireEnv } from "./_supabase.js";
+import { summarize, withBatches } from "../src/lib/batches.js";
 import { addDays, parseIso } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
 import { TASK_TYPES, type CareRule, type DigestMessage, type PushMessage, type PushSubscriptionJson, type Site, type TaskType } from "../src/types.js";
@@ -19,30 +20,33 @@ const TTL_SECONDS = 12 * 3600;
 
 export interface DigestTask {
   id: string;
+  plant_id: string;
   type: TaskType;
   rule_key: string;
   due_on: string;
   window_end: string | null;
   title: string;
-  plant: { tag: string; site: Site; care_calendar: CareRule[] } | null;
+  /** The zone and the group's quantity gather a zone's waterings into one line (Phase 11). */
+  plant: { tag: string; site: Site; zone: string; quantity: number; care_calendar: CareRule[] } | null;
 }
 
 interface TaskRow {
   id: string;
+  plant_id: string;
   type: TaskType;
   rule_key: string;
   due_on: string;
   window_end: string | null;
   title: string;
-  plant: { tag: string; site: Site; species: { care_calendar: unknown } | null } | null;
+  plant: { tag: string; site: Site; zone: string | null; quantity: number | null; species: { care_calendar: unknown } | null } | null;
 }
 
-/** Pending tasks up to the horizon with the plant's site and tag and its species' rules, read in pages. */
+/** Pending tasks up to the horizon with the plant's site, zone, tag and size and its species' rules, read in pages. */
 export async function loadDigestTasks(db: SupabaseClient, todayIso: string): Promise<DigestTask[]> {
   const rows = await readAll<TaskRow>((from, to) =>
     db
       .from("tasks")
-      .select("id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, species(care_calendar))")
+      .select("id, plant_id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, zone, quantity, species(care_calendar))")
       .eq("status", "pending")
       .lte("due_on", addDays(todayIso, HORIZON_DAYS))
       .order("due_on", { ascending: true })
@@ -53,13 +57,20 @@ export async function loadDigestTasks(db: SupabaseClient, todayIso: string): Pro
     const calendar = row.plant?.species?.care_calendar;
     return {
       id: row.id,
+      plant_id: row.plant_id,
       type: row.type,
       rule_key: row.rule_key,
       due_on: row.due_on,
       window_end: row.window_end,
       title: row.title,
       plant: row.plant
-        ? { tag: row.plant.tag, site: row.plant.site, care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [] }
+        ? {
+            tag: row.plant.tag,
+            site: row.plant.site,
+            zone: row.plant.zone ?? "",
+            quantity: row.plant.quantity ?? 1,
+            care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [],
+          }
         : null,
     };
   });
@@ -115,18 +126,32 @@ function sortTasks(tasks: DigestTask[], todayIso: string): DigestTask[] {
   );
 }
 
-/** One message per site that has something to say today; sites with nothing are left out. */
+/**
+ * One message per site that has something to say today; sites with nothing are left out. A zone's
+ * waterings due together, for two plants or more, share one line ("Water 9 plants (20 L each) · row 2",
+ * without the zone when the plants have none) in the place of the most pressing of them, as on Today
+ * (src/lib/batches.ts). The title counts the tasks, and "+N more" the tasks the shown lines leave out.
+ */
 export function composeDigest(tasks: DigestTask[], todayIso: string): DigestMessage[] {
   const due = tasks.filter((t) => t.plant !== null && inDigest(t, todayIso));
   const messages: DigestMessage[] = [];
   for (const site of SITE_ORDER) {
     const mine = sortTasks(due.filter((t) => t.plant?.site === site), todayIso);
     if (mine.length === 0) continue;
-    const lines = mine.slice(0, BODY_LINES).map((t) => {
+    const shown = withBatches(mine, todayIso).slice(0, BODY_LINES);
+    let covered = 0;
+    const lines = shown.map((item) => {
+      if (item.kind === "batch") {
+        covered += item.batch.tasks.length;
+        const { plants, range } = summarize(item.batch.tasks, todayIso);
+        return en.digest.line(en.digest.batch(plants, range?.min ?? null, range?.max ?? null), item.batch.zone);
+      }
+      covered += 1;
+      const t = item.task;
       const line = en.digest.line(t.title, t.plant?.tag ?? "");
       return t.due_on > todayIso ? en.digest.soon(shortDate(t.due_on), line) : line;
     });
-    if (mine.length > BODY_LINES) lines.push(en.digest.more(mine.length - BODY_LINES));
+    if (mine.length > covered) lines.push(en.digest.more(mine.length - covered));
     messages.push({
       site,
       title: en.digest.title(en.site[site], mine.length),

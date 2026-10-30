@@ -2,6 +2,9 @@
 // added here fails `npm run typecheck`. Profile text written by Claude is not translated here.
 import type { Strings } from "./en";
 
+/** A decimal written the French way: 2.5 → "2,5". */
+const frNumber = (n: number) => String(n).replace(".", ",");
+
 export const fr: Strings = {
   app: {
     name: "Plant Care",
@@ -125,6 +128,23 @@ export const fr: Strings = {
     doneAll: (n) => `Fait : les ${n} arrosages`,
     toastDoneAll: (n) => `Fait : ${n} arrosages`,
     someAlreadyClosed: "Certains de ces arrosages étaient déjà fermés (par la pluie, ou depuis un autre écran) ; la liste est à jour.",
+    batchPlants: (n) => (n === 1 ? "1 plante" : `${n} plantes`),
+    litres: (n) => `${frNumber(n)} L`,
+    noAmount: "Sans quantité",
+    litresTotal: (n) => `${frNumber(n)} L en tout`,
+    batchLate: (n) => `${n} en retard`,
+    choose: "Choisir",
+    chooseHint: "Décochez les plantes laissées de côté ; elles restent dans la liste.",
+    batchList: "Plantes de cette tournée",
+    leftOut: "(laissée de côté)",
+    openPlant: (tag) => `Ouvrir ${tag}`,
+    moreTags: (n) => `+${n}`,
+    batchDone: (n, of) => (n === of ? "Fait" : `Fait ${n}/${of}`),
+    skipThem: "Les passer",
+    toastBatch: (done, zone, plants, day) =>
+      `${done ? "Fait" : plants === 1 ? "Passée" : "Passées"} : ${[day, zone, plants === 1 ? "1 plante" : `${plants} plantes`].filter(Boolean).join(" · ")}`,
+    late: (date) => `En retard · ${date}`,
+    undoNothing: "Rien n'a été rouvert : ces tâches ont changé entre-temps. La liste est à jour.",
   },
 
   capture: {
@@ -661,9 +681,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 10",
+    phaseTitle: "Phase 11",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, et maintenant les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, et le journal des soins faits à la main.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, le journal des soins faits à la main, et maintenant les arrosages d'une zone sur une seule carte d'Aujourd'hui et une seule ligne du rappel du matin.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt, et une notification météo quand une alerte ou un arrosage passé après la pluie le justifie.",
@@ -726,6 +746,8 @@ export const fr: Strings = {
   digest: {
     title: (site, n) => `${site} : ${n === 1 ? "1 tâche" : `${n} tâches`}`,
     line: (title, tag) => (tag ? `${title} · ${tag}` : title),
+    batch: (plants, min, max) =>
+      `Arroser ${plants === 1 ? "1 plante" : `${plants} plantes`}${min === null || max === null ? "" : ` (${min === max ? frNumber(min) : `${frNumber(min)}–${frNumber(max)}`} L chacune)`}`,
     soon: (date, line) => `À partir du ${date} : ${line}`,
     more: (n) => `+${n} autres`,
     openUrl: "/",

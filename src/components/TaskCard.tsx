@@ -2,8 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, NotebookPen, TriangleAlert, X } from "lucide-react";
 import { t } from "../i18n";
-import { toLocalDate } from "../lib/dates";
-import { dueState, type DueState } from "../lib/today";
+import { dueState, shortDate, weekdayDate, type DueState } from "../lib/today";
 import { Spinner } from "./Spinner";
 import { TypeTile } from "./TypeIcon";
 import { TASK_MAX_NOTE_CHARS, type Task } from "../types";
@@ -13,16 +12,6 @@ export type TaskAction = { kind: "done"; note?: string } | { kind: "skip"; reaso
 
 const SNOOZE_DAYS = [1, 3, 7];
 const MAX_REASON = TASK_MAX_NOTE_CHARS;
-
-function shortDate(iso: string): string {
-  const d = toLocalDate(iso);
-  return d ? d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : iso;
-}
-
-function weekdayDate(iso: string): string {
-  const d = toLocalDate(iso);
-  return d ? d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) : iso;
-}
 
 /**
  * "Open since 1 Oct · until 31 Dec" for a window that has started, "Overdue · 21 Oct" for a missed
@@ -45,7 +34,7 @@ function dueLabel(task: Task, today: string): { text: string; state: DueState } 
 const DUE_ICONS = { overdue: TriangleAlert, open: Clock, today: CalendarCheck, upcoming: CalendarDays };
 
 /** Eight specks thrown out from the tile when a task is ticked. */
-function Burst() {
+export function Burst() {
   return (
     <span className="burst" aria-hidden>
       {Array.from({ length: 8 }, (_, i) => (

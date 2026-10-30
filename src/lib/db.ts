@@ -436,7 +436,7 @@ export async function countDueTasks(untilIso: string): Promise<number> {
   return count ?? 0;
 }
 
-const TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone)";
+const TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone, quantity)";
 
 /** Pending tasks due on or before a day (YYYY-MM-DD), earliest first, each with its plant. */
 export async function listDueTasks(untilIso: string): Promise<TaskWithPlant[]> {
@@ -519,36 +519,41 @@ export function completeTask(id: string, note = ""): Promise<boolean> {
 }
 
 /**
- * Done for a set of tasks in one update (the "Done: all N waterings" button on Today). Only the rows
- * still pending change; the ids that did are returned, so a task closed meanwhile from another screen
- * (or by the morning rain skip) is simply left out, as a single Done leaves it out.
+ * Closes a set of tasks in one update. Only the rows still pending change; the ids that did are
+ * returned, so a task closed meanwhile from another screen (or by the morning rain skip) is simply
+ * left out, as a single Done leaves it out. Without a reason the rows keep their note: a pending
+ * reminder the grower wrote keeps its words when Done-all closes it.
  */
-export async function completeTasks(ids: string[]): Promise<string[]> {
+async function closeTasks(ids: string[], status: "done" | "skipped", reason?: string): Promise<string[]> {
   if (ids.length === 0) return [];
-  const r = await supabase
-    .from("tasks")
-    .update({ status: "done", acted_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("status", "pending")
-    .select("id");
+  const patch = { status, acted_at: new Date().toISOString(), ...(reason === undefined ? {} : { note: reason }) };
+  const r = await supabase.from("tasks").update(patch).in("id", ids).eq("status", "pending").select("id");
   const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
   if (changed.length > 0) notifyTasksChanged();
   return changed;
 }
 
+/** Done for a set: Today's "Done: all N waterings" and a zone batch's Done. */
+export function completeTasks(ids: string[]): Promise<string[]> {
+  return closeTasks(ids, "done");
+}
+
+/** Skip for a zone batch: the same reason on each row, which the journal shows in place of the title. */
+export function skipTasks(ids: string[], reason: string): Promise<string[]> {
+  return closeTasks(ids, "skipped", reason.trim());
+}
+
 /**
- * Undo of a Done-all from the Today toast: the rows of the set go back to pending. Only rows still
- * done change, so a row reopened and acted on again meanwhile keeps its new state; the ids that
- * changed are returned.
+ * Undo of a set closed from Today (Done-all, a batch's Done or Skip): the rows go back to pending.
+ * Only rows still in the status the set was given change, so a row reopened and acted on again
+ * meanwhile keeps its new state, and Undo of a Skip never reopens a row that was done; the ids that
+ * changed are returned. A set Done wrote no note, so its Undo leaves the note alone; a Skip's reason
+ * goes with the skip.
  */
-export async function reopenTasks(ids: string[]): Promise<string[]> {
+export async function reopenTasks(ids: string[], status: "done" | "skipped"): Promise<string[]> {
   if (ids.length === 0) return [];
-  const r = await supabase
-    .from("tasks")
-    .update({ status: "pending", acted_at: null, note: "" })
-    .in("id", ids)
-    .eq("status", "done")
-    .select("id");
+  const patch = { status: "pending", acted_at: null, ...(status === "skipped" ? { note: "" } : {}) };
+  const r = await supabase.from("tasks").update(patch).in("id", ids).eq("status", status).select("id");
   const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
   if (changed.length > 0) notifyTasksChanged();
   return changed;

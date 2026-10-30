@@ -11,9 +11,24 @@ import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
-import { completeTask, completeTasks, countDoneSince, listDueTasks, reopenTask, reopenTasks, skipTask, snoozeTask } from "../lib/db";
-import { buzz, checkIn, dayPhase, dueNow, greetingFor, isLate, prefersReducedMotion, sortByDue } from "../lib/today";
+import { DUE_NOW, summarize, withBatches, type Batch, type BatchPlant } from "../lib/batches";
+import { completeTask, completeTasks, countDoneSince, listDueTasks, reopenTask, reopenTasks, skipTask, skipTasks, snoozeTask } from "../lib/db";
+import {
+  buzz,
+  checkIn,
+  clearsTheDay,
+  dayPhase,
+  doneAllIds,
+  doneAllRepeatsBatch,
+  dueNow,
+  greetingFor,
+  isLate,
+  prefersReducedMotion,
+  sortByDue,
+  weekdayDate,
+} from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
+import { BatchCard, type BatchAction } from "./today/BatchCard";
 import { RoundCard } from "./today/RoundCard";
 import { WeatherCard } from "./today/WeatherCard";
 import { WeekStrip, type WeekDay } from "./today/WeekStrip";
@@ -36,6 +51,45 @@ const MORNING_RUN_MINUTE = 5;
 type SiteFilter = "all" | Site;
 type ActionKind = TaskAction["kind"];
 
+const NONE_LEFT_OUT: ReadonlySet<string> = new Set();
+
+interface LeftOut {
+  /** The day the plants were unticked; another day's are left behind. */
+  day: string;
+  ids: ReadonlySet<string>;
+}
+
+const LEFT_OUT_KEY = "plantcare.leftOut";
+
+/**
+ * Plants unticked in a zone batch, kept for the app session, as `expandedThisSession` is: the
+ * chevron to a plant's page and the tab bar unmount Today, and its state would go with it. A copy
+ * in sessionStorage survives Android discarding the page in the background.
+ */
+let keptLeftOut: LeftOut | null = null;
+
+function readLeftOut(): LeftOut {
+  if (keptLeftOut) return keptLeftOut;
+  try {
+    const raw = JSON.parse(sessionStorage.getItem(LEFT_OUT_KEY) ?? "null") as { day?: unknown; ids?: unknown } | null;
+    if (raw && typeof raw.day === "string" && Array.isArray(raw.ids)) {
+      return { day: raw.day, ids: new Set(raw.ids.filter((id): id is string => typeof id === "string")) };
+    }
+  } catch {
+    // storage blocked or unreadable: nothing unticked
+  }
+  return { day: "", ids: new Set() };
+}
+
+function keepLeftOut(value: LeftOut) {
+  keptLeftOut = value;
+  try {
+    sessionStorage.setItem(LEFT_OUT_KEY, JSON.stringify({ day: value.day, ids: [...value.ids] }));
+  } catch {
+    // storage blocked: kept for this session in memory only
+  }
+}
+
 interface Loaded {
   today: string;
   /** When the list was read (ms), so a return after the 06:00 run reads it again. */
@@ -51,8 +105,11 @@ interface ToastState {
   message: string;
   /** The task Undo reopens; absent for a snooze. */
   undo?: TaskWithPlant;
-  /** The set a Done-all closed, which Undo reopens together. */
-  undoAll?: string[];
+  /**
+   * The set a Done-all or a batch closed, which Undo reopens together from the status it was given;
+   * for a batch, also the plants that were unticked, which Undo leaves unticked again.
+   */
+  undoAll?: { ids: string[]; status: "done" | "skipped"; leftOut: string[] };
 }
 
 function message(err: unknown): string {
@@ -143,7 +200,17 @@ export function TodayScreen() {
   const [celebrate, setCelebrate] = useState(false);
   const [site, setSite] = useState<SiteFilter>(readSite);
   const [day, setDay] = useState<string | null>(null);
+  /**
+   * Plants unticked in a zone batch (their task ids), for the day they were unticked: kept here and
+   * for the session, not in the card, so a reload of the list (Refresh, the 06:05 read) or a visit to
+   * a plant's page does not tick them again, and left behind at midnight with the day's batches.
+   */
+  const [leftOut, setLeftOut] = useState<LeftOut>(readLeftOut);
   const [hour, setHour] = useState(() => new Date().getHours());
+
+  useEffect(() => {
+    keepLeftOut(leftOut);
+  }, [leftOut]);
   const [streak, setStreak] = useState(() => checkIn(localIsoDate()));
 
   useEffect(() => {
@@ -272,12 +339,7 @@ export function TodayScreen() {
     setRefreshNote(null);
     setLeaving((prev) => ({ ...prev, [task.id]: action.kind }));
     if (action.kind === "done") buzz(18);
-    // Whether this tick clears the day: nothing else late or due today that is not already on its
-    // way out. Open windows do not count; they can stay open for months.
-    const lastOfDay =
-      action.kind === "done" &&
-      dueNow(task, loaded.today) &&
-      !loaded.tasks.some((x) => x.id !== task.id && dueNow(x, loaded.today) && !leaving[x.id]);
+    const lastOfDay = clearsTheDay(loaded.tasks, [task.id], action.kind, loaded.today, (id) => !!leaving[id]);
     try {
       const save: Promise<boolean | string> =
         action.kind === "done"
@@ -324,30 +386,50 @@ export function TodayScreen() {
   }
 
   /**
-   * Done for a site's waterings late or due today, in one update: the cards tick and fold together,
-   * the round moves by the number closed, and one toast offers Undo for the set. A watering closed
-   * meanwhile from another screen (or by the morning rain skip) is left out, as a single Done is.
+   * Done or Skip for a set in one update: a site's waterings late or due today (Done-all), or the
+   * plants still ticked in a zone batch. The cards tick (or slide) and fold together, the round moves
+   * by the number done, and one toast offers Undo for the set. A watering closed meanwhile from
+   * another screen (or by the morning rain skip) is left out, as a single Done leaves it out. After a
+   * batch's own action its unticked plants are ticked again: they come back as a smaller batch.
    */
-  async function doneAll(ids: string[]) {
+  async function actAll(ids: string[], action: BatchAction, batch?: Batch<TaskWithPlant>) {
     if (!loaded || ids.length === 0 || ids.some((id) => leaving[id])) return;
     setError(null);
     setRefreshNote(null);
-    setLeaving((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, "done" as ActionKind])) }));
-    buzz(18);
-    const set = new Set(ids);
-    const lastOfDay = !loaded.tasks.some((x) => !set.has(x.id) && dueNow(x, loaded.today) && !leaving[x.id]);
+    setLeaving((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, action.kind as ActionKind])) }));
+    if (action.kind === "done") buzz(18);
+    const lastOfDay = clearsTheDay(loaded.tasks, ids, action.kind, loaded.today, (id) => !!leaving[id]);
     try {
-      const [, closed] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), completeTasks(ids)]);
+      const save = action.kind === "done" ? completeTasks(ids) : skipTasks(ids, action.reason);
+      const [, closed] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), save]);
+      // Every id sent leaves the list: the ones not returned were not pending any more either.
+      const sent = new Set(ids);
+      // The batch's plants not sent were the unticked ones: an Undo unticks them again.
+      const keptOut = batch ? batch.tasks.map((x) => x.id).filter((id) => !sent.has(id)) : [];
+      const done = action.kind === "done" ? closed.length : 0;
+      setLoaded((prev) => (prev ? { ...prev, tasks: prev.tasks.filter((x) => !sent.has(x.id)), doneToday: prev.doneToday + done } : prev));
+      if (batch) forget(batch.tasks.map((x) => x.id));
       if (closed.length === 0) {
         setRefreshNote(t.today.alreadyClosed);
         reload();
         return;
       }
-      const gone = new Set(closed);
-      setLoaded((prev) => (prev ? { ...prev, tasks: prev.tasks.filter((x) => !gone.has(x.id)), doneToday: prev.doneToday + closed.length } : prev));
-      setToast({ id: nextToastId(), kind: "done", message: t.today.toastDoneAll(closed.length), undoAll: closed });
+      let text: string;
+      if (batch) {
+        const gone = new Set(closed);
+        const plants = summarize(batch.tasks.filter((x) => gone.has(x.id)), loaded.today).plants;
+        text = t.today.toastBatch(action.kind === "done", batch.zone, plants, batch.day === DUE_NOW ? "" : weekdayDate(batch.day));
+      } else {
+        text = t.today.toastDoneAll(closed.length);
+      }
+      setToast({
+        id: nextToastId(),
+        kind: action.kind,
+        message: text,
+        undoAll: { ids: closed, status: action.kind === "done" ? "done" : "skipped", leftOut: keptOut },
+      });
       if (closed.length < ids.length) {
-        // The rest were not pending any more: the list is read again so they leave it too.
+        // The rest were not pending any more: the list is read again to be sure of it.
         setRefreshNote(t.today.someAlreadyClosed);
         reload();
       }
@@ -366,14 +448,43 @@ export function TodayScreen() {
     }
   }
 
+  /** Ticks or unticks a plant of a batch (all its waterings there), for the day on screen. */
+  function toggleLeftOut(plant: BatchPlant) {
+    const day = loaded?.today ?? localIsoDate();
+    setLeftOut((prev) => {
+      const next = new Set(prev.day === day ? prev.ids : []);
+      const out = plant.task_ids.every((id) => next.has(id));
+      for (const id of plant.task_ids) {
+        if (out) next.delete(id);
+        else next.add(id);
+      }
+      return { day, ids: next };
+    });
+  }
+
+  function forget(ids: string[]) {
+    setLeftOut((prev) => {
+      if (!ids.some((id) => prev.ids.has(id))) return prev;
+      const next = new Set(prev.ids);
+      for (const id of ids) next.delete(id);
+      return { day: prev.day, ids: next };
+    });
+  }
+
   async function undo() {
     const task = toast?.undo;
     const all = toast?.undoAll;
     if ((!task && !all) || undoing) return;
     setUndoing(true);
     try {
-      if (all) await reopenTasks(all);
-      else if (task) await reopenTask(task.id);
+      const reopened = all ? (await reopenTasks(all.ids, all.status)).length > 0 : task ? await reopenTask(task.id) : false;
+      // Nothing reopened: the rows changed meanwhile (acted on again on another screen).
+      if (!reopened) setRefreshNote(t.today.undoNothing);
+      else if (all && all.leftOut.length > 0) {
+        const day = loaded?.today ?? localIsoDate();
+        const kept = all.leftOut;
+        setLeftOut((prev) => ({ day, ids: new Set([...(prev.day === day ? prev.ids : []), ...kept]) }));
+      }
       setToast(null);
       reload();
     } catch (err) {
@@ -385,6 +496,7 @@ export function TodayScreen() {
 
   const today = loaded?.today ?? localIsoDate();
   const tasks = loaded?.tasks ?? [];
+  const left = leftOut.day === today ? leftOut.ids : NONE_LEFT_OUT;
   // Late means a missed watering or an ended window; a window that is simply open is not late.
   const overdue = tasks.filter((x) => isLate(x, today)).length;
   // Today's round: what is late or due today. Open windows stay out, or the day could never clear.
@@ -479,9 +591,13 @@ export function TodayScreen() {
               <p className="center muted">{t.today.dayEmpty}</p>
             ) : (
               groups.map((g) => {
-                // Waterings late or due today at this site, not already on their way out: two or
-                // more, and the heading offers to close them together after a watering round.
-                const waterings = g.tasks.filter((x) => x.type === "water" && dueNow(x, today) && !leaving[x.id]).map((x) => x.id);
+                // A zone's waterings due together share one card (Phase 11).
+                const items = withBatches(g.tasks, today);
+                // Waterings late or due today at this site, less the plants unticked in a batch and the
+                // tasks on their way out: two or more, and the heading offers to close them together,
+                // unless one batch already holds them all and its Done says the same.
+                const waterings = doneAllIds(g.tasks, today, (id) => left.has(id) || !!leaving[id]);
+                const showDoneAll = waterings.length > 0 && !doneAllRepeatsBatch(waterings, items);
                 return (
                   <section key={g.site} className="section">
                     <div className="site-head">
@@ -489,23 +605,35 @@ export function TodayScreen() {
                         <SiteLabel site={g.site} size={20} />
                         <span className="count">{t.today.taskCount(g.tasks.length)}</span>
                       </h2>
-                      {waterings.length >= 2 && (
-                        <button type="button" className="small done-all" onClick={() => void doneAll(waterings)}>
+                      {showDoneAll && (
+                        <button type="button" className="small done-all" onClick={() => void actAll(waterings, { kind: "done" })}>
                           <Check size={18} strokeWidth={2.5} aria-hidden />
                           {t.today.doneAll(waterings.length)}
                         </button>
                       )}
                     </div>
-                    {g.tasks.map((task) => (
-                      <TaskCard
-                        key={task.id}
-                        task={task}
-                        today={today}
-                        plant={task.plant}
-                        leaving={leaving[task.id] ?? null}
-                        onAct={(action) => void act(task, action)}
-                      />
-                    ))}
+                    {items.map((item) =>
+                      item.kind === "batch" ? (
+                        <BatchCard
+                          key={`batch:${item.batch.key}`}
+                          batch={item.batch}
+                          today={today}
+                          leaving={leaving}
+                          left={left}
+                          onToggle={toggleLeftOut}
+                          onAct={(ids, action) => void actAll(ids, action, item.batch)}
+                        />
+                      ) : (
+                        <TaskCard
+                          key={item.task.id}
+                          task={item.task}
+                          today={today}
+                          plant={item.task.plant}
+                          leaving={leaving[item.task.id] ?? null}
+                          onAct={(action) => void act(item.task, action)}
+                        />
+                      ),
+                    )}
                   </section>
                 );
               })

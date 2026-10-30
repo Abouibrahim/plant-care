@@ -18,6 +18,7 @@ const {
   completeTasks,
   reopenTask,
   reopenTasks,
+  skipTasks,
   insertManualTask,
   deletePlant,
   countDueTasks,
@@ -184,13 +185,38 @@ describe("completeTasks and reopenTasks", () => {
     const a = addTask({ status: "done", acted_at: "2026-10-01T06:00:00Z" });
     const b = addTask({ status: "done", acted_at: "2026-10-01T06:00:00Z", plant_id: "p2" });
     const skipped = addTask({ status: "skipped", acted_at: "2026-10-01T06:00:00Z", note: "Too wet", plant_id: "p3" });
-    const reopened = await reopenTasks([a.id, b.id, skipped.id]);
+    const reopened = await reopenTasks([a.id, b.id, skipped.id], "done");
     expect(reopened.sort()).toEqual([a.id, b.id].sort());
     expect(byId(a.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
     expect(byId(b.id).status).toBe("pending");
     expect(byId(skipped.id)).toMatchObject({ status: "skipped", note: "Too wet" });
-    expect(await reopenTasks([])).toEqual([]);
+    expect(await reopenTasks([], "done")).toEqual([]);
     expect(await completeTasks([])).toEqual([]);
+  });
+
+  it("keeps a pending reminder's own words through a set Done and its Undo", async () => {
+    const reminder = addTask({ type: "water", rule_key: "manual:r1", due_on: "2026-06-01", window_end: null, title: "Water the new graft", note: "by hand, 5 L" });
+    expect(await completeTasks([reminder.id])).toEqual([reminder.id]);
+    expect(byId(reminder.id)).toMatchObject({ status: "done", note: "by hand, 5 L" });
+    expect(await reopenTasks([reminder.id], "done")).toEqual([reminder.id]);
+    expect(byId(reminder.id)).toMatchObject({ status: "pending", acted_at: null, note: "by hand, 5 L" });
+  });
+});
+
+describe("skipTasks", () => {
+  it("skips the pending rows of a set with one reason, and Undo by status reopens them", async () => {
+    const a = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-01", window_end: null });
+    const b = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-01", window_end: null, plant_id: "p2" });
+    const done = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-01", window_end: null, plant_id: "p3", status: "done", acted_at: "2026-06-01T06:00:00Z" });
+    const skipped = await skipTasks([a.id, b.id, done.id], " soil still wet ");
+    expect(skipped.sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id)).toMatchObject({ status: "skipped", note: "soil still wet" });
+    expect(byId(done.id)).toMatchObject({ status: "done", note: "" });
+    // Undo of a skipped set reopens the skipped rows only, never the one that was done.
+    expect((await reopenTasks([a.id, b.id, done.id], "skipped")).sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+    expect(byId(done.id).status).toBe("done");
+    expect(await skipTasks([], "x")).toEqual([]);
   });
 });
 

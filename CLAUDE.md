@@ -38,7 +38,7 @@ api/                 Vercel functions (one file per route)
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, check.md, *.schema.json
 src/                 the PWA (screens: Today, Capture, Check, Plant, Plants with its map, Species, Settings, Tags; map/ holds the Leaflet screens, loaded lazily)
 supabase/schema.sql  tables, enums, RLS
-tests/               vitest over the dates, the task expansion, the digest, the Today reading, the token verdict, the app's task writes, the planting check, the weather and the map and tags (mockdb.ts imitates the query builder)
+tests/               vitest over the dates, the task expansion, the digest, the Today reading, the zone batches, the token verdict, the app's task writes, the planting check, the weather and the map and tags (mockdb.ts imitates the query builder)
 docs/SPEC.md         the design spec
 PHASE1.md            first milestone with acceptance tests
 ```
@@ -95,7 +95,7 @@ export async function callJson(opts: {
 2. For each plant and rule: age in months from `planted_on` (treat null as mature); skip when the rule's `age` does not match (`any` always matches).
 3. For the next 90 days: window rules (every type except water) create one task on the first day of the first month in `months` that falls in range, `due_on` = that day, `window_end` = last day of the last listed month; water rules create a task every `every_days` on days whose month is in `months`.
 4. Insert only when no task exists with the same `plant_id`, `rule_key` (`${type}:${months.join("-")}:${age}`, with `:${every_days}` appended for a periodic watering, the months sorted) and `due_on`.
-5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three lines in digest order (early notices, late, due today, open windows), each `title · tag`. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
+5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per subscription: title "Farm: 6 tasks", body the first three lines in digest order (early notices, late, due today, open windows), each `title · tag`; the periodic waterings the calendar wrote for one zone, due together for two plants or more, share one line, `Water 9 plants (20 L each) · zone`, at the place of the most pressing of them (Phase 11, `src/lib/batches.ts`, which Today uses for its batch cards); the title and "+N more" still count tasks. Send `lead_days` early for window rules by including tasks with `due_on <= today + lead_days` once.
 6. Weather (Phase 8; the spec had it out of scope, Mohamed asked for it on 2026-10-26): the run first fetches Open-Meteo into `weather_days` (a failure is reported, the rest runs), and after the expansion closes the waterings due today or overdue as skipped when the last two days' rain, or today's likely rain, reaches the `weather` setting's threshold. Alerts (heat, sirocco, frost, gale, heavy rain) for today and tomorrow, and the skip, go out as one more push. The rules live in `src/lib/weather.ts`, shared with Today's card.
 
 ## Working agreements

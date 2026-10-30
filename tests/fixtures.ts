@@ -50,6 +50,7 @@ export function fixture(options: MockOptions = {}): Fixture {
         tag: `Plant ${n}`,
         site: "farm" as Site,
         zone: "",
+        quantity: 1,
         planted_on: null,
         created_at: `2026-01-01T00:00:${String(n).padStart(2, "0")}Z`,
         ...plant,
