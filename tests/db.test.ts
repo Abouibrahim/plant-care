@@ -12,8 +12,22 @@ vi.mock("../src/lib/supabase", async () => {
   return { supabase: makeDb(sharedState), PHOTOS_BUCKET: "photos", supabaseConfigured: true };
 });
 
-const { snoozeTask, completeTask, reopenTask, deletePlant, countDueTasks, listRecentTreatments, findPlantsByTagCode, listPlantSpots, latestPhotos, photoUrl, uploadThumbnail } =
-  await import("../src/lib/db");
+const {
+  snoozeTask,
+  completeTask,
+  completeTasks,
+  reopenTask,
+  reopenTasks,
+  insertManualTask,
+  deletePlant,
+  countDueTasks,
+  listRecentTreatments,
+  findPlantsByTagCode,
+  listPlantSpots,
+  latestPhotos,
+  photoUrl,
+  uploadThumbnail,
+} = await import("../src/lib/db");
 
 const db = makeClient(sharedState);
 let n = 0;
@@ -139,6 +153,82 @@ describe("completeTask and reopenTask", () => {
     expect(byId(task.id).status).toBe("done");
     expect(await reopenTask(task.id)).toBe(true);
     expect(byId(task.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+  });
+
+  it("keeps the note given with Done, trimmed, and Undo clears it", async () => {
+    const task = addTask({});
+    expect(await completeTask(task.id, "  12 kg ")).toBe(true);
+    expect(byId(task.id)).toMatchObject({ status: "done", note: "12 kg" });
+    expect(byId(task.id).acted_at).not.toBeNull();
+    await reopenTask(task.id);
+    expect(byId(task.id).note).toBe("");
+  });
+});
+
+describe("completeTasks and reopenTasks", () => {
+  it("closes the pending rows of the set in one update and returns the ids that changed", async () => {
+    const a = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-01", window_end: null });
+    const b = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-08", window_end: null, plant_id: "p2" });
+    const c = addTask({ type: "water", rule_key: "water:6:any:7", due_on: "2026-06-01", window_end: null, plant_id: "p3", status: "done", acted_at: "2026-06-01T06:00:00Z" });
+    const closed = await completeTasks([a.id, b.id, c.id]);
+    expect(closed.sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id).status).toBe("done");
+    expect(byId(b.id).status).toBe("done");
+    expect(byId(a.id).acted_at).not.toBeNull();
+    // The row closed elsewhere keeps its own time.
+    expect(byId(c.id).acted_at).toBe("2026-06-01T06:00:00Z");
+    expect(await completeTasks([a.id, b.id])).toEqual([]);
+  });
+
+  it("reopens the done rows of the set only, so a skipped row and an empty set change nothing", async () => {
+    const a = addTask({ status: "done", acted_at: "2026-10-01T06:00:00Z" });
+    const b = addTask({ status: "done", acted_at: "2026-10-01T06:00:00Z", plant_id: "p2" });
+    const skipped = addTask({ status: "skipped", acted_at: "2026-10-01T06:00:00Z", note: "Too wet", plant_id: "p3" });
+    const reopened = await reopenTasks([a.id, b.id, skipped.id]);
+    expect(reopened.sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+    expect(byId(b.id).status).toBe("pending");
+    expect(byId(skipped.id)).toMatchObject({ status: "skipped", note: "Too wet" });
+    expect(await reopenTasks([])).toEqual([]);
+    expect(await completeTasks([])).toEqual([]);
+  });
+});
+
+describe("insertManualTask", () => {
+  const base = { plant_id: "p1", type: "feed" as const, title: "  Compost under the fig ", note: " two buckets ", todayIso: "2026-10-30" };
+
+  it("writes a done row keyed manual:, dated today, with the title and note trimmed and no instruction", async () => {
+    const row = await insertManualTask(base);
+    expect(row.rule_key.startsWith("manual:")).toBe(true);
+    expect(row).toMatchObject({ plant_id: "p1", type: "feed", status: "done", due_on: "2026-10-30", window_end: null, instruction: "", title: "Compost under the fig", note: "two buckets" });
+    expect(row.acted_at).not.toBeNull();
+    expect(sharedState.tasks).toHaveLength(1);
+  });
+
+  it("writes a pending reminder on the chosen day instead when asked", async () => {
+    const row = await insertManualTask({ ...base, type: "protect", title: "Stake it", note: "", remind_on: "2026-11-03" });
+    expect(row).toMatchObject({ status: "pending", due_on: "2026-11-03", acted_at: null, window_end: null });
+    expect(row.rule_key.startsWith("manual:")).toBe(true);
+    expect(await countDueTasks("2026-11-03")).toBe(1);
+  });
+
+  it("gives every entry its own key, so two of one kind on one day both stand", async () => {
+    const first = await insertManualTask(base);
+    const second = await insertManualTask(base);
+    expect(first.rule_key).not.toBe(second.rule_key);
+    expect(sharedState.tasks).toHaveLength(2);
+  });
+
+  it("is left alone by the expansion, the reminder pending and the log done", async () => {
+    sharedState.species.push({ id: "s1", care_calendar: [water([6, 7, 8, 9], 3)] });
+    sharedState.plants.push({ id: "p1", species_id: "s1", tag: "Fig", site: "farm", planted_on: null });
+    const done = await insertManualTask(base);
+    const reminder = await insertManualTask({ ...base, type: "protect", title: "Stake it", remind_on: "2026-10-20" });
+    const r = await runExpansion(db, "2026-10-30");
+    expect(r.removed).toBe(0);
+    expect(r.expired + r.superseded).toBe(0);
+    expect(byId(done.id).status).toBe("done");
+    expect(byId(reminder.id)).toMatchObject({ status: "pending", due_on: "2026-10-20" });
   });
 });
 

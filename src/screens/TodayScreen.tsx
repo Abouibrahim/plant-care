@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, Camera, RefreshCw } from "lucide-react";
+import { CalendarDays, Camera, Check, RefreshCw } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { GardenScene } from "../components/GardenScene";
 import { LeafFall } from "../components/LeafFall";
@@ -11,7 +11,7 @@ import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
-import { completeTask, countDoneSince, listDueTasks, reopenTask, skipTask, snoozeTask } from "../lib/db";
+import { completeTask, completeTasks, countDoneSince, listDueTasks, reopenTask, reopenTasks, skipTask, snoozeTask } from "../lib/db";
 import { buzz, checkIn, dayPhase, dueNow, greetingFor, isLate, prefersReducedMotion, sortByDue } from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
 import { RoundCard } from "./today/RoundCard";
@@ -51,6 +51,8 @@ interface ToastState {
   message: string;
   /** The task Undo reopens; absent for a snooze. */
   undo?: TaskWithPlant;
+  /** The set a Done-all closed, which Undo reopens together. */
+  undoAll?: string[];
 }
 
 function message(err: unknown): string {
@@ -279,7 +281,7 @@ export function TodayScreen() {
     try {
       const save: Promise<boolean | string> =
         action.kind === "done"
-          ? completeTask(task.id)
+          ? completeTask(task.id, action.note)
           : action.kind === "skip"
             ? skipTask(task.id, action.reason)
             : snoozeTask(task, action.days, localIsoDate());
@@ -321,12 +323,57 @@ export function TodayScreen() {
     }
   }
 
+  /**
+   * Done for a site's waterings late or due today, in one update: the cards tick and fold together,
+   * the round moves by the number closed, and one toast offers Undo for the set. A watering closed
+   * meanwhile from another screen (or by the morning rain skip) is left out, as a single Done is.
+   */
+  async function doneAll(ids: string[]) {
+    if (!loaded || ids.length === 0 || ids.some((id) => leaving[id])) return;
+    setError(null);
+    setRefreshNote(null);
+    setLeaving((prev) => ({ ...prev, ...Object.fromEntries(ids.map((id) => [id, "done" as ActionKind])) }));
+    buzz(18);
+    const set = new Set(ids);
+    const lastOfDay = !loaded.tasks.some((x) => !set.has(x.id) && dueNow(x, loaded.today) && !leaving[x.id]);
+    try {
+      const [, closed] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), completeTasks(ids)]);
+      if (closed.length === 0) {
+        setRefreshNote(t.today.alreadyClosed);
+        reload();
+        return;
+      }
+      const gone = new Set(closed);
+      setLoaded((prev) => (prev ? { ...prev, tasks: prev.tasks.filter((x) => !gone.has(x.id)), doneToday: prev.doneToday + closed.length } : prev));
+      setToast({ id: nextToastId(), kind: "done", message: t.today.toastDoneAll(closed.length), undoAll: closed });
+      if (closed.length < ids.length) {
+        // The rest were not pending any more: the list is read again so they leave it too.
+        setRefreshNote(t.today.someAlreadyClosed);
+        reload();
+      }
+      if (lastOfDay) {
+        setCelebrate(true);
+        buzz([20, 80, 30]);
+      }
+    } catch (err) {
+      setError(`${t.today.actionFailed}: ${message(err)}`);
+    } finally {
+      setLeaving((prev) => {
+        const next = { ...prev };
+        for (const id of ids) delete next[id];
+        return next;
+      });
+    }
+  }
+
   async function undo() {
     const task = toast?.undo;
-    if (!task || undoing) return;
+    const all = toast?.undoAll;
+    if ((!task && !all) || undoing) return;
     setUndoing(true);
     try {
-      await reopenTask(task.id);
+      if (all) await reopenTasks(all);
+      else if (task) await reopenTask(task.id);
       setToast(null);
       reload();
     } catch (err) {
@@ -431,24 +478,37 @@ export function TodayScreen() {
             ) : groups.length === 0 ? (
               <p className="center muted">{t.today.dayEmpty}</p>
             ) : (
-              groups.map((g) => (
-                <section key={g.site} className="section">
-                  <h2 className="site-heading">
-                    <SiteLabel site={g.site} size={20} />
-                    <span className="count">{t.today.taskCount(g.tasks.length)}</span>
-                  </h2>
-                  {g.tasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      today={today}
-                      plant={task.plant}
-                      leaving={leaving[task.id] ?? null}
-                      onAct={(action) => void act(task, action)}
-                    />
-                  ))}
-                </section>
-              ))
+              groups.map((g) => {
+                // Waterings late or due today at this site, not already on their way out: two or
+                // more, and the heading offers to close them together after a watering round.
+                const waterings = g.tasks.filter((x) => x.type === "water" && dueNow(x, today) && !leaving[x.id]).map((x) => x.id);
+                return (
+                  <section key={g.site} className="section">
+                    <div className="site-head">
+                      <h2 className="site-heading">
+                        <SiteLabel site={g.site} size={20} />
+                        <span className="count">{t.today.taskCount(g.tasks.length)}</span>
+                      </h2>
+                      {waterings.length >= 2 && (
+                        <button type="button" className="small done-all" onClick={() => void doneAll(waterings)}>
+                          <Check size={18} strokeWidth={2.5} aria-hidden />
+                          {t.today.doneAll(waterings.length)}
+                        </button>
+                      )}
+                    </div>
+                    {g.tasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        today={today}
+                        plant={task.plant}
+                        leaving={leaving[task.id] ?? null}
+                        onAct={(action) => void act(task, action)}
+                      />
+                    ))}
+                  </section>
+                );
+              })
             )}
           </>
         )
@@ -459,7 +519,7 @@ export function TodayScreen() {
           key={toast.id}
           kind={toast.kind}
           message={toast.message}
-          onUndo={toast.undo ? () => void undo() : undefined}
+          onUndo={toast.undo || toast.undoAll ? () => void undo() : undefined}
           undoing={undoing}
         />
       )}

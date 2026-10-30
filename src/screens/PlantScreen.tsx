@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BookOpen, ChevronLeft, ImagePlus, MapPin, MapPinned, MessageCircleQuestionMark, Pencil, QrCode, Stethoscope, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ClipboardPen, ImagePlus, MapPin, MapPinned, MessageCircleQuestionMark, Pencil, QrCode, Stethoscope, Trash2, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { storedAnswer } from "../lib/ask";
@@ -33,6 +33,7 @@ import { SiteLabel, TypePill } from "../components/TypeIcon";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
 import { AskPanel } from "./plant/AskPanel";
 import { DiagnosePanel } from "./plant/DiagnosePanel";
+import { LogSheet } from "./plant/LogSheet";
 import { PastDiagnoses } from "./plant/PastDiagnoses";
 import type { JournalEntry, Photo, PhotoKind, PlantWithSpecies, Question, Task, TaskStatus, TaskType } from "../types";
 
@@ -100,6 +101,7 @@ export function PlantScreen() {
   const [diagnose, setDiagnose] = useState<DiagnoseState>(null);
   const [ask, setAsk] = useState<AskState>(null);
   const [placing, setPlacing] = useState(false);
+  const [logging, setLogging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -163,6 +165,12 @@ export function PlantScreen() {
     setReloadKey((k) => k + 1);
   }
 
+  /** A manual log entry was written: the tasks and the journal again, opened on the tab that shows it. */
+  function logged(task: Task) {
+    reloadExtras();
+    setTab(task.status === "pending" ? "calendar" : "journal");
+  }
+
   async function saveRecord(values: RecordValues) {
     if (!plant) return;
     setSaving(true);
@@ -196,7 +204,7 @@ export function PlantScreen() {
     setBusyTaskId(task.id);
     setActionError(null);
     try {
-      if (action.kind === "done") await completeTask(task.id);
+      if (action.kind === "done") await completeTask(task.id, action.note);
       else if (action.kind === "skip") await skipTask(task.id, action.reason);
       else await snoozeTask(task, action.days, localIsoDate());
       reloadExtras();
@@ -376,6 +384,10 @@ export function PlantScreen() {
           <QrCode size={18} aria-hidden />
           {t.plant.tag}
         </Link>
+        <button type="button" className="small span-2" onClick={() => setLogging(true)} disabled={busy}>
+          <ClipboardPen size={18} aria-hidden />
+          {t.plant.logDone}
+        </button>
         <button type="button" className="small span-2" onClick={() => setAsk({ threadId: null })} disabled={busy}>
           <MessageCircleQuestionMark size={18} aria-hidden />
           {t.plant.ask}
@@ -500,6 +512,7 @@ export function PlantScreen() {
         />
       )}
       {ask && <AskPanel plant={plant} threadId={ask.threadId} onChanged={reloadExtras} onClose={() => setAsk(null)} />}
+      {logging && <LogSheet plant={plant} onSaved={logged} onClose={() => setLogging(false)} />}
       {placing && (
         <Suspense fallback={null}>
           <PositionSheet

@@ -6,7 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, ageInMonths, isoDate, isoDateIn, lastDayOfMonth, parseIso, ruleApplies, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import { en } from "../src/i18n/en.js";
 import {
-  DIAGNOSIS_RULE_PREFIX,
+  isAppWrittenRule,
   TASK_TYPES,
   type CareRule,
   type ExpandResponse,
@@ -254,8 +254,9 @@ export interface StaleTasks {
  *   newer one: inside the season the next watering supersedes it on that same day, so this only
  *   closes the season's last watering, which otherwise stayed in the digest until the season came
  *   round again ("Missed watering").
- * Done, skipped and snoozed rows are never listed, nor the rows a diagnosis wrote (`rule_key` starting
- * with `DIAGNOSIS_RULE_PREFIX`, the Phase 4 carve-out).
+ * Done, skipped and snoozed rows are never listed, nor the rows the app wrote: a diagnosis's
+ * (`rule_key` starting with `diagnosis:`, the Phase 4 carve-out) or the grower's own log and one-off
+ * reminders (`manual:`), which stay until the grower acts on them.
  */
 export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTasks {
   const expired: string[] = [];
@@ -263,7 +264,7 @@ export function staleTasks(tasks: StaleCandidate[], todayIso: string): StaleTask
   const missed: string[] = [];
   const newestDue = new Map<string, StaleCandidate>();
   for (const task of tasks) {
-    if (task.status !== "pending" || task.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) continue;
+    if (task.status !== "pending" || isAppWrittenRule(task.rule_key)) continue;
     if (task.window_end !== null) {
       if (task.window_end < todayIso) expired.push(task.id);
       continue;
@@ -337,7 +338,7 @@ export function carriedOver(seed: TaskInsert, acted: ActedWindow[], currentKeys:
       a.plant_id === seed.plant_id &&
       a.type === seed.type &&
       !currentKeys.has(a.rule_key) &&
-      !a.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX) &&
+      !isAppWrittenRule(a.rule_key) &&
       a.due_on <= end &&
       a.window_end >= seed.due_on &&
       day >= seed.due_on &&
@@ -452,9 +453,9 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
   });
   const obsolete = pendingRows
     .filter((r) => {
-      // Phase 4 carve-out: rows a diagnosis wrote (rule_key "diagnosis:<photo_id>", the
-      // re-photograph task) come from the app, not from a species rule; they are never obsolete here.
-      if (r.rule_key.startsWith(DIAGNOSIS_RULE_PREFIX)) return false;
+      // The carve-out: rows the app wrote (a diagnosis's re-photograph task, "diagnosis:<photo_id>",
+      // and the grower's own reminders, "manual:<uuid>") come from no species rule; never obsolete here.
+      if (isAppWrittenRule(r.rule_key)) return false;
       const keys = keysByPlant.get(r.plant_id);
       return keys !== undefined && !keys.has(r.rule_key);
     })

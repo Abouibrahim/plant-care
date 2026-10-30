@@ -120,6 +120,11 @@ export const fr: Strings = {
     snoozeNoDay: "Aucun jour libre où la reporter",
     alreadyActed: "Cette tâche a déjà été traitée",
     undoFailed: "La tâche n'a pas pu être rouverte",
+    doneWithNote: "Fait, avec une note",
+    doneNote: "Note (facultative), ex. 12 kg",
+    doneAll: (n) => `Fait : les ${n} arrosages`,
+    toastDoneAll: (n) => `Fait : ${n} arrosages`,
+    someAlreadyClosed: "Certains de ces arrosages étaient déjà fermés (par la pluie, ou depuis un autre écran) ; la liste est à jour.",
   },
 
   capture: {
@@ -203,6 +208,7 @@ export const fr: Strings = {
     addJournalPhoto: "Photo pour le journal",
     diagnose: "Diagnostiquer",
     ask: "Demander à Claude",
+    logDone: "Noter un soin fait",
     nextTasks: "Prochaines tâches",
     noTasks: "Aucune tâche en attente. Elles sont créées à partir des règles ci-dessous, 90 jours à l'avance.",
     moreTasksHint: "Les tâches apparaissent dans Aujourd'hui à leur échéance.",
@@ -222,6 +228,25 @@ export const fr: Strings = {
     position: "Position",
     tag: "Étiquette",
     showOnMap: "Voir sur la carte",
+  },
+
+  log: {
+    title: "Noter un soin fait",
+    intro: "Un soin fait sans rappel va dans le journal, et Claude le voit quand on l'interroge. Ou créez un rappel ponctuel.",
+    type: "Type de tâche",
+    what: "Ce qui a été fait",
+    whatPlaceholder: "ex. Paillé avec de la paille",
+    whatReminder: "À faire",
+    whatReminderPlaceholder: "ex. Tuteurer",
+    note: "Note (facultative)",
+    notePlaceholder: "ex. 12 kg, deux seaux de compost",
+    when: "Quand",
+    doneToday: "Fait aujourd'hui",
+    remind: "Me le rappeler",
+    remindOn: "Me le rappeler le",
+    save: "Enregistrer dans le journal",
+    saveReminder: "Créer le rappel",
+    failed: "L'entrée n'a pas pu être enregistrée",
   },
 
   /** Le diagnostic depuis l'écran de la plante ; les titres de tâches et les notes qu'il écrit sont ici aussi. */

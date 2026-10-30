@@ -1,17 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, TriangleAlert, X } from "lucide-react";
+import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, NotebookPen, TriangleAlert, X } from "lucide-react";
 import { t } from "../i18n";
 import { toLocalDate } from "../lib/dates";
 import { dueState, type DueState } from "../lib/today";
 import { Spinner } from "./Spinner";
 import { TypeTile } from "./TypeIcon";
-import type { Task } from "../types";
+import { TASK_MAX_NOTE_CHARS, type Task } from "../types";
 
-export type TaskAction = { kind: "done" } | { kind: "skip"; reason: string } | { kind: "snooze"; days: number };
+/** Done carries an optional note ("12 kg"), written to the row like a skip's reason. */
+export type TaskAction = { kind: "done"; note?: string } | { kind: "skip"; reason: string } | { kind: "snooze"; days: number };
 
 const SNOOZE_DAYS = [1, 3, 7];
-const MAX_REASON = 200;
+const MAX_REASON = TASK_MAX_NOTE_CHARS;
 
 function shortDate(iso: string): string {
   const d = toLocalDate(iso);
@@ -66,10 +67,16 @@ interface Props {
   onAct: (action: TaskAction) => void;
 }
 
-/** One task with Done, Skip (inline reason) and Snooze (1, 3 or 7 days). */
+/**
+ * One task with Done, Skip (inline reason) and Snooze (1, 3 or 7 days). "Done with a note" under the
+ * row opens the same inline form as Skip, whose Done submits with or without text; the one-tap Done
+ * stays as it is. The link sits under the buttons, not beside Done: the three buttons already fill
+ * a 360 px phone in French.
+ */
 export function TaskCard({ task, today, plant, busy = false, leaving = null, onAct }: Props) {
-  const [mode, setMode] = useState<"idle" | "skip" | "snooze">("idle");
+  const [mode, setMode] = useState<"idle" | "skip" | "snooze" | "note">("idle");
   const [reason, setReason] = useState("");
+  const [note, setNote] = useState("");
   const due = dueLabel(task, today);
   const DueIcon = DUE_ICONS[due.state];
   const locked = busy || leaving !== null;
@@ -78,6 +85,13 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
     e.preventDefault();
     if (locked) return;
     onAct({ kind: "skip", reason: reason.slice(0, MAX_REASON) });
+    setMode("idle");
+  }
+
+  function submitNote(e: FormEvent) {
+    e.preventDefault();
+    if (locked) return;
+    onAct({ kind: "done", note: note.slice(0, MAX_REASON) });
     setMode("idle");
   }
 
@@ -137,26 +151,53 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
           )}
 
           {mode === "idle" && (
-            <div className="task-actions">
-              <button type="button" className="primary small" disabled={locked} onClick={() => onAct({ kind: "done" })}>
-                {busy ? (
-                  <Spinner />
-                ) : (
-                  <>
-                    <Check size={18} strokeWidth={2.5} aria-hidden />
-                    {t.today.done}
-                  </>
-                )}
+            <>
+              <div className="task-actions">
+                <button type="button" className="primary small" disabled={locked} onClick={() => onAct({ kind: "done" })}>
+                  {busy ? (
+                    <Spinner />
+                  ) : (
+                    <>
+                      <Check size={18} strokeWidth={2.5} aria-hidden />
+                      {t.today.done}
+                    </>
+                  )}
+                </button>
+                <button type="button" className="small" disabled={locked} onClick={() => setMode("skip")}>
+                  <X size={18} aria-hidden />
+                  {t.today.skip}
+                </button>
+                <button type="button" className="small" disabled={locked} onClick={() => setMode("snooze")}>
+                  <AlarmClock size={18} aria-hidden />
+                  {t.today.snooze}
+                </button>
+              </div>
+              <button type="button" className="link small task-note-link" disabled={locked} onClick={() => setMode("note")}>
+                <NotebookPen size={16} aria-hidden />
+                {t.today.doneWithNote}
               </button>
-              <button type="button" className="small" disabled={locked} onClick={() => setMode("skip")}>
+            </>
+          )}
+
+          {mode === "note" && (
+            <form className="task-sub skip" onSubmit={submitNote}>
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t.today.doneNote}
+                aria-label={t.today.doneNote}
+                maxLength={MAX_REASON}
+                autoFocus
+                enterKeyHint="done"
+              />
+              <button type="submit" className="primary small" disabled={locked}>
+                <Check size={18} strokeWidth={2.5} aria-hidden />
+                {t.today.done}
+              </button>
+              <button type="button" className="small icon-btn" onClick={() => setMode("idle")} aria-label={t.common.cancel}>
                 <X size={18} aria-hidden />
-                {t.today.skip}
               </button>
-              <button type="button" className="small" disabled={locked} onClick={() => setMode("snooze")}>
-                <AlarmClock size={18} aria-hidden />
-                {t.today.snooze}
-              </button>
-            </div>
+            </form>
           )}
 
           {mode === "skip" && (
