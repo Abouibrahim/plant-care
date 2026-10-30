@@ -117,6 +117,22 @@ export type ProblemAiResult = Diagnosis & Usage & { note: string };
  */
 export const DIAGNOSIS_RULE_PREFIX = "diagnosis:";
 
+/**
+ * rule_key prefix of the task rows the grower writes by hand from the Plant screen (the manual care
+ * log of the review of 2026-10-30): `manual:<uuid>`, a done row for care done without a reminder, or
+ * a pending one-off reminder. Like the diagnosis rows, the expansion never removes or closes them.
+ */
+export const MANUAL_RULE_PREFIX = "manual:";
+
+/** Whether a task was written from the app (a diagnosis or the manual log) rather than by the expansion from a species rule. */
+export function isAppWrittenRule(ruleKeyValue: string): boolean {
+  return ruleKeyValue.startsWith(DIAGNOSIS_RULE_PREFIX) || ruleKeyValue.startsWith(MANUAL_RULE_PREFIX);
+}
+
+/** Longest title and note of a manual log entry; the sheet's fields stop at the same lengths. */
+export const MANUAL_MAX_TITLE_CHARS = 80;
+export const TASK_MAX_NOTE_CHARS = 200;
+
 // ---- ask ----------------------------------------------------------------------
 
 /** Longest question /api/ask accepts; the panel's text box stops at the same length. */

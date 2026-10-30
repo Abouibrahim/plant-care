@@ -115,6 +115,13 @@ export const en = {
     snoozeNoDay: "No free day to move it to",
     alreadyActed: "This task was already acted on",
     undoFailed: "The task could not be reopened",
+    /** Done with an optional note ("12 kg"); the journal shows the note in place of the title. */
+    doneWithNote: "Done with a note",
+    doneNote: "Note (optional), e.g. 12 kg",
+    /** The site heading's button when two or more waterings are late or due today. */
+    doneAll: (n: number) => `Done: all ${n} waterings`,
+    toastDoneAll: (n: number) => `Done: ${n} waterings`,
+    someAlreadyClosed: "Some of those waterings had already been closed (by the rain skip, or on another screen); the list is up to date now.",
   },
 
   capture: {
@@ -198,6 +205,7 @@ export const en = {
     addJournalPhoto: "Add a journal photo",
     diagnose: "Diagnose",
     ask: "Ask Claude about this plant",
+    logDone: "Log something done",
     nextTasks: "Next tasks",
     noTasks: "No pending tasks. They are created from the rules below, 90 days ahead.",
     moreTasksHint: "Tasks are listed on Today when they come due.",
@@ -217,6 +225,26 @@ export const en = {
     position: "Position",
     tag: "Tag",
     showOnMap: "Show on map",
+  },
+
+  /** The manual care log sheet on the Plant screen: care done by hand, or a one-off reminder. */
+  log: {
+    title: "Log something done",
+    intro: "Care done without a reminder goes in the journal, and Claude sees it when asked. Or set a one-off reminder.",
+    type: "Kind of task",
+    what: "What was done",
+    whatPlaceholder: "e.g. Mulched with straw",
+    whatReminder: "What to do",
+    whatReminderPlaceholder: "e.g. Stake it",
+    note: "Note (optional)",
+    notePlaceholder: "e.g. 12 kg, two buckets of compost",
+    when: "When",
+    doneToday: "Done today",
+    remind: "Remind me",
+    remindOn: "Remind me on",
+    save: "Save to the journal",
+    saveReminder: "Set the reminder",
+    failed: "The entry could not be saved",
   },
 
   /** The diagnosis flow on the Plant screen; the task titles and notes it writes live here too. */

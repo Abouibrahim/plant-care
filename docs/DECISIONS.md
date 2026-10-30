@@ -2,6 +2,17 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-10-30 — Done-all, a note on Done, and the manual care log (review 4.3, 6.2, 6.1)
+
+Three items of `docs/REVIEW-2026-10-30.md`. CLAUDE.md says the expansion writes the task rows and the app only closes them; the manual log is the second kind of row the app writes, after the diagnosis rows of Phase 4.
+
+- **Care done by hand is a task row, not a new table.** A "Log something done" sheet on the Plant screen writes a done task (`rule_key` `manual:<uuid>`, the type chosen, a short title, today's date, `acted_at` now, an optional note, no instruction, no window). The `journal` view already lists acted tasks, Ask already reads the newest done row of each type as "the last time each kind of task was done", and the tasks CSV already exports them, so a separate log table would have meant SQL, a second journal arm and a second context reader for the same facts. "Remind me instead" writes the same row pending on the chosen day; it shows on Today, on the Calendar tab and in the digest like any task, and stays until the grower acts on it.
+  - The key is a fresh uuid per entry, so the unique (plant, rule_key, due_on) constraint never refuses two entries of one kind on one day, and the prefix tells the rows apart from the expansion's.
+  - `manual:` joins `diagnosis:` in the expansion's carve-outs (`isAppWrittenRule` in `src/types.ts`): the obsolete-rule cleanup, `staleTasks` and `carriedOver` all leave them alone, so a reminder is never deleted as "no rule of the species" nor closed as a missed watering. The schema comment on `tasks` still names only the diagnosis rows; it is a comment, and `supabase/schema.sql` is not touched by this change.
+- **A note on Done goes to `tasks.note`, like a skip's reason.** `completeTask(id, note)`; the journal shows the note in place of the title already, so a harvest's "12 kg" is a yield line for free, and Ask's task lines quote it. Undo clears it with the rest.
+  - The trigger is a small "Done with a note" link under the three buttons, not a fourth button or a split Done: in French ("Fait", "Passer", "Reporter") the three already fill the card on a 360 px phone, and a long press is invisible. One-tap Done is unchanged.
+- **Done-all closes a site's waterings in one update, with one Undo.** The heading of a site with two or more waterings late or due today offers "Done: all N waterings"; `completeTasks(ids)` updates `in("id", ids).eq("status", "pending")` and returns the ids that changed, so a watering closed meanwhile (the rain skip, another screen) is left out and the list is read again. Undo is `reopenTasks(ids)` over the closed set only, touching done rows only, so a row the grower reopened and skipped in between keeps that. Windows and the other types are left to their own buttons: a round is a watering round.
+
 ## 2026-10-30 — Phase 9: Farm map and tree tags
 
 The spec stores a GPS pin per plant (block B) but never shows it, and maps and tags are outside it. Mohamed asked for item 3 of the feature review of 2026-10-25.

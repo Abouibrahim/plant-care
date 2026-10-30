@@ -151,6 +151,16 @@ describe("staleTasks", () => {
     expect(staleTasks(rows, "2026-06-16")).toEqual({ expired: [], superseded: [], missed: [] });
   });
 
+  it("leaves the grower's manual rows alone, overdue or not, even one with a window", () => {
+    const rows = [
+      task({ id: "reminder", type: "protect", rule_key: "manual:0d6f2c1e-8a7b-4c3d-9e2f-1a2b3c4d5e6f", due_on: "2026-05-01" }),
+      task({ id: "water-reminder", rule_key: "manual:5b1e9a20-1c2d-4e3f-8a9b-0c1d2e3f4a5b", due_on: "2026-05-01" }),
+      task({ id: "windowed", type: "harvest", rule_key: "manual:a3c4d5e6-f708-4192-a3b4-c5d6e7f80912", due_on: "2026-05-01", window_end: "2026-05-31" }),
+      task({ id: "rule-ended", type: "harvest", rule_key: "harvest:5:any", due_on: "2026-05-01", window_end: "2026-05-31" }),
+    ];
+    expect(staleTasks(rows, "2026-06-16")).toEqual({ expired: ["rule-ended"], superseded: [], missed: [] });
+  });
+
   it("closes the season's last watering once its interval has passed, and not before", () => {
     const last = task({ id: "last", rule_key: "water:6-7-8-9:any:7", due_on: "2026-09-28" });
     expect(staleTasks([last], "2026-10-04").missed).toEqual([]);
@@ -315,6 +325,36 @@ describe("runExpansion", () => {
     const r = await runExpansion(f.db, "2026-06-01");
     expect(r.removed).toBe(12 * 91);
     expect(f.pending()).toHaveLength(0);
+  });
+
+  it("never removes or closes the grower's manual rows, whatever the calendar does", async () => {
+    const f = fixture();
+    const id = f.plant([water([6, 7, 8, 9], 7)]);
+    const manual = (partial: Record<string, unknown>) => ({
+      id: `manual-${f.state.tasks.length}`,
+      plant_id: id,
+      rule_key: `manual:${crypto.randomUUID()}`,
+      window_end: null,
+      instruction: "",
+      note: "",
+      created_at: "2026-07-01T08:00:00Z",
+      ...partial,
+    });
+    f.state.tasks.push(manual({ type: "protect", title: "Stake it", due_on: "2026-07-03", status: "pending", acted_at: null }));
+    f.state.tasks.push(manual({ type: "feed", title: "Compost", due_on: "2026-07-01", status: "done", acted_at: "2026-07-01T08:00:00Z", note: "two buckets" }));
+    f.state.tasks.push(manual({ type: "water", title: "Extra bucket", due_on: "2026-07-02", status: "pending", acted_at: null }));
+    const first = await runExpansion(f.db, "2026-07-10");
+    expect(first.removed).toBe(0);
+    expect(first.expired).toBe(0);
+    // The rule's own overdue waterings collapse to the newest; the manual water reminder is not among them.
+    expect(f.tasks((t) => (t.rule_key as string).startsWith("manual:") && t.status === "pending")).toHaveLength(2);
+    expect(f.tasks((t) => t.title === "Compost")[0]).toMatchObject({ status: "done", note: "two buckets" });
+    // A regeneration that drops every rule removes the rule's pending tasks and nothing of the grower's.
+    f.state.species[0].care_calendar = [window("prune", [1, 2])];
+    const second = await runExpansion(f.db, "2026-07-11");
+    expect(second.removed).toBeGreaterThan(0);
+    expect(f.pending().every((t) => (t.rule_key as string).startsWith("manual:"))).toBe(true);
+    expect(f.pending()).toHaveLength(2);
   });
 
   it("expands one plant only when asked", async () => {

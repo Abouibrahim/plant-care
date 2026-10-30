@@ -629,6 +629,19 @@ input[type="checkbox"] {
   background: var(--tc-soft);
   color: var(--tc);
 }
+/* The kind-of-task chips of the manual log: the icon in the type's colour, the chosen one tinted. */
+.type-chips .chip svg {
+  color: var(--tc);
+}
+.type-chips .chip.active {
+  background: var(--tc-soft);
+  color: var(--tc);
+  border-color: var(--tc);
+}
+.when-switch button {
+  padding-left: 8px;
+  padding-right: 8px;
+}
 .site-label {
   display: inline-flex;
   align-items: center;
@@ -1013,6 +1026,16 @@ a.task-body:active {
   padding-right: 8px;
   white-space: nowrap;
 }
+/* "Done with a note" under the three buttons: light, left-aligned, one short line. */
+.task-note-link {
+  margin-top: 2px;
+  margin-left: -6px;
+  min-height: 36px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 6px;
+}
 .burst {
   position: absolute;
   left: 50%;
@@ -1341,6 +1364,23 @@ button.week-day.selected {
   font-size: 0.85rem;
   font-weight: 600;
   letter-spacing: 0;
+}
+/* The site heading with, after a watering round, "Done: all N waterings" beside it or under it. */
+.site-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+.site-head .site-heading {
+  margin-bottom: 0;
+}
+.done-all {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: var(--accent-soft);
 }
 
 .toast {

@@ -7,6 +7,7 @@ import { weatherSettings, type SprayTreatment } from "./weather";
 import { t } from "../i18n";
 import {
   DIAGNOSIS_RULE_PREFIX,
+  MANUAL_RULE_PREFIX,
   SITES,
   VERDICTS,
   type CheckSummary,
@@ -23,6 +24,7 @@ import {
   type SpeciesProfile,
   type Task,
   type TaskStatus,
+  type TaskType,
   type TaskWithPlant,
   type Verdict,
   type WeatherDay,
@@ -248,8 +250,9 @@ export async function updateSpeciesField<K extends keyof SpeciesProfile>(
 }
 
 // ---- tasks ------------------------------------------------------------------
-// Rows are written by the expansion (api/_tasks.ts); the app reads them and closes them. The one
-// exception is the diagnosis section below, which writes the treatment log and the re-photograph task.
+// Rows are written by the expansion (api/_tasks.ts); the app reads them and closes them. The two
+// exceptions are the diagnosis section below, which writes the treatment log and the re-photograph
+// task, and the manual log after it, where the grower records care done by hand or a one-off reminder.
 
 /** Fired on window whenever a task is acted on here or an expansion changed the table; the nav badge listens. */
 export const TASKS_CHANGED = "plantcare:tasks-changed";
@@ -351,8 +354,45 @@ export async function reopenTask(id: string): Promise<boolean> {
   return changed;
 }
 
-export function completeTask(id: string): Promise<boolean> {
-  return closeTask(id, "done", "");
+/** An optional note ("12 kg", "cut back to three leaders") goes to `note`, which the journal shows in place of the title. */
+export function completeTask(id: string, note = ""): Promise<boolean> {
+  return closeTask(id, "done", note.trim());
+}
+
+/**
+ * Done for a set of tasks in one update (the "Done: all N waterings" button on Today). Only the rows
+ * still pending change; the ids that did are returned, so a task closed meanwhile from another screen
+ * (or by the morning rain skip) is simply left out, as a single Done leaves it out.
+ */
+export async function completeTasks(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const r = await supabase
+    .from("tasks")
+    .update({ status: "done", acted_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("status", "pending")
+    .select("id");
+  const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
+  if (changed.length > 0) notifyTasksChanged();
+  return changed;
+}
+
+/**
+ * Undo of a Done-all from the Today toast: the rows of the set go back to pending. Only rows still
+ * done change, so a row reopened and acted on again meanwhile keeps its new state; the ids that
+ * changed are returned.
+ */
+export async function reopenTasks(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const r = await supabase
+    .from("tasks")
+    .update({ status: "pending", acted_at: null, note: "" })
+    .in("id", ids)
+    .eq("status", "done")
+    .select("id");
+  const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
+  if (changed.length > 0) notifyTasksChanged();
+  return changed;
 }
 
 /** The reason goes to `note`, which the journal shows in place of the title. */
@@ -526,6 +566,57 @@ export async function insertRephotoTask(input: {
   }
   notifyTasksChanged();
   return r.data as Task;
+}
+
+// ---- manual log -----------------------------------------------------------------
+// Care done by hand, or a one-off reminder, written from the Plant screen (the review of 2026-10-30,
+// 6.1): a task row keyed `manual:<uuid>`, so the journal lists it, Ask reads it as the last time that
+// kind of task was done, and the expansion leaves it alone like the diagnosis rows above.
+
+export function manualRuleKey(): string {
+  return `${MANUAL_RULE_PREFIX}${newId()}`;
+}
+
+export interface ManualTaskInput {
+  plant_id: string;
+  type: TaskType;
+  title: string;
+  note: string;
+  /** The phone's date, YYYY-MM-DD: the day a done entry is logged on. */
+  todayIso: string;
+  /**
+   * Set for "remind me instead": the row is written pending on this day and shows on Today, on the
+   * Calendar tab and in the digest like any task. Omitted or null, the row is written done today.
+   */
+  remind_on?: string | null;
+}
+
+/**
+ * Writes the row: done today with `acted_at` now, or pending on `remind_on`. The key is fresh, so the
+ * unique (plant, rule_key, due_on) constraint never refuses it; `window_end` is null and the
+ * instruction empty, since there is no species rule behind it.
+ */
+export async function insertManualTask(input: ManualTaskInput): Promise<Task> {
+  const reminder = typeof input.remind_on === "string" && input.remind_on !== "";
+  const r = await supabase
+    .from("tasks")
+    .insert({
+      plant_id: input.plant_id,
+      type: input.type,
+      rule_key: manualRuleKey(),
+      due_on: reminder ? input.remind_on : input.todayIso,
+      window_end: null,
+      title: input.title.trim(),
+      instruction: "",
+      status: reminder ? "pending" : "done",
+      acted_at: reminder ? null : new Date().toISOString(),
+      note: input.note.trim(),
+    })
+    .select("*")
+    .single();
+  const row = must(r) as Task;
+  notifyTasksChanged();
+  return row;
 }
 
 // ---- questions --------------------------------------------------------------
