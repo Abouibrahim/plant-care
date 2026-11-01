@@ -2,6 +2,33 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-11-01 — A user guide for the app as built
+
+The spec is the design of 2026-10-23, and Phases 6 to 11 went past it, so what the app does had to be pieced together from eleven `PHASE*.md` files and this log. `docs/USER-GUIDE.md` now describes 0.11.0 for the grower: each screen and what it does, the rules behind the tasks, the notifications and the weather, what works without a connection, the cost of each Claude call, the messages and what to do, and the setup and administration for the owner.
+
+- **Written from the code, then checked against it.** Nine readers mapped the app area by area from the source and `src/i18n/en.ts`. A second reader checked each map against the code: about 1,500 items confirmed, 408 corrected, added or removed. The finished guide, CLAUDE.md and README.md were then checked against the code once more by eleven reviewers, each one's findings re-checked by a skeptic: about 1,600 claims checked, 125 corrections kept and applied. Labels and messages are quoted as the English screens show them.
+- **The guide is kept current.** CLAUDE.md's working agreements now ask that a change the grower can see update the guide in the same commit. The `PHASE*.md` files stay as the record of each milestone, results included, even where the app has moved on: `PHASE4.md` prices a diagnosis at Sonnet 5.5 rates, and `PHASE3.md` expects the run's counts in the cron log, which logs nothing on success. The guide and this log are the current account. `docs/SPEC.md` gets a pointer under its heading and is otherwise unchanged.
+- **CLAUDE.md and README.md corrected against the repository.** CLAUDE.md now says that the eleven phases are built and lists the files the repository has grown (`src/lib`, `src/i18n/fr.ts`, `public/`, `scripts/`, the tests added since Phase 8, the docs). It describes the code as it is where it had fallen behind: the French interface, the map and the public `VITE_` keys, the owners row paired with `OWNER_USER_ID`, the 500 a token gets without `OWNER_USER_ID`, the dry run, the thumbnails, the six usage fields, the effort per call and the time-bound retries (with the `callJson` sample redrawn from the file), the runs of months and the tidying of the expansion, the exact-day early notice, the rain skip's scope, and when the app runs the expansion itself. README.md gains a feature list, the upgrade order of the phase SQL with its warning about running it again, the dry run, Node 22.12 and the pointer to the guide.
+- **Behaviour the old docs stated wrongly or not at all.** None of it is changed here; the guide states each as it is, and each could become a fix:
+  - the 06:00 rain skip also closes a watering reminder set by hand ("Remind me", `manual:`), since it selects pending waterings with no window whatever their key; the entry on the manual care log below (2026-10-30) says such a reminder stays until the grower acts on it;
+  - "Missed watering" closes a rule's newest pending watering once its interval has passed with none newer, which can happen mid-season after an early Done or a snooze, not only at the end of a season;
+  - a snooze counts from the later of the task's day and today, so an open window counts from today, and snoozing a late watering leaves today's watering to do;
+  - a zone batch needs two plant records, so a group planting of twelve alone stays a single card;
+  - on Hobby the morning run fires within the 05:00 UTC hour, so the push can come as late as 06:59, and Today's re-read at 06:05 can come before the run;
+  - after a lost profile reply, the lookup finds the profile of a typed name only when one of its names equals the typed text; otherwise "Retry the profile" pays for a second call before it matches the stored row;
+  - a diagnosis is not told whether the profile is confirmed or edited (Ask and Check are), and a pest's prevention text is never sent to Claude;
+  - a new amount of litres on a rule reaches its waterings only as new ones are written, so Today's zone totals and the push show the old amount for up to 90 days;
+  - a tree tag prints the plant's tag on one line of about 16 letters, so the record form's own example, "Olive row 2, tree 3", prints as "Olive row 2, tre…";
+  - only the newest planting check of a species can be opened again, although every check is kept;
+  - a diagnosis is always written in English, even with the app in French;
+  - a refusal from the Claude API itself (no credit, a wrong key, overloaded) reaches the phone as raw JSON after "Error: 400" or another status.
+- **Deviations from the spec that had no entry.** Recorded here so that this log covers them all:
+  - the species' water schedules (`establishment_schedule`, `mature_schedule`, `litres_per_watering`) became care-calendar rules with `every_days`, `litres` and `age` in Phase 1, as CLAUDE.md's Claude call conventions say: the calendar holds every schedule;
+  - the daily email fallback for the notifications was never built; Web Push has been the only channel since Phase 3;
+  - Settings has no digest time: the Hobby plan runs the cron once a day at the hour fixed in `vercel.json`, as `PHASE5.md` notes;
+  - the Plants screen filters by site and searches the tag, the zone and the names, with no separate filter by zone or species, and has no bulk move of a group to a zone: a zone changes one plant at a time, through Edit record. No phase took these up.
+- **Comments, no code.** `.env.example` says when a missing `OWNER_USER_ID` answers 500, and the comments in `supabase/schema.sql` name the thumbnails, the `manual:` rows and the rain skip's reach over them; neither changes what runs. No version bump: the app is unchanged.
+
 ## 2026-10-30 — Phase 11: zone batches
 
 Item 1 of the feature review of 2026-10-25. Today groups tasks by site, and the digest gives each task its own line, so at farm scale the summer list of single waterings grows with every plant. Phase 10's Done-all (review 4.3) closes a site's waterings in one tap but still lists them one by one, and the push still spends its three lines on three trees. A batch is a display grouping only: Done and Skip write the same rows as before, so each plant's journal is unchanged. The push line partly brings back the spec's own digest example, "water 3 young trees" (`docs/SPEC.md`), which Phase 3 replaced with one line per task; CLAUDE.md step 5 now says so.

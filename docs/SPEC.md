@@ -2,6 +2,8 @@
 
 As of 2026-10-23 · Mohamed Farhat · borgdanet / backyard
 
+> As built: the app at 0.11.0 is described in `docs/USER-GUIDE.md`, and each deviation from this design is recorded with its reason in `docs/DECISIONS.md`; the few that had no entry before, such as the email fallback and the digest time, are gathered in its entry of 2026-11-01. This file is kept as agreed on 2026-10-23.
+
 ## Goal and scope
 
 A phone-first web app for one user: photograph a plant at the backyard or at borgdanet, get a named plant record with a care profile written for Cap Bon conditions, and receive reminders for the actions that matter (water, prune, feed, mulch, harvest, scout).

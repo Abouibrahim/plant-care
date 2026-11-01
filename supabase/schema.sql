@@ -58,7 +58,9 @@ create table plants (
 create index plants_site_idx on plants (site, zone);
 create index plants_species_idx on plants (species_id);
 
--- Photos live in the private Storage bucket "photos" at {plant_id}/{timestamp}.jpg.
+-- Photos live in the private Storage bucket "photos" at {plant_id}/{timestamp}.jpg. Since Phase 10 each save also
+-- uploads a 320 px thumbnail beside it at {plant_id}/{timestamp}.thumb.jpg; older photos, or one whose thumbnail
+-- upload failed, have none, and the app shows the original.
 create table photos (
   id           uuid primary key default gen_random_uuid(),
   plant_id     uuid not null references plants(id) on delete cascade,
@@ -70,9 +72,12 @@ create table photos (
 );
 create index photos_plant_idx on photos (plant_id, taken_at desc);
 
--- Tasks are expanded by /api/daily from species.care_calendar. The app writes two kinds of row itself
--- (Phase 4): the re-photograph reminder of a diagnosis (rule_key 'diagnosis:<photo_id>') and each
--- treatment logged ('diagnosis:<photo_id>:treated'); the expansion never removes those.
+-- Tasks are expanded by /api/daily and /api/expand from species.care_calendar. Besides a snooze's copy of
+-- such a row, the app writes three kinds of row itself: the re-photograph reminder of a diagnosis
+-- (rule_key 'diagnosis:<photo_id>') and each treatment logged ('diagnosis:<photo_id>:treated') since
+-- Phase 4, and the manual care log and one-off reminders ('manual:<uuid>') since Phase 10. The
+-- expansion never removes or closes those, but the 06:00 rain skip closes a pending 'manual:' watering due
+-- that day or overdue, like any watering with no window.
 create table tasks (
   id          uuid primary key default gen_random_uuid(),
   plant_id    uuid not null references plants(id) on delete cascade,
