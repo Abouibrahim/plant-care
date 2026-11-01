@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.11.0, as of 1 November 2026.
+For version 0.12.0, as of 1 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -27,7 +27,7 @@ In this guide, **bold** words are things you tap, named as the English screens n
 
 ## 1. What the app does
 
-- **The daily round.** Today lists what is late, due today, open as a window or due in the next six days at both sites. Each task has Done, Skip and Snooze, and Done and Skip have an Undo. A zone's waterings due together share one card, and a site's due waterings close in one tap.
+- **The daily round.** Today lists what is late, due today, open as a window or due in the next six days at both sites. Each task has Done, Skip and Snooze, and Done and Skip have an Undo. A zone's waterings due together share one card, and so do a zone's plants that share a window job, such as a harvest; a site's due waterings close in one tap.
 - **Morning notifications.** Each morning between 06:00 and 07:00 Tunis time, each phone that turned reminders on gets one notification for each site with something due. A weather notification comes first when an alert or a rain skip applies.
 - **Identification.** Capture sends a photo to Claude, which names up to three candidates. Each comes with its confidence, the visible evidence and the names in English, French and Tunisian Arabic.
 - **Species profiles.** Claude writes one profile per species for Cap Bon: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests and diseases, companions, uses and toxicity. You confirm it and can correct any part by hand, and your edits survive a rewrite.
@@ -57,7 +57,7 @@ Only Capture, a profile rewrite, Diagnose, Ask Claude and Check before planting 
 | Window | A task that stays open over a run of months in a row, such as a pruning or a harvest. It is due on the 1st of the run's first month and open until the last day of its last month, so a rule for April and October makes two windows. |
 | Watering | A periodic watering: a task every few days inside its months, with its litres in the title. |
 | Establishment, mature | A plant under 24 months since its planting date is in establishment; from 24 months it is mature. A plant with no planting date counts as mature. |
-| Zone batch | The calendar waterings of two or more plant records in one zone that fall due together, shown as one card on Today and one line of the notification. A group of 12 is one record, so alone it makes no batch. |
+| Zone batch | Tasks of two or more plant records in one zone, shown as one card on Today and one line of the notification: the calendar waterings that fall due together, or one window job (the same kind of task, title and window). A group of 12 is one record, so alone it makes no batch. |
 | Morning run | The job that runs on the server every morning, at 06:00 Tunis time or within the hour after. |
 
 ## 3. Getting started
@@ -133,7 +133,7 @@ Each card shows the kind of task in its colour, the title, the plant's tag and z
 | "Window ended 30 Sep" | A window past its last day. The next task refresh (the morning run, Today's first opening, Refresh) closes it as skipped with the note "Window ended". |
 | "Thu 5 Nov" | Due on a coming day. You can still do it early. |
 
-A watering's litres are for each plant. A group's own card shows its tag without its count, so "Deep watering (8 L)" on POM-H, a record of 12, means 8 L for each of the 12, 96 L in all; its line in the morning notification reads the same. Only a zone batch adds the litres up ("216 L in all").
+A watering's litres are for each plant. A group's own card shows its tag without its count, so "Deep watering (8 L)" on POM-H, a record of 12, means 8 L for each of the 12, 96 L in all; its line in the morning notification reads the same. Only a zone's round of waterings adds the litres up ("216 L in all").
 
 ### Done, Skip, Snooze and Undo
 
@@ -147,25 +147,31 @@ A watering's litres are for each plant. A group's own card shows its tag without
   - A 7-day snooze of a task due today moves it just past the week Today shows, so it is off the list for a day.
 - **Undo** reopens what the toast names and clears its note or reason. It reopens only tasks still in the state the action left them in.
 - **After the toast.** Undo lasts the five seconds of its toast, on Today only. After that a task closed by mistake cannot be reopened, and no task can be reworded or moved to a day of your choice: Snooze moves it by 1, 3 or 7 days. For care still to do, set a one-off reminder on the plant with **Log something done** → **Remind me** (chapter 6).
-- **A window is one task per season.** Done or Skip on a window closes it for that run of months: its rule writes no new task for them until they come round next year. Until you act, it stays on Today and in every morning's notification to its last day, then closes itself as "Window ended". Mark it when the season's work is over. For work done in rounds, such as several pickings, log the earlier rounds with **Log something done** and close the window on the last with **Done with a note**, such as the season's total.
+- **A window is one task per season.** Done or Skip on a window closes it for that run of months: its rule writes no new task for them until they come round next year. Until you act, it stays on Today and in every morning's notification to its last day, then closes itself as "Window ended". Mark it when the season's work is over. For work done in rounds, such as several pickings, log the earlier rounds with **Log something done** and close the window on the last with **Done with a note**, such as the season's total. On a batch of windows, the note goes on every plant ticked, with the batch's zone and size in front (below).
 
 If a task was already closed elsewhere, by the 06:00 rain skip or on another screen, a Done or Skip changes nothing and a note says the list is up to date. A Snooze on such a task shows "The task could not be updated: This task was already acted on" instead; tap **Retry** to read the list again.
 
-### A zone's waterings in one card
+### A zone's tasks in one card
 
-When two or more plant records of one zone at one site have calendar waterings due together, they share one card, placed where the most pressing of them would be. A group planted together is one record, so a group of 12 alone makes no batch.
+When two or more plant records of one zone at one site have the same job to do, they share one card, a batch, placed where the most pressing of them would be. A group planted together is one record, so a group of 12 alone makes no batch. There are two kinds of batch:
 
-- **What joins.** Only the periodic waterings from the care calendar. Feeds, harvests, every window (a watering window included), a reminder you wrote and a diagnosis's follow-up stay as cards of their own. One plant's two waterings stay two cards. The late waterings and today's form one batch, and each coming day gets its own. Zones match whatever their capitals and outer spaces ("Row 2 " and "row 2"), and plants with no zone batch together without a label.
-- **What the card shows.** The title counts plants ("15 plants"): a group counts by its size, and a plant with two waterings due counts once. Next come the zone and "216 L in all", given only when every watering states its litres. The due line reads "Today", "Overdue · …" or "Today · 3 overdue", counted in plants. Then one row per amount with its plants: "40 L · OL-01 OL-03", "8 L · POM-H ×12", "No amount · FIG-03".
-- **Done** closes every watering of each ticked plant in one save, and the toast names the zone and the plants ("Done: row 2 · 14 plants"). The round counts the waterings closed, so a plant with yesterday's and today's waterings counts two there, and its journal gets a line for each.
+- **A round of waterings.** The periodic waterings from the care calendar that fall due together: the late ones and today's form one batch, and each coming day gets its own.
+- **A window job.** Windows of the same kind of task with the same title over the same window, such as ten olives' "Harvest the olives" from 1 Oct to 31 Dec. Different titles stay apart even in the same months, so a young tree's "Formative pruning" and the mature trees' "Winter pruning" are two cards, and so are two species' scouting. A watering window is a window job too, never part of a round. A window that is open, opens today or has ended belongs to today; one that opens on a coming day belongs to that day.
+
+Zones match whatever their capitals and outer spaces ("Row 2 " and "row 2"), and so do titles; plants with no zone batch together without a label. A reminder you wrote and a diagnosis's follow-up stay as cards of their own. A window you snooze leaves its batch, since its copy has a day of its own (two snoozed to the same day batch together again), and a snoozed watering joins the round of its new day.
+
+- **What a round's card shows.** The title counts plants ("15 plants"): a group counts by its size, and a plant with two waterings due counts once. Next come the zone and "216 L in all", given only when every watering states its litres. The due line reads "Today", "Overdue · …" or "Today · 3 overdue", counted in plants. Then one row per amount with its plants: "40 L · OL-01 OL-03", "8 L · POM-H ×12", "No amount · FIG-03".
+- **What a window job's card shows.** It reads like the single card, for several plants: the kind of task, the title, the zone and "10 plants", the window's due line ("Open since 1 Oct · until 31 Dec"), the instruction when every plant has the same one, and the plants' tags. A watering window's title keeps its litres for each plant, and its card adds no total.
+- **Done** closes the task of each ticked plant in one save. It is the green button only when the batch holds something late or due today; while a window is merely open, and on a coming day, it is a plain button, since Done closes the window for the season. The toast names the job for a window job ("Done: Harvest the olives · row 2 · 10 plants") and the zone for a round ("Done: row 2 · 14 plants"). The round card at the top counts the tasks closed, so a plant with yesterday's and today's waterings counts two there, and its journal gets a line for each.
+- **Done with a note**, on a window job only, writes your note on each plant ticked, with the zone and the number of plants in front: "row 3 · 10 plants: 180 kg", so each tree's journal reads it as the batch's total. Undo removes it. A yield for one tree goes on that tree's own card (the chevron, below).
 - **Skip** writes one optional reason on all of them (**Skip them**).
-- **Choose** lists the plants; tap a row to untick a plant you leave out. Done then reads "Done 14/15". The ticks are kept on the phone for the day while the app is open, through Refresh and a visit to a plant. After the batch's own Done or Skip, the plants left out come back ticked, as a smaller batch or as single cards, and an Undo unticks them again.
-- **The chevron** beside a plant in Choose opens its page on the Calendar tab, where its own card offers Snooze and a note. A batch has no Snooze and no note of its own.
-- **A coming day's batch** is titled with its day ("Thu 5 Nov · 9 plants"), and its Done is a plain button, so the thumb goes to today's.
+- **Choose** lists the plants; tap a row to untick a plant you leave out. Done then reads "Done 14/15". **Untick all** at the top of the list unticks every plant, for work done over several visits: untick all, tick the trees done today, then "Done 2/10"; once all are unticked it reads **Tick all**. The ticks are kept on the phone for the day while the app is open, through Refresh and a visit to a plant. After the batch's own Done or Skip, the plants left out come back ticked, as a smaller batch or as single cards, and an Undo unticks them again.
+- **The chevron** beside a plant in Choose opens its page on the Calendar tab, where its own card offers Snooze and a note of its own. A batch has no Snooze.
+- **A coming day's batch** is titled with its day ("Thu 5 Nov · 9 plants", "Thu 5 Nov · Winter prune"), and its Done is a plain button, so the thumb goes to today's.
 
 ### Done: all N waterings
 
-Beside a site's heading, **Done: all N waterings** closes every watering at that site that is late or due today, in one go and with one Undo. It takes the calendar waterings, a watering window that opens today or has ended, and a watering reminder you set. It leaves out the plants unticked in a batch and needs two waterings or more. It writes no note, so a reminder keeps its words. It is hidden when one batch due now already holds every one of them, and when a coming day is chosen in the strip.
+Beside a site's heading, **Done: all N waterings** closes every watering at that site that is late or due today, in one go and with one Undo. It takes the calendar waterings, a watering window that opens today or has ended, and a watering reminder you set. It leaves out the plants unticked in a batch and needs two waterings or more. It writes no note, so a reminder keeps its words. It is hidden when one batch already holds every one of them, and when a coming day is chosen in the strip.
 
 ### The weather card
 
@@ -604,7 +610,7 @@ Besides the morning run, tasks are written the first time Today opens in an app 
 
 - **Which tasks.** A site's notification holds its pending tasks that are due today or late, open windows included, reminders and follow-ups in their own words. It also carries a window's early notice, on the one morning exactly its days of warning before it opens: "From 1 Oct: Harvest olives · OL-01". Waterings get no early notice, and a window written after its notice morning gets only its due-date line.
 - **Order.** Early notices first, then late tasks, then today's, then the open windows.
-- **Lines.** The title counts the tasks ("Farm: 6 tasks"). The body shows up to three lines, each "title · tag", then "+N more". A zone's waterings due now, for two plant records or more, share one line: "Water 9 plants (20 L each) · row 2". Its "9 plants" counts plants, a group by its size; the title and "+N more" count tasks. The litres show as a range when the amounts differ, and are left out when one is missing.
+- **Lines.** The title counts the tasks ("Farm: 6 tasks"). The body shows up to three lines, each "title · tag", then "+N more". A zone's batch (chapter 4), for two plant records or more, shares one line: a round of waterings due now reads "Water 9 plants (20 L each) · row 2", and a window job "Scout for olive fly · 10 plants · row 2", or "From 1 Oct: Harvest olives · 10 plants · row 2" for its early notice. Its "9 plants" counts plants, a group by its size; the title and "+N more" count tasks. The litres show as a range when the amounts differ, and are left out when one is missing.
 - **Weather.** A separate "Weather: …" notification comes first when there is an alert for today or tomorrow, or when the rain skip closed waterings. Its title names the first alert, and each alert has its own line.
 - **The rest.** A site with nothing due sends nothing. Each morning's notification replaces the day before's of the same kind; a morning that sends none of a kind leaves the day before's in place until you clear it. The text is always in English. A phone that is off gets them when it comes back on, if that is within 12 hours; after that, that morning's notifications are lost.
 
@@ -740,7 +746,7 @@ The owners row and `OWNER_USER_ID` must name the same account. The row opens the
 
 ### Bringing an older project up to date
 
-A project set up phase by phase does not run `schema.sql` again. Run the SQL from the Setup section of each of these files once, in this order: `PHASE5.md` (settings), `PHASE6.md` (questions, and the journal closed to the public key), `PHASE7.md` (planting checks), `PHASE8.md` (weather), then `PHASE10.md` (the owners table, with your email in its insert). The last line of the Phase 10 SQL must say 1. Phases 2, 3, 4, 9 and 11 need no SQL.
+A project set up phase by phase does not run `schema.sql` again. Run the SQL from the Setup section of each of these files once, in this order: `PHASE5.md` (settings), `PHASE6.md` (questions, and the journal closed to the public key), `PHASE7.md` (planting checks), `PHASE8.md` (weather), then `PHASE10.md` (the owners table, with your email in its insert). The last line of the Phase 10 SQL must say 1. Phases 2, 3, 4, 9, 11 and 12 need no SQL.
 
 Do not run the SQL of Phase 6, 7 or 8 again after Phase 10: each run sets its table back to "any signed-in account". If one was run again, run the Phase 10 SQL again.
 

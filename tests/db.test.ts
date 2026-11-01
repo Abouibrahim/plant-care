@@ -194,6 +194,24 @@ describe("completeTasks and reopenTasks", () => {
     expect(await completeTasks([])).toEqual([]);
   });
 
+  it("writes a window batch's note on every row of the set, trimmed, and its Undo clears it", async () => {
+    const a = addTask({});
+    const b = addTask({ plant_id: "p2" });
+    const closed = await completeTasks([a.id, b.id], "  row 3 · 2 plants: 180 kg ");
+    expect(closed.sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id)).toMatchObject({ status: "done", note: "row 3 · 2 plants: 180 kg" });
+    expect(byId(b.id)).toMatchObject({ status: "done", note: "row 3 · 2 plants: 180 kg" });
+    expect((await reopenTasks([a.id, b.id], "done", true)).sort()).toEqual([a.id, b.id].sort());
+    expect(byId(a.id)).toMatchObject({ status: "pending", acted_at: null, note: "" });
+    expect(byId(b.id).note).toBe("");
+  });
+
+  it("writes no note when the one given is blank, so the rows keep theirs", async () => {
+    const reminder = addTask({ type: "water", rule_key: "manual:r2", due_on: "2026-06-01", window_end: null, note: "by hand, 5 L" });
+    expect(await completeTasks([reminder.id], "   ")).toEqual([reminder.id]);
+    expect(byId(reminder.id)).toMatchObject({ status: "done", note: "by hand, 5 L" });
+  });
+
   it("keeps a pending reminder's own words through a set Done and its Undo", async () => {
     const reminder = addTask({ type: "water", rule_key: "manual:r1", due_on: "2026-06-01", window_end: null, title: "Water the new graft", note: "by hand, 5 L" });
     expect(await completeTasks([reminder.id])).toEqual([reminder.id]);

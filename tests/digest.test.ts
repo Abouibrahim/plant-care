@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { composeDigest, inDigest, loadDigestTasks, type DigestTask } from "../api/_push.js";
 import { runExpansion } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
+import type { CareRule } from "../src/types";
 import { fixture, water, window } from "./fixtures";
 
 const harvestRule = window("harvest", [10, 11], { lead_days: 14, title: "Harvest olives" });
@@ -181,17 +182,77 @@ describe("composeDigest: zone batches", () => {
     expect(farm.body).not.toContain("+");
   });
 
-  it("never gathers windows, other tasks or a zone's lone watering", () => {
+  it("never gathers a zone's lone watering", () => {
+    const tasks = [task({ id: "lone", title: "Water (20 L)", plant: at("OL-03", "row 3") }), task({ id: "other", plant: at("OL-04", "row 4") })];
+    const [farm] = composeDigest(tasks, today);
+    expect(farm.body.split("\n")).toEqual([en.digest.line("Water (20 L)", "OL-03"), en.digest.line("Water (20 L)", "OL-04")]);
+  });
+});
+
+describe("composeDigest: window batches (Phase 12)", () => {
+  const today = "2026-09-17";
+  const at = (tag: string, zone: string, quantity = 1, care_calendar: CareRule[] = []) => ({ tag, site: "farm" as const, zone, quantity, care_calendar });
+  /** A window of its own plant, "Scout for olive fly" from 1 Jun to 31 Oct unless the partial says otherwise. */
+  const win = (id: string, plant: DigestTask["plant"], partial: Partial<DigestTask> = {}) =>
+    task({ id, type: "scout", rule_key: "scout:6-7-8-9-10:any", due_on: "2026-06-01", window_end: "2026-10-31", title: "Scout for olive fly", plant, ...partial });
+
+  it("gives a window job its plants share one line, with the title, the plants and the zone", () => {
     const tasks = [
-      task({ id: "w1", due_on: "2026-09-01", window_end: "2026-09-30", title: "Establishment watering", plant: at("OL-01", "row 2") }),
-      task({ id: "w2", due_on: "2026-09-01", window_end: "2026-09-30", title: "Establishment watering", plant: at("OL-02", "row 2") }),
-      task({ id: "lone", title: "Water (20 L)", plant: at("OL-03", "row 3") }),
+      win("a", at("OL-01", "row 2")),
+      win("b", at("POM-H", "Row 2", 12)),
+      task({ id: "w1", due_on: "2026-09-01", window_end: "2026-09-30", title: "Establishment watering", plant: at("OL-05", "row 2") }),
+      task({ id: "w2", due_on: "2026-09-01", window_end: "2026-09-30", title: "Establishment watering", plant: at("OL-06", "row 2") }),
     ];
     const [farm] = composeDigest(tasks, today);
+    expect(farm.tasks).toBe(4);
     expect(farm.body.split("\n")).toEqual([
-      en.digest.line("Water (20 L)", "OL-03"),
-      en.digest.line("Establishment watering", "OL-01"),
-      en.digest.line("Establishment watering", "OL-02"),
+      en.digest.line(en.digest.group("Scout for olive fly", 13), "row 2"),
+      en.digest.line(en.digest.group("Establishment watering", 2), "row 2"),
+    ]);
+    expect(en.digest.group("Scout for olive fly", 13)).toBe("Scout for olive fly · 13 plants");
+  });
+
+  it("keeps different jobs on lines of their own, and a lone plant's window as its own line", () => {
+    const tasks = [
+      win("a", at("OL-01", "row 2")),
+      win("b", at("OL-02", "row 2")),
+      win("fig", at("FIG-01", "row 2"), { title: "Scout for fig mites" }),
+      win("c", at("OL-03", "row 2"), { type: "prune", rule_key: "prune:6-7-8-9-10:any", title: "Scout for olive fly" }),
+    ];
+    const [farm] = composeDigest(tasks, today);
+    // Same day: the calendar's kind order (prune before scout), then the title.
+    expect(farm.body.split("\n")).toEqual([
+      en.digest.line("Scout for olive fly", "OL-03"),
+      en.digest.line("Scout for fig mites", "FIG-01"),
+      en.digest.line(en.digest.group("Scout for olive fly", 2), "row 2"),
+    ]);
+  });
+
+  it("batches the early notices of one job with their day in front, and plants with no zone without a zone part", () => {
+    const rule = window("harvest", [10, 11], { lead_days: 14, title: "Harvest olives" });
+    const notice = (id: string, zone: string) =>
+      task({ id, type: "harvest", rule_key: "harvest:10-11:any", due_on: "2026-10-01", window_end: "2026-11-30", title: "Harvest olives", plant: at(id, zone, 1, [rule]) });
+    const [farm] = composeDigest([notice("OL-01", ""), notice("OL-02", " ")], today);
+    expect(farm.body).toBe(en.digest.soon("1 Oct", en.digest.group("Harvest olives", 2)));
+  });
+
+  it("counts the tasks a window line holds when it says how many more there are", () => {
+    const tasks = [
+      task({ id: "late", due_on: "2026-09-15", plant: at("c", "C") }),
+      win("a1", at("a1", "A")),
+      win("a2", at("a2", "A")),
+      win("a3", at("a3", "A")),
+      win("b", at("b", "B")),
+      win("d1", at("d1", "D")),
+      win("d2", at("d2", "D")),
+    ];
+    const [farm] = composeDigest(tasks, today);
+    expect(farm.tasks).toBe(7);
+    expect(farm.body.split("\n")).toEqual([
+      en.digest.line("Water (20 L)", "c"),
+      en.digest.line(en.digest.group("Scout for olive fly", 3), "A"),
+      en.digest.line("Scout for olive fly", "b"),
+      en.digest.more(2),
     ]);
   });
 });

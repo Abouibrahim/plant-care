@@ -1,7 +1,8 @@
-// Zone batches (Phase 11): which waterings gather, where a batch sits in the list, and what its
-// summary says (plants counted once, litres by amount, late plants).
+// Zone batches: which tasks gather (the periodic waterings, Phase 11; every window job, Phase 12),
+// where a batch sits in the list, and what its summary says (plants counted once, litres by amount,
+// late plants).
 import { describe, expect, it } from "vitest";
-import { batchKey, joinsBatch, litresOf, plantsOf, summarize, withBatches, zoneKey, type Batchable, type ListItem } from "../src/lib/batches";
+import { batchKey, joinsBatch, litresOf, plantsOf, summarize, titleKey, withBatches, zoneKey, type Batchable, type ListItem } from "../src/lib/batches";
 import { addDays } from "../src/lib/dates";
 import { dueNow } from "../src/lib/today";
 import type { Site, TaskType } from "../src/types";
@@ -37,11 +38,13 @@ function task(due_on: string, zone: string, extra: Extra = {}): Batchable {
 const shape = (items: ListItem<Batchable>[]) => items.map((i) => (i.kind === "task" ? i.task.id : `[${i.batch.tasks.map((x) => x.id).join(",")}]`));
 
 describe("what joins a batch", () => {
-  it("takes the calendar's periodic waterings of a plant, not windows, other tasks or tasks without a plant", () => {
+  it("takes the calendar's tasks of a plant: its periodic waterings and its windows of every kind", () => {
     expect(joinsBatch(task(today, "row 2"))).toBe(true);
-    expect(joinsBatch(task(today, "row 2", { window_end: "2026-08-31" }))).toBe(false);
-    expect(joinsBatch(task(today, "row 2", { type: "feed" as TaskType }))).toBe(false);
+    expect(joinsBatch(task(today, "row 2", { window_end: "2026-08-31" }))).toBe(true);
+    expect(joinsBatch(task("2026-07-01", "row 2", { type: "feed", window_end: "2026-08-31" }))).toBe(true);
     expect(joinsBatch({ ...task(today, "row 2"), plant: null })).toBe(false);
+    // Only waterings repeat: a row of another kind with no window is not one the expansion writes.
+    expect(joinsBatch(task(today, "row 2", { type: "feed" as TaskType }))).toBe(false);
   });
 
   it("keeps the grower's own reminders and a diagnosis's out, whose words would vanish in a batch", () => {
@@ -188,5 +191,108 @@ describe("summarize", () => {
   it("keeps a decimal total to one place", () => {
     const tasks = [task(today, "", { title: "Water (2.5 L)", quantity: 3 }), task(today, "", { title: "Water (0.1 L)", quantity: 3 })];
     expect(summarize(tasks, today)).toMatchObject({ range: { min: 0.1, max: 2.5 }, total: 7.8 });
+  });
+});
+
+describe("window batches (Phase 12)", () => {
+  /** A window of its own plant, "Scout for olive fly" from 1 Jun to 31 Oct unless the extra says otherwise. */
+  const win = (zone: string, extra: Extra = {}) =>
+    task("2026-06-01", zone, { type: "scout", rule_key: "scout:6-7-8-9-10:any", window_end: "2026-10-31", title: "Scout for olive fly", ...extra });
+  const batches = (items: ListItem<Batchable>[]) => items.flatMap((i) => (i.kind === "batch" ? [i.batch] : []));
+
+  it("gathers one job over one window: kind, window and title, at one site and zone", () => {
+    expect(batchKey(win("row 2"), today)).toBe("farm|row 2|scout|2026-06-01|2026-10-31|scout for olive fly");
+    const [a, b] = [win("row 2"), win("Row 2 ", { title: " Scout for  olive fly" })];
+    const items = withBatches([a, b], today);
+    expect(shape(items)).toEqual([`[${a.id},${b.id}]`]);
+    expect(batches(items)[0]).toMatchObject({ type: "scout", day: "now", title: "Scout for olive fly", zone: "row 2" });
+  });
+
+  it("keeps different jobs apart: another title, another window, another kind, another site or zone", () => {
+    const [a, b] = [win("row 2"), win("row 2")];
+    const fig = win("row 2", { title: "Scout for fig mites" });
+    const later = win("row 2", { due_on: "2026-07-01", window_end: "2026-09-30" });
+    const harvest = win("row 2", { type: "harvest", rule_key: "harvest:6-7-8-9-10:any" });
+    const yard = win("row 2", { site: "backyard" });
+    const row3 = win("row 3");
+    const items = withBatches([a, fig, later, harvest, yard, row3, b], today);
+    expect(shape(items)).toEqual([`[${a.id},${b.id}]`, fig.id, later.id, harvest.id, yard.id, row3.id]);
+  });
+
+  it("keeps a young tree's job apart from a mature tree's when their titles differ, though the months match", () => {
+    const prune = (title: string, age: string) => win("row 2", { type: "prune", rule_key: `prune:1-2:${age}`, title });
+    const mature = [prune("Winter pruning", "mature"), prune("Winter pruning", "mature")];
+    const young = prune("Formative pruning", "establishment");
+    expect(shape(withBatches([...mature, young], today))).toEqual([`[${mature[0].id},${mature[1].id}]`, young.id]);
+  });
+
+  it("lets a snoozed window, with a day of its own, leave its mates, and batches two snoozed to the same day", () => {
+    const [a, b, c, d] = [win("row 2"), win("row 2"), win("row 2"), win("row 2")];
+    const copy = (x: Batchable) => ({ ...x, id: `${x.id}-copy`, due_on: "2026-07-18" });
+    expect(shape(withBatches([a, b, copy(c)], today))).toEqual([`[${a.id},${b.id}]`, copy(c).id]);
+    expect(shape(withBatches([a, b, copy(c), copy(d)], today))).toEqual([`[${a.id},${b.id}]`, `[${copy(c).id},${copy(d).id}]`]);
+  });
+
+  it("lets a snoozed watering, written under its rule's key, join the round of its new day", () => {
+    const moved = task("2026-07-16", "row 2", { rule_key: "water:6-7-8:any:7" });
+    const mate = task("2026-07-16", "row 2");
+    expect(shape(withBatches([moved, mate], today))).toEqual([`[${moved.id},${mate.id}]`]);
+  });
+
+  it("lists a batch's plants by tag, whatever order the database gives them in", () => {
+    const tags = ["OL-07", "OL-2", "OL-10", "OL-01"];
+    const s = summarize(tags.map((tag) => win("row 2", { tag })), today);
+    expect(s.members.map((m) => m.tag)).toEqual(["OL-01", "OL-2", "OL-07", "OL-10"]);
+  });
+
+  it("files an open, an opening and an ended window under 'now', and a window yet to open under its day", () => {
+    expect(batches(withBatches([win("a"), win("a")], today))[0].day).toBe("now");
+    const opening = { due_on: today, window_end: "2026-08-31" };
+    expect(batches(withBatches([win("b", opening), win("b", opening)], today))[0].day).toBe("now");
+    const ended = { due_on: "2026-05-01", window_end: "2026-07-14" };
+    expect(batches(withBatches([win("c", ended), win("c", ended)], today))[0].day).toBe("now");
+    const coming = { due_on: "2026-07-18", window_end: "2026-08-31" };
+    expect(batches(withBatches([win("d", coming), win("d", coming)], today))[0].day).toBe("2026-07-18");
+  });
+
+  it("never joins a watering window to the round of periodic waterings", () => {
+    const [r1, r2] = [task(today, "row 2"), task(today, "row 2")];
+    const w = { window_end: "2026-08-31", title: "Water if leaves curl (60 L)", rule_key: "water:6-7-8:mature" };
+    const [w1, w2] = [task("2026-06-01", "row 2", w), task("2026-06-01", "row 2", w)];
+    const found = batches(withBatches([r1, w1, r2, w2], today));
+    expect(found.map((b) => [b.title, b.tasks.map((x) => x.id)])).toEqual([
+      [null, [r1.id, r2.id]],
+      ["Water if leaves curl (60 L)", [w1.id, w2.id]],
+    ]);
+  });
+
+  it("leaves a lone plant's window, and a reminder the grower wrote, as cards", () => {
+    const lone = win("row 4");
+    const reminder = win("row 4", { rule_key: "manual:r2" });
+    expect(shape(withBatches([lone, reminder], today))).toEqual([lone.id, reminder.id]);
+  });
+
+  it("names the job as most of its plants spell it", () => {
+    const items = withBatches([win("row 2", { title: "Scout for Olive Fly" }), win("row 2"), win("row 2")], today);
+    expect(batches(items)[0].title).toBe("Scout for olive fly");
+    expect(titleKey("  Scout for   Olive Fly ")).toBe("scout for olive fly");
+  });
+
+  it("sums a window batch in plants, with no litres and no lateness while the window is open", () => {
+    const s = summarize([win("row 2", { quantity: 12, tag: "POM-H" }), win("row 2", { tag: "OL-01" })], today);
+    expect(s).toMatchObject({ plants: 13, late: 0, range: null, total: null });
+    expect(s.members.every((m) => !m.late)).toBe(true);
+    // An ended window is late for every plant.
+    const ended = { due_on: "2026-05-01", window_end: "2026-07-14" };
+    expect(summarize([win("row 2", ended), win("row 2", ended)], today).late).toBe(2);
+  });
+
+  it("counts a plant once when two of its rules give the same job", () => {
+    const olive = { plant_id: "olive", type: "prune" as TaskType, title: "Winter pruning" };
+    const tasks = [win("row 2", { ...olive, rule_key: "prune:1-2:any" }), win("row 2", { ...olive, rule_key: "prune:1-2:mature" }), win("row 2", { type: "prune", title: "Winter pruning" })];
+    expect(withBatches(tasks, today)).toHaveLength(1);
+    const s = summarize(tasks, today);
+    expect(s.plants).toBe(2);
+    expect(s.members.find((m) => m.plant_id === "olive")?.task_ids).toHaveLength(2);
   });
 });

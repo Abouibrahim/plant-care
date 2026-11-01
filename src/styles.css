@@ -1063,6 +1063,10 @@ a.task-body:active {
   align-items: baseline;
   gap: 6px;
 }
+/* A window batch (Phase 12) has one job, so its plants' tags stand alone under the due line. */
+.batch-plants {
+  margin-top: 10px;
+}
 .tag.out {
   color: var(--muted);
   text-decoration: line-through;
@@ -1072,8 +1076,21 @@ a.task-body:active {
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
-.batch-list > p {
-  margin: 0 0 4px;
+/* The hint, with "Untick all" / "Tick all" beside it for work done over several visits. */
+.batch-list-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.batch-list-head p {
+  flex: 1;
+  margin: 0;
+}
+.batch-list-head button.link {
+  flex: none;
+  padding-right: 0;
+  font-weight: 600;
 }
 .batch-list ul {
   list-style: none;
@@ -1487,10 +1504,16 @@ button.week-day.selected {
   box-shadow: var(--shadow-lift);
   animation: toast-in 0.3s cubic-bezier(0.3, 1.3, 0.5, 1);
 }
+/* Three lines at most: a batch's toast names the job, the zone and the plants, which one line of a
+   360 px phone cuts after the job, and two lines still cut in French beside "Annuler". */
 .toast-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  padding: 6px 0;
+  line-height: 1.3;
   font-size: 0.92rem;
   font-weight: 600;
 }

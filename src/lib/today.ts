@@ -2,9 +2,10 @@
 // the counts and the week strip, so "overdue" means the same thing everywhere), the time of day
 // (greeting and garden scene), the check-in streak kept on this phone, and the short vibration on
 // Done. Nothing here touches the data.
-import { DUE_NOW, type Batchable, type ListItem } from "./batches";
+import type { Batchable, ListItem } from "./batches";
 import { addDays, toLocalDate } from "./dates";
-import { TASK_TYPES, type Task } from "../types";
+import { t } from "../i18n";
+import { TASK_MAX_NOTE_CHARS, TASK_TYPES, type Task } from "../types";
 
 /** "21 Oct" in the phone's language, for the due lines of the cards. */
 export function shortDate(iso: string): string {
@@ -30,6 +31,24 @@ export function dueState(task: Pick<Task, "due_on" | "window_end">, today: strin
   if (task.due_on < today) return end !== null ? "open" : "overdue";
   if (task.due_on === today) return "today";
   return "upcoming";
+}
+
+/**
+ * The due line of a card: "Open since 1 Oct · until 31 Dec" for a window that has started, "Overdue ·
+ * 21 Oct" for a missed watering, "Today", or the day of the week for the coming days. Past windows
+ * say so. A window batch shares its window, so it reads its first task's line.
+ */
+export function dueLabel(task: Pick<Task, "due_on" | "window_end">, today: string): { text: string; state: DueState } {
+  const end = task.window_end;
+  const state = dueState(task, today);
+  if (end !== null && end < today) return { text: t.today.windowEnded(shortDate(end)), state };
+  let text: string;
+  if (state === "open") text = t.today.openSince(shortDate(task.due_on));
+  else if (state === "overdue") text = `${t.today.overdue} · ${shortDate(task.due_on)}`;
+  else if (state === "today") text = t.today.dueToday;
+  else text = weekdayDate(task.due_on);
+  if (end !== null) text += ` · ${t.today.until(shortDate(end))}`;
+  return { text, state };
 }
 
 export function isLate(task: Pick<Task, "due_on" | "window_end">, today: string): boolean {
@@ -66,12 +85,56 @@ export function doneAllIds(tasks: Due[], today: string, skip: (id: string) => bo
   return ids.length >= 2 ? ids : [];
 }
 
-/** Whether Done-all would repeat a batch's own Done: one batch due now holds every watering it would close. */
+/**
+ * Whether Done-all would repeat a batch's own Done: one batch already holds every watering it would
+ * close. Any batch counts, whatever else the list holds, so a window batch beside the waterings (a
+ * prune, a watering window still open) does not bring the button back.
+ */
 export function doneAllRepeatsBatch<T extends Batchable>(ids: string[], items: ListItem<T>[]): boolean {
-  const now = items.flatMap((i) => (i.kind === "batch" && i.batch.day === DUE_NOW ? [i.batch] : []));
-  if (now.length !== 1) return false;
-  const held = new Set(now[0].tasks.map((x) => x.id));
-  return ids.length > 0 && ids.every((id) => held.has(id));
+  if (ids.length === 0) return false;
+  return items.some((i) => {
+    if (i.kind !== "batch") return false;
+    const held = new Set(i.batch.tasks.map((x) => x.id));
+    return ids.every((id) => held.has(id));
+  });
+}
+
+/** What a batch's buttons do: Done (a window batch's with an optional note), or Skip with a reason; never a snooze. */
+export type BatchAction = { kind: "done"; note?: string } | { kind: "skip"; reason: string };
+
+/**
+ * Whether a batch's Done is the green button: only when the batch holds something late or due today
+ * (a watering, a window that opens today or has ended). A window that is merely open gets a plain
+ * one, as a coming day does: its Done closes the window for the season, and the green buttons on
+ * Today mean today's round.
+ */
+export function batchDonePrimary(tasks: Pick<Task, "due_on" | "window_end">[], today: string): boolean {
+  return tasks.some((x) => dueNow(x, today));
+}
+
+/** What a window batch's note carries in front: "row 3 · 10 plants", the plants ticked; the plants alone with no zone. */
+function noteScope(zone: string, plants: number): string {
+  return [zone, t.today.batchPlants(plants)].filter(Boolean).join(" · ");
+}
+
+/** The room left for the grower's words once the scope is in front, so the whole note keeps within a note's length. */
+export function scopedNoteRoom(zone: string, plants: number): number {
+  return Math.max(0, TASK_MAX_NOTE_CHARS - t.today.batchNote(noteScope(zone, plants), "").length);
+}
+
+/**
+ * A window batch's "Done with a note" as it is written on each ticked plant's row, "row 3 · 10
+ * plants: 180 kg", so each tree's journal reads it as the batch's; the words trimmed and cut to the
+ * room left. Null when there are no words: the Done then writes no note.
+ */
+export function scopedNote(zone: string, plants: number, text: string): string | null {
+  const words = text.trim().slice(0, scopedNoteRoom(zone, plants)).trim();
+  return words === "" ? null : t.today.batchNote(noteScope(zone, plants), words);
+}
+
+/** Whether the Undo of a batch's action clears the rows' note: a Skip's reason or a Done's note goes with it; a plain Done wrote none. */
+export function undoClearsNote(action: BatchAction): boolean {
+  return action.kind === "skip" || (action.note ?? "").trim() !== "";
 }
 
 /**

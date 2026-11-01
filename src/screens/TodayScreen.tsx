@@ -11,7 +11,7 @@ import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
-import { DUE_NOW, summarize, withBatches, type Batch, type BatchPlant } from "../lib/batches";
+import { DUE_NOW, summarize, withBatches, type Batch } from "../lib/batches";
 import { completeTask, completeTasks, countDoneSince, listDueTasks, reopenTask, reopenTasks, skipTask, skipTasks, snoozeTask } from "../lib/db";
 import {
   buzz,
@@ -25,10 +25,12 @@ import {
   isLate,
   prefersReducedMotion,
   sortByDue,
+  undoClearsNote,
   weekdayDate,
+  type BatchAction,
 } from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
-import { BatchCard, type BatchAction } from "./today/BatchCard";
+import { BatchCard } from "./today/BatchCard";
 import { RoundCard } from "./today/RoundCard";
 import { WeatherCard } from "./today/WeatherCard";
 import { WeekStrip, type WeekDay } from "./today/WeekStrip";
@@ -106,10 +108,11 @@ interface ToastState {
   /** The task Undo reopens; absent for a snooze. */
   undo?: TaskWithPlant;
   /**
-   * The set a Done-all or a batch closed, which Undo reopens together from the status it was given;
-   * for a batch, also the plants that were unticked, which Undo leaves unticked again.
+   * The set a Done-all or a batch closed, which Undo reopens together from the status it was given,
+   * clearing the note a Skip or a batch's "Done with a note" wrote; for a batch, also the plants that
+   * were unticked, which Undo leaves unticked again.
    */
-  undoAll?: { ids: string[]; status: "done" | "skipped"; leftOut: string[] };
+  undoAll?: { ids: string[]; status: "done" | "skipped"; clearNote: boolean; leftOut: string[] };
 }
 
 function message(err: unknown): string {
@@ -387,10 +390,11 @@ export function TodayScreen() {
 
   /**
    * Done or Skip for a set in one update: a site's waterings late or due today (Done-all), or the
-   * plants still ticked in a zone batch. The cards tick (or slide) and fold together, the round moves
-   * by the number done, and one toast offers Undo for the set. A watering closed meanwhile from
-   * another screen (or by the morning rain skip) is left out, as a single Done leaves it out. After a
-   * batch's own action its unticked plants are ticked again: they come back as a smaller batch.
+   * plants still ticked in a zone batch, a window batch's Done with its note. The cards tick (or
+   * slide) and fold together, the round moves by the number done, and one toast, naming a window
+   * batch's job, offers Undo for the set. A task closed meanwhile from another screen (or by the
+   * morning rain skip) is left out, as a single Done leaves it out. After a batch's own action its
+   * unticked plants are ticked again: they come back as a smaller batch.
    */
   async function actAll(ids: string[], action: BatchAction, batch?: Batch<TaskWithPlant>) {
     if (!loaded || ids.length === 0 || ids.some((id) => leaving[id])) return;
@@ -400,7 +404,7 @@ export function TodayScreen() {
     if (action.kind === "done") buzz(18);
     const lastOfDay = clearsTheDay(loaded.tasks, ids, action.kind, loaded.today, (id) => !!leaving[id]);
     try {
-      const save = action.kind === "done" ? completeTasks(ids) : skipTasks(ids, action.reason);
+      const save = action.kind === "done" ? completeTasks(ids, action.note) : skipTasks(ids, action.reason);
       const [, closed] = await Promise.all([sleep(prefersReducedMotion() ? 0 : LEAVE_MS), save]);
       // Every id sent leaves the list: the ones not returned were not pending any more either.
       const sent = new Set(ids);
@@ -410,7 +414,7 @@ export function TodayScreen() {
       setLoaded((prev) => (prev ? { ...prev, tasks: prev.tasks.filter((x) => !sent.has(x.id)), doneToday: prev.doneToday + done } : prev));
       if (batch) forget(batch.tasks.map((x) => x.id));
       if (closed.length === 0) {
-        setRefreshNote(t.today.alreadyClosed);
+        setRefreshNote(ids.length > 1 ? t.today.setAlreadyClosed : t.today.alreadyClosed);
         reload();
         return;
       }
@@ -418,7 +422,7 @@ export function TodayScreen() {
       if (batch) {
         const gone = new Set(closed);
         const plants = summarize(batch.tasks.filter((x) => gone.has(x.id)), loaded.today).plants;
-        text = t.today.toastBatch(action.kind === "done", batch.zone, plants, batch.day === DUE_NOW ? "" : weekdayDate(batch.day));
+        text = t.today.toastBatch(action.kind === "done", batch.title ?? "", batch.zone, plants, batch.day === DUE_NOW ? "" : weekdayDate(batch.day));
       } else {
         text = t.today.toastDoneAll(closed.length);
       }
@@ -426,7 +430,12 @@ export function TodayScreen() {
         id: nextToastId(),
         kind: action.kind,
         message: text,
-        undoAll: { ids: closed, status: action.kind === "done" ? "done" : "skipped", leftOut: keptOut },
+        undoAll: {
+          ids: closed,
+          status: action.kind === "done" ? "done" : "skipped",
+          clearNote: undoClearsNote(action),
+          leftOut: keptOut,
+        },
       });
       if (closed.length < ids.length) {
         // The rest were not pending any more: the list is read again to be sure of it.
@@ -448,15 +457,14 @@ export function TodayScreen() {
     }
   }
 
-  /** Ticks or unticks a plant of a batch (all its waterings there), for the day on screen. */
-  function toggleLeftOut(plant: BatchPlant) {
+  /** Unticks (`out`) or ticks again tasks of a batch, a plant's or the whole batch's, for the day on screen. */
+  function leaveOut(ids: string[], out: boolean) {
     const day = loaded?.today ?? localIsoDate();
     setLeftOut((prev) => {
       const next = new Set(prev.day === day ? prev.ids : []);
-      const out = plant.task_ids.every((id) => next.has(id));
-      for (const id of plant.task_ids) {
-        if (out) next.delete(id);
-        else next.add(id);
+      for (const id of ids) {
+        if (out) next.add(id);
+        else next.delete(id);
       }
       return { day, ids: next };
     });
@@ -477,7 +485,7 @@ export function TodayScreen() {
     if ((!task && !all) || undoing) return;
     setUndoing(true);
     try {
-      const reopened = all ? (await reopenTasks(all.ids, all.status)).length > 0 : task ? await reopenTask(task.id) : false;
+      const reopened = all ? (await reopenTasks(all.ids, all.status, all.clearNote)).length > 0 : task ? await reopenTask(task.id) : false;
       // Nothing reopened: the rows changed meanwhile (acted on again on another screen).
       if (!reopened) setRefreshNote(t.today.undoNothing);
       else if (all && all.leftOut.length > 0) {
@@ -591,7 +599,8 @@ export function TodayScreen() {
               <p className="center muted">{t.today.dayEmpty}</p>
             ) : (
               groups.map((g) => {
-                // A zone's waterings due together share one card (Phase 11).
+                // A zone's waterings due together share one card (Phase 11), and so do the plants of a
+                // zone that share a window job (Phase 12).
                 const items = withBatches(g.tasks, today);
                 // Waterings late or due today at this site, less the plants unticked in a batch and the
                 // tasks on their way out: two or more, and the heading offers to close them together,
@@ -620,7 +629,7 @@ export function TodayScreen() {
                           today={today}
                           leaving={leaving}
                           left={left}
-                          onToggle={toggleLeftOut}
+                          onLeaveOut={leaveOut}
                           onAct={(ids, action) => void actAll(ids, action, item.batch)}
                         />
                       ) : (

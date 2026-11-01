@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, NotebookPen, TriangleAlert, X } from "lucide-react";
 import { t } from "../i18n";
-import { dueState, shortDate, weekdayDate, type DueState } from "../lib/today";
+import { dueLabel, type DueState } from "../lib/today";
 import { Spinner } from "./Spinner";
 import { TypeTile } from "./TypeIcon";
 import { TASK_MAX_NOTE_CHARS, type Task } from "../types";
@@ -13,25 +13,13 @@ export type TaskAction = { kind: "done"; note?: string } | { kind: "skip"; reaso
 const SNOOZE_DAYS = [1, 3, 7];
 const MAX_REASON = TASK_MAX_NOTE_CHARS;
 
-/**
- * "Open since 1 Oct · until 31 Dec" for a window that has started, "Overdue · 21 Oct" for a missed
- * watering, "Today", or the day of the week for the coming days. Past windows say so. The state
- * comes from `dueState`, the same reading the Today counts and the week strip use.
- */
-function dueLabel(task: Task, today: string): { text: string; state: DueState } {
-  const end = task.window_end;
-  const state = dueState(task, today);
-  if (end !== null && end < today) return { text: t.today.windowEnded(shortDate(end)), state };
-  let text: string;
-  if (state === "open") text = t.today.openSince(shortDate(task.due_on));
-  else if (state === "overdue") text = `${t.today.overdue} · ${shortDate(task.due_on)}`;
-  else if (state === "today") text = t.today.dueToday;
-  else text = weekdayDate(task.due_on);
-  if (end !== null) text += ` · ${t.today.until(shortDate(end))}`;
-  return { text, state };
-}
-
 const DUE_ICONS = { overdue: TriangleAlert, open: Clock, today: CalendarCheck, upcoming: CalendarDays };
+
+/** The icon in front of a due line, shared with the batch card; the line itself is `dueLabel`'s. */
+export function DueIcon({ state }: { state: DueState }) {
+  const Icon = DUE_ICONS[state];
+  return <Icon size={16} aria-hidden />;
+}
 
 /** Eight specks thrown out from the tile when a task is ticked. */
 export function Burst() {
@@ -67,7 +55,6 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
   const due = dueLabel(task, today);
-  const DueIcon = DUE_ICONS[due.state];
   const locked = busy || leaving !== null;
 
   function submitSkip(e: FormEvent) {
@@ -120,7 +107,7 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
         </div>
       </div>
       <div className={`task-due ${due.state}`}>
-        <DueIcon size={16} aria-hidden />
+        <DueIcon state={due.state} />
         {due.text}
       </div>
       {task.instruction && <p className="task-instruction">{task.instruction}</p>}

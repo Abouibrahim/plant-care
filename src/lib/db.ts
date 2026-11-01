@@ -533,9 +533,13 @@ async function closeTasks(ids: string[], status: "done" | "skipped", reason?: st
   return changed;
 }
 
-/** Done for a set: Today's "Done: all N waterings" and a zone batch's Done. */
-export function completeTasks(ids: string[]): Promise<string[]> {
-  return closeTasks(ids, "done");
+/**
+ * Done for a set: Today's "Done: all N waterings" and a batch's Done. A window batch's "Done with a
+ * note" writes the note on every row; without one (or with only spaces) the rows keep theirs.
+ */
+export function completeTasks(ids: string[], note = ""): Promise<string[]> {
+  const text = note.trim();
+  return closeTasks(ids, "done", text === "" ? undefined : text);
 }
 
 /** Skip for a zone batch: the same reason on each row, which the journal shows in place of the title. */
@@ -547,12 +551,12 @@ export function skipTasks(ids: string[], reason: string): Promise<string[]> {
  * Undo of a set closed from Today (Done-all, a batch's Done or Skip): the rows go back to pending.
  * Only rows still in the status the set was given change, so a row reopened and acted on again
  * meanwhile keeps its new state, and Undo of a Skip never reopens a row that was done; the ids that
- * changed are returned. A set Done wrote no note, so its Undo leaves the note alone; a Skip's reason
- * goes with the skip.
+ * changed are returned. A Skip's reason goes with the skip, and so does the note of a batch's "Done
+ * with a note" (`clearNote`); a plain set Done wrote no note, so its Undo leaves the note alone.
  */
-export async function reopenTasks(ids: string[], status: "done" | "skipped"): Promise<string[]> {
+export async function reopenTasks(ids: string[], status: "done" | "skipped", clearNote = status === "skipped"): Promise<string[]> {
   if (ids.length === 0) return [];
-  const patch = { status: "pending", acted_at: null, ...(status === "skipped" ? { note: "" } : {}) };
+  const patch = { status: "pending", acted_at: null, ...(clearNote ? { note: "" } : {}) };
   const r = await supabase.from("tasks").update(patch).in("id", ids).eq("status", status).select("id");
   const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
   if (changed.length > 0) notifyTasksChanged();

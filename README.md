@@ -2,14 +2,14 @@
 
 Phone-first PWA for one grower with two sites in Cap Bon, the backyard at home and the farm at borgdanet. Photograph a plant, let Claude identify it and write a species profile for Cap Bon conditions, and the app turns the profile into a task calendar, a daily round on Today and a push digest every morning.
 
-How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE11.md` and `UI-REFRESH.md`, the review behind Phase 10 in `docs/REVIEW-2026-10-30.md` (the Phase 11 it proposes is still open).
+How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE12.md` and `UI-REFRESH.md`, the review behind Phase 10 in `docs/REVIEW-2026-10-30.md` (the Phase 11 it proposes is still open).
 
 ## What it does
 
 - **Capture**: a photo goes to Claude, which names up to three candidates with their confidence and evidence; a confirmed species gets its profile once, shared by every plant of it.
 - **Profiles**: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests, companions, uses and toxicity. The grower confirms them and edits any part, the care calendar and the pests included; hand edits survive a regeneration.
-- **Today**: the tasks late, due today, open now (a window that has started) and due in the next six days, by site, with Done (and a note), Skip, Snooze and Undo; a zone's waterings due together in one card, done or skipped together with any plant left out; a site's waterings done in one tap.
-- **Morning push**: each morning at 06:00 Tunis time or within the hour after, one notification per site with something due (a zone's waterings on one line) and a weather notification when an alert or a rain skip applies.
+- **Today**: the tasks late, due today, open now (a window that has started) and due in the next six days, by site, with Done (and a note), Skip, Snooze and Undo; a zone's waterings due together in one card, and so a zone's plants sharing a window job (a pruning, a harvest), done or skipped together with any plant left out; a site's waterings done in one tap.
+- **Morning push**: each morning at 06:00 Tunis time or within the hour after, one notification per site with something due (a zone's waterings, or a window job its plants share, on one line) and a weather notification when an alert or a rain skip applies.
 - **Health**: Diagnose weighs a problem photo against the plant's own context and sets a follow-up reminder; treatments are logged from it.
 - **Ask Claude** about one plant, with the answers kept in its journal; **Check before planting** weighs a species against the sites before it is bought.
 - **Weather** (Open-Meteo): waterings skipped after rain; alerts for heat, sirocco, frost, gales and heavy rain; the hours that suit spraying when a task or a recent diagnosis asks for a spray.

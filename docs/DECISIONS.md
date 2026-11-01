@@ -2,6 +2,46 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-11-01 — Phase 12: batches for every task (0.12.0)
+
+Mohamed's request: "now, only waterings is grouped into one card. plan and implement grouping of all other tasks". Phase 11 kept windows single because "they last weeks, carry instructions that differ by species, and are few". At farm scale they are not few. A window is one row per plant for its whole run of months, so ten olives in a row put ten "Scout for olive fly" cards on Today from June to October, and every morning's push spends its lines on them. This phase batches windows and answers the other two reasons. Three critics read the first draft: a grower on a phone, one for edge cases, one for the project's rules. Their points changed it, as noted below.
+
+- **A batch is one job.**
+  - Windows gather by site, zone, kind, window (the same first and last day) and title. Titles are compared without case or extra spaces.
+  - The draft keyed on the window alone. The critics showed that two species, or a young and a mature tree, often share the months but not the job: a mature olive's "Winter pruning" and a young one's "Formative pruning", or the olives' and the figs' scouting. One Done would have closed both, and the card would have had no title or instruction.
+  - With the title in the key, a window batch is in practice one species' rule, and its card reads like the single card.
+  - The cost is a safe split: a plant whose task was written after a title edit stays apart until its mates are written again.
+  - A watering window is a window job, never part of the round. It keeps its title's litres per plant and shows no total, since it is one task for the season.
+- **The Done answers "they last weeks".** Done closes a window for the season for every ticked plant, and the toast's Undo lasts 5 seconds. So a batch's Done is the green button only when the batch holds something late or due today (`dueNow`: an ended window, or one opening today). For a window that is merely open it is a plain button, as for a coming day, so the green buttons on Today stay today's round.
+- **The day.** Every batch files under "now" when its tasks are due today or before, and under its day otherwise.
+  - A window batch takes its state and due line from the single card (`dueLabel`, moved from `TaskCard` to `src/lib/today.ts`), so an open window never reads as overdue.
+  - `summarize` reads lateness by a window's end and litres only from waterings, so a prune batch has no litres, range or total.
+- **The toast and the push name the job.** With several batches in one zone, "Done: row 2 · 10 plants" no longer said what had closed.
+  - A window batch's toast puts its title first, "Done: Harvest the olives · row 2 · 10 plants", after the day for a coming day.
+  - The push gives it one line, "Scout for olive fly · 10 plants · row 2", with "From 1 Nov: " in front for an early notice. The draft's "Scout 10 plants" would read alike for two scouting jobs.
+  - The round's toast and line are unchanged.
+- **Done with a note, scoped.**
+  - **Why.** Phase 11 left the note off a batch because it would replace the title in every plant's journal. For window work the note matters: a harvest closes with the season's total, as the guide advises. The only other way, the chevron to one tree, put a row's total in that tree's journal.
+  - **What it writes.** A window batch has "Done with a note". The note goes on each ticked plant's row with the batch's zone and size in front, "row 3 · 10 plants: 180 kg", and the whole stays within a note's 200 characters.
+  - **Undo** clears it (`reopenTasks(ids, status, clearNote)`).
+  - **No note given.** `completeTasks(ids, note)` writes none, so Done-all still keeps a reminder's words.
+  - **The round** has no note.
+- **Untick all.** Window work is often done over several visits, so Choose gains "Untick all" / "Tick all". A visit is then: untick all, tick the trees done, "Done 2/10".
+  - The ticks still last for the day, as in Phase 11. After a batch's own Done the plants left out come back ticked anyway, so a longer memory would add little.
+  - A plant to leave out for the season is skipped on its own card.
+- **Done-all.** It was hidden when exactly one batch due now held every watering it would close. With window batches on the list there are often several batches, so it is now hidden when any one batch holds them all.
+- **Found in review of the build.** Four reviewers read the build, and a skeptic checked each finding. What it changed:
+  - **The toast takes up to three lines.** A window batch's toast names its job, and one line of a 360 px phone then cut the zone and the count; two lines still cut it in French, beside the wider "Annuler".
+  - **Plants are listed by tag.** A batch's tags and its Choose list follow the tags, since the database gives a batch's rows in no set order.
+  - **Texts are cleared.** After a partial Done or Skip, the words typed for the plants that went are cleared rather than offered for the next ones.
+  - **Pure helpers.** The green-Done rule, the note's scope and room, and when Undo clears a note are pure helpers in `src/lib/today.ts`, with tests.
+- **Unchanged:**
+  - no snooze on a batch;
+  - the rows a person or a diagnosis wrote, and tasks with no plant, stay single;
+  - two plant records make a batch;
+  - plants count once, a group by its quantity;
+  - no SQL, no Claude call, no new read.
+
 ## 2026-11-01 — A user guide for the app as built
 
 The spec is the design of 2026-10-23, and Phases 6 to 11 went past it, so what the app does had to be pieced together from eleven `PHASE*.md` files and this log. `docs/USER-GUIDE.md` now describes 0.11.0 for the grower: each screen and what it does, the rules behind the tasks, the notifications and the weather, what works without a connection, the cost of each Claude call, the messages and what to do, and the setup and administration for the owner.
@@ -35,7 +75,7 @@ Item 1 of the feature review of 2026-10-25. Today groups tasks by site, and the 
 
 - **What gathers, and why only waterings.**
   - A batch is the periodic waterings the care calendar wrote (type water, no window) at one site and zone that fall due together: the late ones with today's, and each coming day's apart. These repeat every few days for every plant, which is what makes the list long.
-  - Windows (a feed, a harvest, a window watering) stay single: they last weeks, carry instructions that differ by species, and are few.
+  - Windows (a feed, a harvest, a window watering) stay single: they last weeks, carry instructions that differ by species, and are few. (Phase 12 batches them by job; see its entry above.)
   - So do the rows a person or a diagnosis wrote (`isAppWrittenRule`, the carve-out the stale-task cleanup uses). A "Remind me" watering keeps its own words, and its title has no litres.
 - **Two plants or more make a batch.** One plant's two waterings stay cards. Plants with no zone batch together, with no label, as the single card shows none. Zones are compared without case or outer spaces, as Ask and Check compare them, since the record form takes free text. The label is the spelling most of the plants use.
 - **Each plant counts once.** A plant can have two waterings due in one batch:
