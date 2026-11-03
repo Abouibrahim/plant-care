@@ -149,6 +149,13 @@ export const fr: Strings = {
     batchNote: (scope, note) => `${scope} : ${note}`,
     late: (date) => `En retard · ${date}`,
     undoNothing: "Rien n'a été rouvert : ces tâches ont changé entre-temps. La liste est à jour.",
+    activityLabel: (kind, n, late) =>
+      `${kind} : ${n === 1 ? "1 tâche" : `${n} tâches`}${late ? (n === 1 ? ", en retard" : ", dont certaines en retard") : ""}`,
+    later: "Plus tard cette semaine",
+    shareList: (kind) => `Partager la liste : ${kind}`,
+    shareCopied: "Liste copiée : collez-la dans un message.",
+    shareFailed: "La liste n'a pu être ni partagée ni copiée",
+    handoutAmount: (amount, tags) => `${amount} : ${tags}`,
   },
 
   capture: {
@@ -685,9 +692,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 12",
+    phaseTitle: "Phase 13",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, le journal des soins faits à la main, les arrosages d'une zone sur une seule carte d'Aujourd'hui et une seule ligne du rappel du matin, et maintenant de même pour les fenêtres que partagent les plantes d'une zone (une taille, une récolte, une surveillance) : une carte et une ligne par travail.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, le journal des soins faits à la main, les arrosages d'une zone sur une seule carte d'Aujourd'hui et une seule ligne du rappel du matin, de même pour les fenêtres que partagent les plantes d'une zone (une taille, une récolte, une surveillance), et maintenant le travail d'Aujourd'hui par type de tâche, chaque type se repliant pour la journée et s'envoyant en liste à qui le fait.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt, et une notification météo quand une alerte ou un arrosage passé après la pluie le justifie.",

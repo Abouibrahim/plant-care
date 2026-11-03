@@ -1467,22 +1467,122 @@ button.week-day.selected {
   font-weight: 600;
   letter-spacing: 0;
 }
-/* The site heading with, after a watering round, "Done: all N waterings" beside it or under it. */
-.site-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px 12px;
-  margin-bottom: 10px;
-}
-.site-head .site-heading {
-  margin-bottom: 0;
-}
 .done-all {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   background: var(--accent-soft);
+}
+
+/* A kind of work on Today (Phase 13): a fold button and a share button over a rule in the kind's
+   colour, then its cards; "Later this week" after the kinds. Each folds away with its last card,
+   as a card does. The kind's colour stays in the tile and the rule: harvest's ochre is too light
+   for text. */
+.activity,
+.later {
+  display: grid;
+  grid-template-rows: 1fr;
+  margin-bottom: 4px;
+  transition:
+    grid-template-rows 0.35s ease 0.45s,
+    margin-bottom 0.35s ease 0.45s,
+    opacity 0.3s ease 0.45s;
+}
+.activity.leaving,
+.later.leaving {
+  grid-template-rows: 0fr;
+  margin-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.activity-clip {
+  min-height: 0;
+  overflow: clip;
+  overflow-clip-margin: 24px;
+}
+.activity-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  border-bottom: 2px solid color-mix(in srgb, var(--tc) 40%, transparent);
+}
+.activity-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.activity-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 4px 2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+}
+.activity-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+}
+.activity-toggle:active:not(:disabled) {
+  transform: none;
+  background: var(--surface-2);
+}
+.activity-toggle .type-tile {
+  border-radius: 10px;
+}
+.activity-late {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--late);
+}
+.activity-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+.activity-toggle[aria-expanded="false"] .activity-chevron {
+  transform: rotate(-90deg);
+}
+button.activity-share {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+button.activity-share.copied {
+  color: var(--ok);
+}
+button.activity-share.failed {
+  color: var(--late);
+}
+.activity-body[hidden] {
+  display: none;
+}
+.activity-body > .done-all {
+  margin-bottom: 12px;
+}
+.later-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 1rem;
+}
+.later-head .count {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .toast {

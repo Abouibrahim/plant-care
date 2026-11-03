@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { en } from "../src/i18n/en";
-import { withBatches, type Batchable } from "../src/lib/batches";
+import { byActivity, splitNow } from "../src/lib/activities";
+import { DUE_NOW, summarize, withBatches, type Batchable } from "../src/lib/batches";
 import {
   batchDonePrimary,
   clearsTheDay,
@@ -9,11 +10,21 @@ import {
   dueLabel,
   dueNow,
   dueState,
+  foldKey,
+  isFolded,
   isLate,
+  NO_FOLDS,
+  parseFolds,
+  parseLeftOut,
+  roundDueLabel,
   scopedNote,
   scopedNoteRoom,
+  sectionFacts,
+  settleFolds,
+  sharedInstruction,
   shortDate,
   sortByDue,
+  toggleFold,
   undoClearsNote,
   weekdayDate,
 } from "../src/lib/today";
@@ -169,5 +180,160 @@ describe("a batch's Done, note and Undo (Phase 12)", () => {
     expect(undoClearsNote({ kind: "done", note: "row 3 · 10 plants: 180 kg" })).toBe(true);
     expect(undoClearsNote({ kind: "done" })).toBe(false);
     expect(undoClearsNote({ kind: "done", note: "  " })).toBe(false);
+  });
+});
+
+describe("Today by kind of work (Phase 13)", () => {
+  let n = 0;
+  /** A calendar watering of its own plant at the farm unless the extra says otherwise. */
+  const w = (due_on: string, zone: string, extra: Partial<Batchable> = {}): Batchable => {
+    n += 1;
+    return {
+      id: `k${n}`,
+      plant_id: `kp${n}`,
+      type: "water",
+      rule_key: "water:9-10-11:any:7",
+      due_on,
+      window_end: null,
+      title: "Deep watering (40 L)",
+      plant: { tag: `T${n}`, site: "farm", zone, quantity: 1 },
+      ...extra,
+    };
+  };
+
+  it("counts a kind's heading in tasks, as the site heading does, and flags it late only for late work", () => {
+    // One plant with yesterday's and today's waterings counts two tasks; a group of 12 counts one.
+    const yesterdays = w("2026-10-25", "row 2");
+    const todays = w(today, "row 2", { plant_id: yesterdays.plant_id });
+    const group = w(today, "row 2", { plant: { tag: "POM-H", site: "farm", zone: "row 2", quantity: 12 } });
+    const items = withBatches([yesterdays, todays, group], today);
+    expect(items).toHaveLength(1);
+    const ids = [yesterdays.id, todays.id, group.id];
+    expect(sectionFacts(items, today)).toEqual({ tasks: 3, late: true, ids, live: ids });
+    // A task on its way out still counts, but a fold neither keeps it nor checks it.
+    expect(sectionFacts(items, today, (id) => id === todays.id).live).toEqual([yesterdays.id, group.id]);
+    // An open window and a coming day are not late; an ended window is.
+    const open = w("2026-10-01", "row 3", { type: "harvest", window_end: "2026-12-31", title: "Harvest the olives" });
+    const coming = w("2026-10-28", "row 3");
+    expect(sectionFacts(withBatches([open, coming], today), today).late).toBe(false);
+    const ended = w("2026-09-01", "row 3", { type: "harvest", window_end: "2026-10-25", title: "Pick the late figs" });
+    expect(sectionFacts(withBatches([ended], today), today).late).toBe(true);
+  });
+
+  it("adds the kinds' counts and the coming days up to the site heading", () => {
+    const tasks = sortByDue(
+      [
+        w("2026-10-25", "row 2"),
+        w(today, "row 2"),
+        w(today, "row 3", { type: "prune", window_end: "2027-02-28", title: "Winter prune" }),
+        w("2026-10-01", "row 3", { type: "harvest", window_end: "2026-12-31", title: "Harvest the olives" }),
+        w("2026-10-01", "row 3", { type: "harvest", window_end: "2026-12-31", title: "Harvest the olives" }),
+        w("2026-10-28", "row 2"),
+        w("2026-10-30", "row 4", { type: "feed", window_end: "2026-11-30", title: "Autumn compost" }),
+      ],
+      today,
+    );
+    const { now, later } = splitNow(tasks, today);
+    const kinds = byActivity(withBatches(now, today)).map((g) => sectionFacts(g.items, today).tasks);
+    expect(kinds.reduce((a, b) => a + b, 0) + later.length).toBe(tasks.length);
+  });
+
+  it("keys a fold by site, kind and view", () => {
+    const keys = [foldKey("farm", "water", DUE_NOW), foldKey("backyard", "water", DUE_NOW), foldKey("farm", "prune", DUE_NOW), foldKey("farm", "water", "2026-10-28")];
+    expect(new Set(keys).size).toBe(4);
+    expect(keys[0]).toBe("farm|water|now");
+  });
+
+  it("folds a kind with the tasks it shows and opens it again, leaving the other kinds alone", () => {
+    const water = foldKey("farm", "water", DUE_NOW);
+    const prune = foldKey("farm", "prune", DUE_NOW);
+    const one = toggleFold(NO_FOLDS, today, water, ["a", "b"]);
+    expect(isFolded(one, today, water, ["a", "b"])).toBe(true);
+    const two = toggleFold(one, today, prune, ["c"]);
+    const opened = toggleFold(two, today, water, ["a", "b"]);
+    expect(isFolded(opened, today, water, ["a", "b"])).toBe(false);
+    expect(isFolded(opened, today, prune, ["c"])).toBe(true);
+  });
+
+  it("keeps a fold while tasks leave, and opens it when a task it did not have appears", () => {
+    const key = foldKey("farm", "water", DUE_NOW);
+    const folds = toggleFold(NO_FOLDS, today, key, ["a", "b", "c"]);
+    // A Done, or the rain skip, takes tasks away: still folded.
+    expect(isFolded(folds, today, key, ["a", "c"])).toBe(true);
+    // A reminder set for today, a plant saved, an Undo: a task it did not have opens it.
+    expect(isFolded(folds, today, key, ["a", "c", "d"])).toBe(false);
+    // Nothing to show, another day: open.
+    expect(isFolded(folds, today, key, [])).toBe(false);
+    expect(isFolded(folds, "2026-10-27", key, ["a"])).toBe(false);
+    // A kind shown open after new work folds again, now with the new task.
+    const again = toggleFold(folds, today, key, ["a", "c", "d"]);
+    expect(isFolded(again, today, key, ["a", "c", "d"])).toBe(true);
+  });
+
+  it("keeps a kind that new work opened open until a tap folds it again", () => {
+    const key = foldKey("farm", "water", DUE_NOW);
+    const folds = toggleFold(NO_FOLDS, today, key, ["a", "b"]);
+    // A reminder for today appears: the kind shows open, and its fold goes as it shows.
+    const settled = settleFolds(folds, today, { [key]: ["a", "b", "r"] });
+    expect(settled.keys[key]).toBeUndefined();
+    // The reminder done, the kind stays open rather than folding by itself.
+    expect(isFolded(settled, today, key, ["a", "b"])).toBe(false);
+    // Nothing new, a kind not on screen, another day: the same folds come back.
+    expect(settleFolds(folds, today, { [key]: ["a"] })).toBe(folds);
+    expect(settleFolds(folds, today, { [key]: [] })).toBe(folds);
+    expect(settleFolds(folds, today, { "farm|prune|now": ["z"] })).toBe(folds);
+    expect(settleFolds(folds, "2026-10-27", { [key]: ["z"] })).toBe(folds);
+  });
+
+  it("opens a kind folded while a task was being saved, when an Undo or a failed save brings the task back", () => {
+    const [a, b, c] = [w(today, "row 2"), w(today, "row 2"), w("2026-10-01", "row 5", { window_end: "2026-11-30", title: "Water if dry (20 L)" })];
+    const items = withBatches([a, b, c], today);
+    const key = foldKey("farm", "water", DUE_NOW);
+    // a is being saved when the heading is tapped: the fold keeps b and c only.
+    const saving = sectionFacts(items, today, (id) => id === a.id);
+    const folds = toggleFold(NO_FOLDS, today, key, saving.live);
+    expect(isFolded(folds, today, key, saving.live)).toBe(true);
+    // Saved, a leaves: still folded.
+    expect(isFolded(folds, today, key, sectionFacts(withBatches([b, c], today), today).live)).toBe(true);
+    // Back after an Undo or a failed save: new to the fold, it opens the kind.
+    const back = sectionFacts(items, today).live;
+    expect(isFolded(folds, today, key, back)).toBe(false);
+    expect(settleFolds(folds, today, { [key]: back }).keys[key]).toBeUndefined();
+  });
+
+  it("drops another day's folds on the next tap", () => {
+    const old = toggleFold(NO_FOLDS, "2026-10-25", foldKey("farm", "water", DUE_NOW), ["a"]);
+    const next = toggleFold(old, today, foldKey("farm", "prune", DUE_NOW), ["c"]);
+    expect(next).toEqual({ day: today, keys: { "farm|prune|now": ["c"] } });
+  });
+
+  it("reads the folds and the ticks kept on the phone, and nothing from a value of another shape", () => {
+    for (const raw of [null, "not json", "[]", "5", '"x"', '{"day":3,"keys":{}}', '{"day":"2026-10-26","keys":[]}', '{"day":"2026-10-26"}']) {
+      expect(parseFolds(raw)).toEqual(NO_FOLDS);
+    }
+    expect(parseFolds('{"day":"2026-10-26","keys":{"farm|water|now":["a",4,"b"],"farm|prune|now":"x"}}')).toEqual({ day: "2026-10-26", keys: { "farm|water|now": ["a", "b"] } });
+    const folds = toggleFold(NO_FOLDS, today, "farm|water|now", ["a"]);
+    expect(parseFolds(JSON.stringify(folds))).toEqual(folds);
+
+    for (const raw of [null, "not json", "[]", '{"day":"2026-10-26","ids":"a"}', '{"ids":["a"]}']) {
+      expect(parseLeftOut(raw)).toEqual({ day: "", ids: new Set() });
+    }
+    expect(parseLeftOut('{"day":"2026-10-26","ids":["a",7,"b"]}')).toEqual({ day: "2026-10-26", ids: new Set(["a", "b"]) });
+  });
+
+  it("words a round's due line in plants, as the card and the shared list read it", () => {
+    expect(roundDueLabel(DUE_NOW, { plants: 5, late: 0, since: today })).toEqual({ text: en.today.dueToday, state: "today" });
+    expect(roundDueLabel(DUE_NOW, { plants: 5, late: 3, since: "2026-10-24" })).toEqual({ text: `${en.today.dueToday} · ${en.today.batchLate(3)}`, state: "overdue" });
+    expect(roundDueLabel(DUE_NOW, { plants: 2, late: 2, since: "2026-10-24" })).toEqual({ text: `${en.today.overdue} · ${shortDate("2026-10-24")}`, state: "overdue" });
+    expect(roundDueLabel("2026-10-29", { plants: 2, late: 0, since: "2026-10-29" })).toEqual({ text: weekdayDate("2026-10-29"), state: "upcoming" });
+    // The card's own summary feeds it.
+    const [a, b] = [w("2026-10-25", "row 2"), w(today, "row 2")];
+    expect(roundDueLabel(DUE_NOW, summarize([a, b], today)).text).toBe(`${en.today.dueToday} · ${en.today.batchLate(1)}`);
+  });
+
+  it("shows a batch's instruction only when all its plants give the same", () => {
+    expect(sharedInstruction([{ instruction: "Open the centre." }, { instruction: "Open the centre." }])).toBe("Open the centre.");
+    expect(sharedInstruction([{ instruction: "Open the centre." }, { instruction: "Remove suckers." }])).toBe("");
+    expect(sharedInstruction([])).toBe("");
   });
 });

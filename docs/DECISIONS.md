@@ -2,6 +2,81 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-11-03 — Phase 13: Today by kind of work (0.13.0)
+
+Mohamed's request: "what if we have all tasks grouped by activity. this will make it easier to assign tasks across the farm. think of this proposition, plan then implement". An activity is read as a kind of task (water, prune, feed, mulch, harvest, scout, propagate, protect). Four drafts answered it from different angles: activity sections kept minimal, assignment first, one card per activity, and a skeptic of the idea who weighed a toggle and filter chips. Three critics scored them: a grower at 06:00 with workers waiting, edge cases checked against the code, and the project's rules. The design below takes the first draft as its base, with the parts of the others the critics kept.
+
+- **Sites stay the outer level, and the kinds sit inside each.** Work is handed out per place, batches and the push are per site, and one section per kind across both sites would put a backyard watering on the farm worker's list.
+- **The kinds hold the work due now; the coming days go under "Later this week".**
+  - The work due now is what is late, due today, or a window that is open, opens today or has ended (`due_on` on or before today).
+  - The hand-out is today's work. With the coming days inside each kind, the farm's Water section would carry Thursday's and Saturday's rounds before Prune appears, and a shared Water list would send Thursday's rows with today's.
+  - A day chosen in the strip is grouped by kind with no tail, so tomorrow's work can be handed out the evening before. Today's tile shows the same kinds as the week.
+  - A batch never straddles the split: a round's key holds its day, and a window job's its first day.
+- **The order is the calendar's, fixed.** `TASK_TYPES` was already Today's display order.
+  - Each worker's kind sits in the same place every morning. Ordered by urgency, headings would move under the thumb as a late task closed: Done on a late Scout follow-up would drop Scout below Water as the card leaves, and the thumb would land on a round's green Done.
+  - Urgency shows through the heading's "Overdue" flag, the order inside each kind, the hero's overdue count, the strip's dot, and the split above.
+  - The cost is that a late task of a later kind sits below the earlier kinds.
+- **Inside a kind, everything is as in 0.12.0.** `withBatches` runs over the site's work due now as before, and its output is split by kind as a stable partition (`byActivity` in `src/lib/activities.ts`).
+  - A batch is one kind by construction: a round is periodic waterings, and a window job's key holds its kind. So no batch spans two kinds, and the batch keys, their places and the Choose ticks are unchanged.
+  - A test checks that each kind's batches are those it would make on its own.
+- **The heading.**
+  - It holds the kind's tile and name, its tasks counted in rows, an "Overdue" flag and a chevron, with a share button beside it.
+  - Rows are the site heading's unit, so the kinds and "Later this week" add up to it. A third unit (plants, litres, zones) would sit beside the cards' plants.
+  - The flag has no number, since a round counts its late ones in plants.
+  - The name is in the text colour: harvest's ochre is about 3.4:1 on the cream background, under what text of that size needs.
+- **Nothing closes a kind as a whole.**
+  - The one-card-per-activity draft worked the literal reading through. One Done on Water would close today's rounds, a watering window for the season and Thursday's waterings two days early, all with a green button. One note would give the olives and the pomegranates one shared yield, and one tick in Choose would stand for two tasks.
+  - So each card keeps its own controls. Done-all stays the only tap that closes several jobs.
+- **Folds.**
+  - **A tap folds a kind for the day.** A fold applies to one site and kind in one view: the week, with today's tile, or a chosen coming day.
+  - **Kept like the ticks.** A module copy plus sessionStorage `plantcare.folded`, so it survives Refresh, the 06:05 read, a visit to a plant and Android discarding the page.
+  - **New work opens it.** A fold keeps the ids it hid and opens by itself when a task it did not have appears: a reminder for today, a plant saved, an Undo. The kind then stays open until a tap folds it again (`settleFolds`).
+  - **Mounted while folded.** Folded cards are hidden, not unmounted, so an open Choose or a half-typed weight survives a brushed heading.
+  - **A kind leaves with its last card**, the heading folding away with it.
+  - **Rejected:**
+    - folding by default the kinds holding only open windows (one critic): "Harvest the olives · until 31 Dec" would sit folded every morning until "Window ended" closed it without its yield;
+    - folds kept past the day or across a restart;
+    - a fold-all;
+    - sticky headings.
+- **Done-all moves into the Water section**, its rules unchanged, and is hidden while Water is folded so it never closes cards out of sight.
+- **Handing out: the share button.**
+  - **Why.** Mohamed's purpose is assigning work to people who have no account; a message on their phone is the channel they have.
+  - **What it does.** Each kind's share button builds the kind's list as plain text from exactly what the section shows, and hands it to `navigator.share` with the text alone (no title, no link). Where there is no share sheet, or it refuses, the text is copied, and the info banner says so: a toast would push out the last action's Undo, and the error banner's Retry would read the list again rather than share it.
+  - **What goes in.** Every task shown goes in, whatever the Choose ticks: they scope a Done, and "Untick all" (the several-visits flow) would otherwise send an empty list. There are no ids or links.
+  - **A one-way copy.** Nothing comes back from it. SPEC.md's out-of-scope "shared task lists" stays out.
+  - **Rejected:**
+    - worker accounts, or a name on each task: SQL and RLS work, and nothing would read it; a list of names kept in `settings` is the path if names are ever wanted;
+    - the Choose ticks as the hand-out's picker;
+    - a time stamp and an automatic fold after a share, which would hide Done-all and later work.
+- **Today reads its list again when a push arrives.** `public/push-sw.js` posts `{ type: "plantcare:push" }` to the open app windows on every push. Today reads its list, the weather and the badge at the first message, and once for the run's burst of notifications (10 seconds), since the run has written everything before it sends its first.
+  - **Why.** The morning run can come as late as 06:59, after Today's 06:05 read, and its rain skip closes waterings. A tap on the notification only focuses an app already open on Today. With the share button, such a list could send a worker out to water after the rain.
+- **The morning push does not change.** It stays most-pressing-first: early notices, then late, due today and open windows, a batch as one line.
+  - The notification previews what is pressing, and the hand-out happens on Today.
+  - Grouped by kind, its three lines would often all be waterings, and the one-morning early notice and a late follow-up would fall into "+N more".
+  - Phase 12's push tests have not run yet.
+- **Code.**
+  - `src/lib/activities.ts`, pure, with `.js` specifiers so `api/` could use it: `kindOf`, `byActivity` and `splitNow`.
+  - `src/lib/today.ts` gains:
+    - `sectionFacts`;
+    - the folds (`foldKey`, `isFolded`, `toggleFold`, `parseFolds`);
+    - `parseLeftOut`, the ticks' parse, moved out of the screen;
+    - `roundDueLabel` and `sharedInstruction`, moved from the batch card so the list can read them.
+  - `src/lib/handout.ts` builds the list, and `src/lib/share.ts` shares or copies it, with the navigator passed in for tests.
+- **Found in review of the build.** Four reviewers read the build and a skeptic checked each finding: 14 raised, 4 refuted, and the 10 confirmed came to 8 points, all fixed.
+  - **A kind no longer folds itself again.** A kind that new work opened folded itself once that task was done, its cards vanishing under the thumb. Its fold now goes when new work opens it.
+  - **Tasks being saved are left out of a fold.** A kind folded while one of its cards was being saved kept that card's id, so an Undo or a failed save brought the card back hidden. A fold now keeps and checks only the tasks that are not on their way out.
+  - **No lock on the share buttons.** They waited for the share sheet to report, and Chrome on Android does not always report, so they could stay greyed until Today was left. Now a short pause stops a double tap, and only the latest share's answer counts.
+  - **The share button shows its own outcome.** A copy, or a failure, was said only in the note at the top of Today, out of sight when sharing a lower kind. The button now shows a tick, or a warning sign, for a moment.
+  - **The push read comes at once.** It waited 2 seconds after the burst for nothing, since the run's data is final before its first notification. The badge is now counted again with it.
+  - **Line breaks are flattened.** An instruction edited by hand with a blank line in it split a block of the shared list in two. Titles and instructions now go on one line, as the card shows them.
+  - **A test now pins the share call.** It checks that the share is called on the navigator itself and before anything is awaited, which the share sheet needs.
+- **Unchanged:**
+  - the cards and their buttons;
+  - the batches, the round, the badge, the leaf fall, the chips and the strip;
+  - the push and its tests;
+  - the task writes;
+  - no SQL, no new read, no Claude call.
+
 ## 2026-11-01 — Phase 12: batches for every task (0.12.0)
 
 Mohamed's request: "now, only waterings is grouped into one card. plan and implement grouping of all other tasks". Phase 11 kept windows single because "they last weeks, carry instructions that differ by species, and are few". At farm scale they are not few. A window is one row per plant for its whole run of months, so ten olives in a row put ten "Scout for olive fly" cards on Today from June to October, and every morning's push spends its lines on them. This phase batches windows and answers the other two reasons. Three critics read the first draft: a grower on a phone, one for edge cases, one for the project's rules. Their points changed it, as noted below.

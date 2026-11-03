@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, Camera, Check, RefreshCw } from "lucide-react";
 import { Banner } from "../components/Banner";
@@ -9,10 +9,24 @@ import { TaskCard, type TaskAction } from "../components/TaskCard";
 import { Toast, type ToastKind } from "../components/Toast";
 import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
+import { byActivity, splitNow } from "../lib/activities";
 import { api } from "../lib/api";
 import { addDays, localIsoDate, toLocalDate } from "../lib/dates";
-import { DUE_NOW, summarize, withBatches, type Batch } from "../lib/batches";
-import { completeTask, completeTasks, countDoneSince, listDueTasks, reopenTask, reopenTasks, skipTask, skipTasks, snoozeTask } from "../lib/db";
+import { DUE_NOW, summarize, withBatches, type Batch, type ListItem } from "../lib/batches";
+import {
+  completeTask,
+  completeTasks,
+  countDoneSince,
+  listDueTasks,
+  notifyTasksChanged,
+  reopenTask,
+  reopenTasks,
+  skipTask,
+  skipTasks,
+  snoozeTask,
+} from "../lib/db";
+import { handoutText } from "../lib/handout";
+import { shareText } from "../lib/share";
 import {
   buzz,
   checkIn,
@@ -21,15 +35,25 @@ import {
   doneAllIds,
   doneAllRepeatsBatch,
   dueNow,
+  foldKey,
   greetingFor,
+  isFolded,
   isLate,
+  NO_FOLDS,
+  parseFolds,
+  parseLeftOut,
   prefersReducedMotion,
+  sectionFacts,
+  settleFolds,
   sortByDue,
+  toggleFold,
   undoClearsNote,
   weekdayDate,
   type BatchAction,
+  type Folds,
 } from "../lib/today";
 import { expansionChanged, SITES, TASK_TYPES, type Site, type TaskType, type TaskWithPlant } from "../types";
+import { ActivitySection, type ShareFlash } from "./today/ActivitySection";
 import { BatchCard } from "./today/BatchCard";
 import { RoundCard } from "./today/RoundCard";
 import { WeatherCard } from "./today/WeatherCard";
@@ -73,14 +97,11 @@ let keptLeftOut: LeftOut | null = null;
 function readLeftOut(): LeftOut {
   if (keptLeftOut) return keptLeftOut;
   try {
-    const raw = JSON.parse(sessionStorage.getItem(LEFT_OUT_KEY) ?? "null") as { day?: unknown; ids?: unknown } | null;
-    if (raw && typeof raw.day === "string" && Array.isArray(raw.ids)) {
-      return { day: raw.day, ids: new Set(raw.ids.filter((id): id is string => typeof id === "string")) };
-    }
+    return parseLeftOut(sessionStorage.getItem(LEFT_OUT_KEY));
   } catch {
-    // storage blocked or unreadable: nothing unticked
+    // storage blocked: nothing unticked
+    return { day: "", ids: new Set() };
   }
-  return { day: "", ids: new Set() };
 }
 
 function keepLeftOut(value: LeftOut) {
@@ -91,6 +112,39 @@ function keepLeftOut(value: LeftOut) {
     // storage blocked: kept for this session in memory only
   }
 }
+
+const FOLDS_KEY = "plantcare.folded";
+
+/** The kinds of work folded on Today, kept for the app session and the day as the ticks are, with a copy in sessionStorage. */
+let keptFolds: Folds | null = null;
+
+function readFolds(): Folds {
+  if (keptFolds) return keptFolds;
+  try {
+    return parseFolds(sessionStorage.getItem(FOLDS_KEY));
+  } catch {
+    // storage blocked: nothing folded
+    return NO_FOLDS;
+  }
+}
+
+function keepFolds(value: Folds) {
+  keptFolds = value;
+  try {
+    sessionStorage.setItem(FOLDS_KEY, JSON.stringify(value));
+  } catch {
+    // storage blocked: kept for this session in memory only
+  }
+}
+
+/** What public/push-sw.js posts to the open app on every push, so Today reads the morning run's result. */
+const PUSH_MESSAGE = "plantcare:push";
+/** The run sends its notifications one after another, its data already final: one read for the burst. */
+const PUSH_QUIET_MS = 10_000;
+/** A second tap on a share button this soon after the first opens no second sheet. */
+const SHARE_TAP_MS = 1000;
+/** How long a share button shows that the list was copied, or could not be. */
+const SHARE_FLASH_MS = 2500;
 
 interface Loaded {
   today: string;
@@ -209,11 +263,30 @@ export function TodayScreen() {
    * a plant's page does not tick them again, and left behind at midnight with the day's batches.
    */
   const [leftOut, setLeftOut] = useState<LeftOut>(readLeftOut);
+  /** The kinds of work folded for the day, per site, kind and view, kept like the ticks. */
+  const [folds, setFolds] = useState<Folds>(readFolds);
+  /** A share button that shows, for a moment, that its list was copied or could not be. */
+  const [shareFlash, setShareFlash] = useState<{ key: string; flash: ShareFlash } | null>(null);
+  /**
+   * The latest share, so a late answer from an earlier sheet changes nothing (Chrome on Android does
+   * not always say when a share ends, and lets the next one start), and a short pause after each, so
+   * a double tap opens one sheet.
+   */
+  const shareSeq = useRef(0);
+  const shareCooling = useRef(false);
   const [hour, setHour] = useState(() => new Date().getHours());
 
   useEffect(() => {
     keepLeftOut(leftOut);
   }, [leftOut]);
+  useEffect(() => {
+    keepFolds(folds);
+  }, [folds]);
+  useEffect(() => {
+    if (!shareFlash) return;
+    const timer = window.setTimeout(() => setShareFlash(null), SHARE_FLASH_MS);
+    return () => window.clearTimeout(timer);
+  }, [shareFlash]);
   const [streak, setStreak] = useState(() => checkIn(localIsoDate()));
 
   useEffect(() => {
@@ -288,6 +361,28 @@ export function TodayScreen() {
       window.clearTimeout(timer);
     };
   }, [loadedToday, loadedAt]);
+
+  // The morning run can come at any minute from 06:00 to 06:59, after a read at 06:05, and its rain
+  // skip closes waterings: when its notifications reach the phone while Today is open (or in the
+  // background), the service worker says so and the list, the weather and the badge are read again,
+  // so a kind handed out after the notification does not carry a watering the rain skipped. The run
+  // has written everything before its first notification, so the first message is read at once and
+  // the rest of its burst adds nothing.
+  useEffect(() => {
+    const worker = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+    if (!worker) return;
+    let quietUntil = 0;
+    const onMessage = (event: MessageEvent) => {
+      if ((event.data as { type?: unknown } | null)?.type !== PUSH_MESSAGE) return;
+      const now = Date.now();
+      if (now < quietUntil) return;
+      quietUntil = now + PUSH_QUIET_MS;
+      setAttempt((n) => n + 1);
+      notifyTasksChanged();
+    };
+    worker.addEventListener("message", onMessage);
+    return () => worker.removeEventListener("message", onMessage);
+  }, []);
 
   // While the screen stays open, the hour is read again on the hour, so the greeting and the weather
   // card's "(passed)" and "(now)" marks follow the clock; each new hour arms the next read.
@@ -479,6 +574,35 @@ export function TodayScreen() {
     });
   }
 
+  /**
+   * Hands a kind's list to the share sheet; the text was built in the tap, so the sheet opens within
+   * it. Shared or dismissed, nothing changes here. A copy (no share sheet), or a list neither shared
+   * nor copied, shows for a moment on the button tapped, which may be far below the banners, and stays
+   * said in the info banner: that leaves the last action's Undo toast in place, and it has no Retry,
+   * which would read the list again rather than share it. No button waits for a sheet to close, since
+   * Chrome on Android does not always say when it has.
+   */
+  async function shareSection(key: string, text: string) {
+    if (shareCooling.current) return;
+    shareCooling.current = true;
+    window.setTimeout(() => {
+      shareCooling.current = false;
+    }, SHARE_TAP_MS);
+    shareSeq.current += 1;
+    const seq = shareSeq.current;
+    setError(null);
+    setRefreshNote(null);
+    let flash: ShareFlash | null = null;
+    try {
+      if ((await shareText(text)) === "copied") flash = "copied";
+    } catch {
+      flash = "failed";
+    }
+    if (flash === null || seq !== shareSeq.current) return;
+    setRefreshNote(flash === "copied" ? t.today.shareCopied : t.today.shareFailed);
+    setShareFlash({ key, flash });
+  }
+
   async function undo() {
     const task = toast?.undo;
     const all = toast?.undoAll;
@@ -517,6 +641,63 @@ export function TodayScreen() {
   const shown = sortByDue(day === null ? siteTasks : onDay(siteTasks, day, today), today);
   const groups = SITE_ORDER.map((s) => ({ site: s, tasks: shown.filter((x) => x.plant?.site === s) })).filter((g) => g.tasks.length > 0);
   const siteCount = (s: SiteFilter) => (s === "all" ? dayTasks.length : dayTasks.filter((x) => x.plant?.site === s).length);
+  // A kind's fold and list belong to the view: the week view and today's tile share one, and each
+  // coming day chosen in the strip has its own.
+  const view = day === null || day === today ? DUE_NOW : day;
+
+  // Each site's list (Phase 13): its work due now by kind of task, then the coming days. The week view
+  // keeps the coming days apart, under "Later this week"; a day chosen in the strip shows its own
+  // tasks only, all by kind. A zone's waterings due together share one card (Phase 11), and so do the
+  // plants of a zone that share a window job (Phase 12); the cards then go under their kind, in the
+  // calendar's order, each kind keeping Today's order.
+  const sites = groups.map((g) => {
+    const { now, later } = day === null ? splitNow(g.tasks, today) : { now: g.tasks, later: [] };
+    const items = withBatches(now, today);
+    // Waterings late or due today at this site, less the plants unticked in a batch and the tasks on
+    // their way out: two or more, and the Water section offers to close them together, unless one
+    // batch already holds them all and its Done says the same.
+    const waterings = doneAllIds(now, today, (id) => left.has(id) || !!leaving[id]);
+    return {
+      site: g.site,
+      count: g.tasks.length,
+      kinds: byActivity(items).map(({ type, items: mine }) => ({
+        type,
+        items: mine,
+        facts: sectionFacts(mine, today, (id) => leaving[id] !== undefined),
+        key: foldKey(g.site, type, view),
+      })),
+      waterings,
+      showDoneAll: waterings.length > 0 && !doneAllRepeatsBatch(waterings, items),
+      later,
+      tail: withBatches(later, today),
+    };
+  });
+  // A kind that new work opened stays open until a tap folds it again: its fold goes as it shows.
+  const settled = settleFolds(folds, today, Object.fromEntries(sites.flatMap((s) => s.kinds.map((k) => [k.key, k.facts.live]))));
+  if (settled !== folds) setFolds(settled);
+
+  /** A card of the list: a zone batch (Phases 11 and 12) or a task of its own. */
+  const card = (item: ListItem<TaskWithPlant>) =>
+    item.kind === "batch" ? (
+      <BatchCard
+        key={`batch:${item.batch.key}`}
+        batch={item.batch}
+        today={today}
+        leaving={leaving}
+        left={left}
+        onLeaveOut={leaveOut}
+        onAct={(ids, action) => void actAll(ids, action, item.batch)}
+      />
+    ) : (
+      <TaskCard
+        key={item.task.id}
+        task={item.task}
+        today={today}
+        plant={item.task.plant}
+        leaving={leaving[item.task.id] ?? null}
+        onAct={(action) => void act(item.task, action)}
+      />
+    );
 
   const phase = dayPhase(hour);
 
@@ -598,54 +779,48 @@ export function TodayScreen() {
             ) : groups.length === 0 ? (
               <p className="center muted">{t.today.dayEmpty}</p>
             ) : (
-              groups.map((g) => {
-                // A zone's waterings due together share one card (Phase 11), and so do the plants of a
-                // zone that share a window job (Phase 12).
-                const items = withBatches(g.tasks, today);
-                // Waterings late or due today at this site, less the plants unticked in a batch and the
-                // tasks on their way out: two or more, and the heading offers to close them together,
-                // unless one batch already holds them all and its Done says the same.
-                const waterings = doneAllIds(g.tasks, today, (id) => left.has(id) || !!leaving[id]);
-                const showDoneAll = waterings.length > 0 && !doneAllRepeatsBatch(waterings, items);
-                return (
-                  <section key={g.site} className="section">
-                    <div className="site-head">
-                      <h2 className="site-heading">
-                        <SiteLabel site={g.site} size={20} />
-                        <span className="count">{t.today.taskCount(g.tasks.length)}</span>
-                      </h2>
-                      {showDoneAll && (
-                        <button type="button" className="small done-all" onClick={() => void actAll(waterings, { kind: "done" })}>
+              sites.map((s) => (
+                <section key={s.site} className="section">
+                  <h2 className="site-heading">
+                    <SiteLabel site={s.site} size={20} />
+                    <span className="count">{t.today.taskCount(s.count)}</span>
+                  </h2>
+                  {s.kinds.map((k) => (
+                    <ActivitySection
+                      key={k.type}
+                      type={k.type}
+                      tasks={k.facts.tasks}
+                      late={k.facts.late}
+                      // A task on its way out is neither kept by a fold nor counted against it.
+                      folded={isFolded(folds, today, k.key, k.facts.live)}
+                      leaving={k.facts.live.length === 0}
+                      flash={shareFlash?.key === k.key ? shareFlash.flash : null}
+                      onToggle={() => setFolds((prev) => toggleFold(prev, today, k.key, k.facts.live))}
+                      onShare={() => void shareSection(k.key, handoutText({ type: k.type, site: s.site, day: view === DUE_NOW ? today : view, today, items: k.items }))}
+                    >
+                      {k.type === "water" && s.showDoneAll && (
+                        <button type="button" className="small done-all" onClick={() => void actAll(s.waterings, { kind: "done" })}>
                           <Check size={18} strokeWidth={2.5} aria-hidden />
-                          {t.today.doneAll(waterings.length)}
+                          {t.today.doneAll(s.waterings.length)}
                         </button>
                       )}
-                    </div>
-                    {items.map((item) =>
-                      item.kind === "batch" ? (
-                        <BatchCard
-                          key={`batch:${item.batch.key}`}
-                          batch={item.batch}
-                          today={today}
-                          leaving={leaving}
-                          left={left}
-                          onLeaveOut={leaveOut}
-                          onAct={(ids, action) => void actAll(ids, action, item.batch)}
-                        />
-                      ) : (
-                        <TaskCard
-                          key={item.task.id}
-                          task={item.task}
-                          today={today}
-                          plant={item.task.plant}
-                          leaving={leaving[item.task.id] ?? null}
-                          onAct={(action) => void act(item.task, action)}
-                        />
-                      ),
-                    )}
-                  </section>
-                );
-              })
+                      {k.items.map(card)}
+                    </ActivitySection>
+                  ))}
+                  {s.tail.length > 0 && (
+                    <section className={`later ${s.later.every((x) => leaving[x.id] !== undefined) ? "leaving" : ""}`}>
+                      <div className="activity-clip">
+                        <h3 className="later-head">
+                          <CalendarDays size={18} aria-hidden />
+                          {t.today.later}
+                          <span className="count">{t.today.taskCount(s.later.length)}</span>
+                        </h3>
+                        {s.tail.map(card)}
+                      </div>
+                    </section>
+                  )}
+                </section>
+              ))
             )}
           </>
         )

@@ -1,11 +1,13 @@
 // Small helpers behind the Today screen: how a task stands against the day (shared by the cards,
-// the counts and the week strip, so "overdue" means the same thing everywhere), the time of day
-// (greeting and garden scene), the check-in streak kept on this phone, and the short vibration on
-// Done. Nothing here touches the data.
-import type { Batchable, ListItem } from "./batches";
+// the counts and the week strip, so "overdue" means the same thing everywhere), the batch cards'
+// lines and rules, the kinds of work's headings and folds, the time of day (greeting and garden
+// scene), the check-in streak kept on this phone, and the short vibration on Done. Nothing here
+// touches the data. The folds and the ticks are parsed from what the screen read from storage; only
+// the check-in streak keeps its own (localStorage).
+import { DUE_NOW, type Batchable, type BatchSummary, type ListItem } from "./batches";
 import { addDays, toLocalDate } from "./dates";
 import { t } from "../i18n";
-import { TASK_MAX_NOTE_CHARS, TASK_TYPES, type Task } from "../types";
+import { TASK_MAX_NOTE_CHARS, TASK_TYPES, type Site, type Task, type TaskType } from "../types";
 
 /** "21 Oct" in the phone's language, for the due lines of the cards. */
 export function shortDate(iso: string): string {
@@ -77,8 +79,9 @@ export function sortByDue<T extends Pick<Task, "due_on" | "window_end" | "type" 
 type Due = Pick<Task, "id" | "type" | "due_on" | "window_end">;
 
 /**
- * The site heading's "Done: all N waterings": the site's waterings late or due today, less those
- * `skip` names (plants left out of a batch, tasks already on their way out); none below two.
+ * "Done: all N waterings", the first row of a site's Water section: the site's waterings late or due
+ * today, less those `skip` names (plants left out of a batch, tasks already on their way out); none
+ * below two.
  */
 export function doneAllIds(tasks: Due[], today: string, skip: (id: string) => boolean): string[] {
   const ids = tasks.filter((x) => x.type === "water" && dueNow(x, today) && !skip(x.id)).map((x) => x.id);
@@ -138,6 +141,23 @@ export function undoClearsNote(action: BatchAction): boolean {
 }
 
 /**
+ * The due line of a round of waterings, counted in plants: "Today", "Today · 3 overdue", "Overdue ·
+ * 12 Jul" when every plant is late, or the coming day it falls on. The card and the shared list read it.
+ */
+export function roundDueLabel(day: string, summary: Pick<BatchSummary, "plants" | "late" | "since">): { text: string; state: DueState } {
+  if (day !== DUE_NOW) return { text: weekdayDate(day), state: "upcoming" };
+  if (summary.late === 0) return { text: t.today.dueToday, state: "today" };
+  if (summary.late === summary.plants) return { text: `${t.today.overdue} · ${shortDate(summary.since)}`, state: "overdue" };
+  return { text: `${t.today.dueToday} · ${t.today.batchLate(summary.late)}`, state: "overdue" };
+}
+
+/** The instruction a batch shows, as the single card does: the one every task in it gives, or "" when they differ. */
+export function sharedInstruction(tasks: Array<Pick<Task, "instruction">>): string {
+  const first = tasks[0]?.instruction ?? "";
+  return tasks.every((x) => x.instruction === first) ? first : "";
+}
+
+/**
  * Whether closing `ids` clears the day, for the leaf fall: a Done that takes at least one task late
  * or due today and leaves none behind that is not already on its way out. Open windows do not count,
  * since they can stay open for months; a coming day's batch is not today's round.
@@ -146,6 +166,111 @@ export function clearsTheDay(tasks: Due[], ids: string[], kind: "done" | "skip" 
   if (kind !== "done") return false;
   const set = new Set(ids);
   return tasks.some((x) => set.has(x.id) && dueNow(x, today)) && !tasks.some((x) => !set.has(x.id) && dueNow(x, today) && !leaving(x.id));
+}
+
+/**
+ * What a kind of work's heading shows (Phase 13): its tasks, counted in rows as the site heading
+ * counts them (a group of 12 is one, a plant with yesterday's and today's waterings two), whether
+ * one is late (a missed watering or reminder, an ended window; never an open window or a coming
+ * day), and their ids.
+ */
+export interface SectionFacts {
+  tasks: number;
+  late: boolean;
+  ids: string[];
+  /**
+   * The ids not on their way out, which a fold keeps and checks: a task being saved when the kind
+   * is folded comes back as new work after an Undo or a failed save, and opens the kind.
+   */
+  live: string[];
+}
+
+export function sectionFacts<T extends Batchable>(items: ListItem<T>[], today: string, leaving: (id: string) => boolean = () => false): SectionFacts {
+  const tasks = items.flatMap((item) => (item.kind === "batch" ? item.batch.tasks : [item.task]));
+  const ids = tasks.map((x) => x.id);
+  return { tasks: tasks.length, late: tasks.some((x) => isLate(x, today)), ids, live: ids.filter((id) => !leaving(id)) };
+}
+
+/**
+ * The kinds of work folded on this phone, for one day: per fold key, the ids of the tasks the kind
+ * showed when it was folded. A fold means "handed out, out of my way", so it lasts the day and opens
+ * again as soon as the kind shows a task it did not have.
+ */
+export interface Folds {
+  day: string;
+  keys: Record<string, string[]>;
+}
+
+export const NO_FOLDS: Folds = { day: "", keys: {} };
+
+/** "farm|water|now" for the week view and today's tile, "farm|water|2026-11-05" for a coming day chosen in the strip. */
+export function foldKey(site: Site, type: TaskType, view: string): string {
+  return `${site}|${type}|${view}`;
+}
+
+/** Whether a kind shows folded: on the fold's day only, with something to show, and while every task it shows was there when it was folded. */
+export function isFolded(folds: Folds, today: string, key: string, shown: string[]): boolean {
+  if (folds.day !== today || shown.length === 0) return false;
+  const kept = folds.keys[key];
+  if (!kept) return false;
+  const had = new Set(kept);
+  return shown.every((id) => had.has(id));
+}
+
+/** Folds an open kind with the ids it shows, or opens a folded one; the folds of another day are dropped. */
+export function toggleFold(folds: Folds, today: string, key: string, shown: string[]): Folds {
+  const keys = folds.day === today ? { ...folds.keys } : {};
+  if (isFolded(folds, today, key, shown)) delete keys[key];
+  else keys[key] = [...shown];
+  return { day: today, keys };
+}
+
+/**
+ * The folds less every kind that now shows a task its fold did not have: new work opened it, and it
+ * stays open until a tap folds it again, rather than folding by itself once that task is done.
+ * `shown` gives, per fold key of the view on screen, the ids the kind shows (less those on their way
+ * out). The same folds come back when nothing is dropped, so the screen can apply it as it renders.
+ */
+export function settleFolds(folds: Folds, today: string, shown: Record<string, string[]>): Folds {
+  if (folds.day !== today) return folds;
+  let keys: Record<string, string[]> | null = null;
+  for (const [key, ids] of Object.entries(shown)) {
+    const kept = folds.keys[key];
+    if (!kept || ids.length === 0) continue;
+    const had = new Set(kept);
+    if (ids.every((id) => had.has(id))) continue;
+    keys ??= { ...folds.keys };
+    delete keys[key];
+  }
+  return keys ? { day: folds.day, keys } : folds;
+}
+
+/** The folds as kept in sessionStorage ("plantcare.folded"); none for a missing or unreadable value, ids that are not strings dropped. */
+export function parseFolds(raw: string | null): Folds {
+  try {
+    const value = JSON.parse(raw ?? "null") as { day?: unknown; keys?: unknown } | null;
+    if (!value || typeof value.day !== "string" || !value.keys || typeof value.keys !== "object" || Array.isArray(value.keys)) return NO_FOLDS;
+    const keys: Record<string, string[]> = {};
+    for (const [key, ids] of Object.entries(value.keys)) {
+      if (Array.isArray(ids)) keys[key] = ids.filter((id): id is string => typeof id === "string");
+    }
+    return { day: value.day, keys };
+  } catch {
+    return NO_FOLDS;
+  }
+}
+
+/** The plants unticked in Choose as kept in sessionStorage ("plantcare.leftOut", { day, ids }); none for a missing or unreadable value. */
+export function parseLeftOut(raw: string | null): { day: string; ids: Set<string> } {
+  try {
+    const value = JSON.parse(raw ?? "null") as { day?: unknown; ids?: unknown } | null;
+    if (value && typeof value.day === "string" && Array.isArray(value.ids)) {
+      return { day: value.day, ids: new Set(value.ids.filter((id): id is string => typeof id === "string")) };
+    }
+  } catch {
+    // unreadable: nothing unticked
+  }
+  return { day: "", ids: new Set() };
 }
 
 /** Sky of the garden scene: dawn 5–9 h, day 10–16 h, dusk 17–19 h, night 20–4 h. */

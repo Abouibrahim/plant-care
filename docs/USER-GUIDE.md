@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.12.0, as of 1 November 2026.
+For version 0.13.0, as of 3 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -27,7 +27,7 @@ In this guide, **bold** words are things you tap, named as the English screens n
 
 ## 1. What the app does
 
-- **The daily round.** Today lists what is late, due today, open as a window or due in the next six days at both sites. Each task has Done, Skip and Snooze, and Done and Skip have an Undo. A zone's waterings due together share one card, and so do a zone's plants that share a window job, such as a harvest; a site's due waterings close in one tap.
+- **The daily round.** Today lists what is late, due today, open as a window or due in the next six days at both sites. Each site shows its work due now by kind of task (water, prune, harvest…), with the coming days below. A kind folds away for the day and can be sent as a list to whoever does the work. Each task has Done, Skip and Snooze, and Done and Skip have an Undo. A zone's waterings due together share one card, and so do a zone's plants that share a window job, such as a harvest; a site's due waterings close in one tap.
 - **Morning notifications.** Each morning between 06:00 and 07:00 Tunis time, each phone that turned reminders on gets one notification for each site with something due. A weather notification comes first when an alert or a rain skip applies.
 - **Identification.** Capture sends a photo to Claude, which names up to three candidates. Each comes with its confidence, the visible evidence and the names in English, French and Tunisian Arabic.
 - **Species profiles.** Claude writes one profile per species for Cap Bon: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests and diseases, companions, uses and toxicity. You confirm it and can correct any part by hand, and your edits survive a rewrite.
@@ -54,6 +54,7 @@ Only Capture, a profile rewrite, Diagnose, Ask Claude and Check before planting 
 | Profile | What Claude wrote about a species, shared by every plant of that species. |
 | Care rule | One line of a profile's care calendar: a kind of task, its months, the age it applies to and, for a watering, the days between waterings and the litres. |
 | Task | A dated reminder made from a care rule, or one that you or a diagnosis set. |
+| Kind of task | Water, Prune, Feed, Mulch, Harvest, Scout, Propagate or Protect, each with its colour and icon. Today groups the work due now by kind. |
 | Window | A task that stays open over a run of months in a row, such as a pruning or a harvest. It is due on the 1st of the run's first month and open until the last day of its last month, so a rule for April and October makes two windows. |
 | Watering | A periodic watering: a task every few days inside its months, with its litres in the title. |
 | Establishment, mature | A plant under 24 months since its planting date is in establishment; from 24 months it is mature. A plant with no planting date counts as mature. |
@@ -105,7 +106,7 @@ After an update, the app finds the new version the next time it starts afresh; s
 
 ### What Today shows
 
-Today lists every task still to do that falls due today or in the next six days, plus anything older still undone, open windows included. It groups them by site, Farm first, and orders each site: late first, then due today, then open windows, then the coming days.
+Today lists every task still to do that falls due today or in the next six days, plus anything older still undone, open windows included. It groups them by site, Farm first. In each site the work due now (late, due today, a window that is open, opens today or has ended) comes by kind of task, in the calendar's order: Water, Prune, Feed, Mulch, Harvest, Scout, Propagate, Protect. Inside a kind the cards come late first, then due today, then open windows. The coming days follow under "Later this week", by day.
 
 At the top, over a garden scene that follows the hour, are the date, a greeting and a pill with the week's summary ("12 tasks this week, 3 overdue"). The summary counts both sites, whatever you have filtered. "Overdue" counts only late tasks, not open windows.
 
@@ -117,9 +118,20 @@ From two days on, a flame badge shows the streak: the days in a row you opened T
 
 ### The week strip and the site chips
 
-"This week" has seven day tiles, starting today. Each shows the number of tasks due that day and the icon of its main kind of task. Today's tile counts everything late, due today and in an open window, and an orange dot on it marks late tasks. Tap a day to see only its tasks; tap it again, or **Whole week**, to see them all.
+"This week" has seven day tiles, starting today. Each shows the number of tasks due that day and the icon of its main kind of task. Today's tile counts everything late, due today and in an open window, and an orange dot on it marks late tasks. Tap a day to see only its tasks; tap it again, or **Whole week**, to see them all. A chosen day shows its tasks by kind, without "Later this week": today's tile shows the same kinds as the whole week, and a coming day its own, so tomorrow's work can be handed out the evening before.
 
 The chips **All**, **Farm** and **Backyard** filter the list and the strip by site. The phone remembers the site. The chosen day clears when you leave Today or the date turns.
+
+### The kinds of work
+
+Each kind with work due now at a site has a heading: its tile and name, its number of tasks and, when one of them is late, "Overdue". The number counts tasks as the site heading does, so the kinds and "Later this week" add up to the site's "N tasks"; a batch card inside counts plants. "Overdue" marks a missed watering, a reminder or follow-up past its day, or an ended window, never a window that is merely open.
+
+- **The order is fixed**, the calendar's, so each kind is in the same place every morning, whoever does it. Urgency shows through the "Overdue" flag, the order inside each kind, the summary's overdue count and the strip's orange dot. A late task of a later kind can sit below the earlier kinds, such as a diagnosis's follow-up, which is a Scout task.
+- **Tap a heading to fold the kind**: its cards hide, and the heading keeps its number and flag. Tap it again to open it. A fold lasts the day while the app is open, through Refresh and a visit to a plant. The whole week (with today's tile) and each coming day chosen in the strip fold apart. The next day every kind is open again, and so it is when the app is started afresh.
+- **New work opens a fold.** A folded kind opens by itself when a task appears in it that was not there when you folded it: a reminder set for today, a plant saved, an Undo. It then stays open until you fold it again, even once that task is done.
+- **Folding is not doing.** The round and the falling leaves still wait for the tasks due under a folded heading, and **Done: all N waterings** is hidden while Water is folded.
+- **A kind leaves with its last card.** When its last task is done, skipped or snoozed, the heading folds away with the card, and an Undo brings both back.
+- **No Done for a whole kind.** Each card keeps its own buttons. One Done on Water would close today's rounds, a watering window for the whole season and Thursday's waterings two days early, and one note would give the olives and the pomegranates one shared yield.
 
 ### Reading a task card
 
@@ -153,7 +165,7 @@ If a task was already closed elsewhere, by the 06:00 rain skip or on another scr
 
 ### A zone's tasks in one card
 
-When two or more plant records of one zone at one site have the same job to do, they share one card, a batch, placed where the most pressing of them would be. A group planted together is one record, so a group of 12 alone makes no batch. There are two kinds of batch:
+When two or more plant records of one zone at one site have the same job to do, they share one card, a batch, placed in its kind where the most pressing of them would be. A group planted together is one record, so a group of 12 alone makes no batch. There are two kinds of batch:
 
 - **A round of waterings.** The periodic waterings from the care calendar that fall due together: the late ones and today's form one batch, and each coming day gets its own.
 - **A window job.** Windows of the same kind of task with the same title over the same window, such as ten olives' "Harvest the olives" from 1 Oct to 31 Dec. Different titles stay apart even in the same months, so a young tree's "Formative pruning" and the mature trees' "Winter pruning" are two cards, and so are two species' scouting. A watering window is a window job too, never part of a round. A window that is open, opens today or has ended belongs to today; one that opens on a coming day belongs to that day.
@@ -171,7 +183,41 @@ Zones match whatever their capitals and outer spaces ("Row 2 " and "row 2"), and
 
 ### Done: all N waterings
 
-Beside a site's heading, **Done: all N waterings** closes every watering at that site that is late or due today, in one go and with one Undo. It takes the calendar waterings, a watering window that opens today or has ended, and a watering reminder you set. It leaves out the plants unticked in a batch and needs two waterings or more. It writes no note, so a reminder keeps its words. It is hidden when one batch already holds every one of them, and when a coming day is chosen in the strip.
+At the top of a site's Water section, **Done: all N waterings** closes every watering at that site that is late or due today, in one go and with one Undo. It takes the calendar waterings, a watering window that opens today or has ended, and a watering reminder you set. It leaves out the plants unticked in a batch and needs two waterings or more. It writes no note, so a reminder keeps its words. It is hidden when one batch already holds every one of them, when a coming day is chosen in the strip, and while Water is folded.
+
+### Handing out a kind of work
+
+The share button beside a kind's heading sends that kind's list as plain text through the phone's share sheet: pick WhatsApp, SMS or e-mail, then the person. You can change the text before it goes. A list reads:
+
+```
+Water · Farm · Tue 3 Nov
+
+row 2 · 15 plants · 216 L in all
+Today · 3 overdue
+40 L: OL-01, OL-03, OL-04
+8 L: POM-H ×12
+
+row 3 · 3 plants · 60 L in all
+Today
+20 L: FIG-01, FIG-02, FIG-03
+Water at the drip line, never against the trunk.
+
+Water the new carob · CAR-01 · row 5
+Today
+```
+
+- **What goes in.** Every card the kind shows, in Today's order, each with its due line and the instruction its plants share:
+  - a round of waterings: its zone, plants and litres in all, then each amount with its plants;
+  - a window job: its title, zone and number of plants, its window, then every tag;
+  - a card of its own: its title, tag and zone.
+
+  Every plant is listed, whatever is unticked in Choose, a group with its size ("POM-H ×12"). There are no links and nothing private.
+- **The words.** The frame (the due lines, "plants", "L in all") follows the app's language. Titles and instructions go as the profile wrote them, in English, and zones and tags as you typed them.
+- **A copy of the moment.** Nothing comes back from it. When the person reports, mark the work on Today: Done, Choose → **Untick all** → tick → "Done 2/10", or **Done with a note** for a weight. Fold the kind once it is handed out.
+- **Water after the morning notification.** The morning run may skip waterings after rain, and Today reads the run's result when its notification arrives (below), so hand out Water after it.
+- **A coming day.** Choose the day in the strip, then share its kind: the list is headed with that day. "Later this week" has no share button.
+- **Two people on one kind.** Share it to each and name the zones, or delete blocks before sending.
+- **No share sheet**, as in a computer's browser: the list is copied instead. The share button shows a tick for a moment, and a note at the top of Today says "List copied: paste it into a message." If the list can be neither shared nor copied, the button shows a warning sign and the note says so.
 
 ### The weather card
 
@@ -197,7 +243,8 @@ Today also keeps itself current:
 
 - it runs the same task calendar once per app session, the first time it opens;
 - it follows the clock on the hour: the greeting, the scene and the spraying marks;
-- it reads everything again at midnight, and again after 06:05 if it was read before 06:05. The morning run can come as late as 06:59, and a list read between 06:05 and the run keeps what it read, even when you come back to the app. Once the morning notification has come, tap **Refresh**, or open another tab and come back to Today, to see what the run changed;
+- it reads everything again at midnight, and again after 06:05 if it was read before 06:05;
+- it reads its list, the weather and the badge again as soon as a notification arrives while the app is open or in the background. The morning run can come as late as 06:59, so a list read between 06:05 and the run is brought up to date by the run's own notification, without **Refresh**. An app that was closed reads everything when it opens;
 - the badge is counted again whenever you move between screens or come back to the app.
 
 When nothing is due this week at either site, Today shows "Nothing due this week." with **Photograph a plant**. When only the site you filtered, or the day you chose, has nothing, the list reads "Nothing due on this day."; tap **All** or **Whole week** to see the rest.
@@ -609,12 +656,12 @@ Besides the morning run, tasks are written the first time Today opens in an app 
 ### The morning notifications
 
 - **Which tasks.** A site's notification holds its pending tasks that are due today or late, open windows included, reminders and follow-ups in their own words. It also carries a window's early notice, on the one morning exactly its days of warning before it opens: "From 1 Oct: Harvest olives · OL-01". Waterings get no early notice, and a window written after its notice morning gets only its due-date line.
-- **Order.** Early notices first, then late tasks, then today's, then the open windows.
+- **Order.** Early notices first, then late tasks, then today's, then the open windows. Unlike Today, the notification orders its lines by urgency, not by kind of task: three lines grouped by kind would often all be waterings.
 - **Lines.** The title counts the tasks ("Farm: 6 tasks"). The body shows up to three lines, each "title · tag", then "+N more". A zone's batch (chapter 4), for two plant records or more, shares one line: a round of waterings due now reads "Water 9 plants (20 L each) · row 2", and a window job "Scout for olive fly · 10 plants · row 2", or "From 1 Oct: Harvest olives · 10 plants · row 2" for its early notice. Its "9 plants" counts plants, a group by its size; the title and "+N more" count tasks. The litres show as a range when the amounts differ, and are left out when one is missing.
 - **Weather.** A separate "Weather: …" notification comes first when there is an alert for today or tomorrow, or when the rain skip closed waterings. Its title names the first alert, and each alert has its own line.
 - **The rest.** A site with nothing due sends nothing. Each morning's notification replaces the day before's of the same kind; a morning that sends none of a kind leaves the day before's in place until you clear it. The text is always in English. A phone that is off gets them when it comes back on, if that is within 12 hours; after that, that morning's notifications are lost.
 
-A tap on a notification opens Today. If the app is open on another screen, it reloads on Today and what was on that screen is lost, so finish a capture first.
+A tap on a notification opens Today. If the app is open on another screen, it reloads on Today and what was on that screen is lost, so finish a capture first. If Today is already open, it has read the run's result when the notification came.
 
 ### The weather
 
@@ -659,7 +706,8 @@ The app itself is stored on the phone, so it opens and moves between screens wit
 - saves and Claude calls fail, and nothing waits to be sent later; only a species profile is slow to fail, since the app keeps looking for it for up to 5 minutes, so a check of a typed name stays that long on "Finding the species (a new one is profiled first)…" (leave the screen to stop it);
 - the photos the phone has already shown or taken, about 500, stay on it, so on a weak signal they show at once; without one they show only on a page already open when the signal went, and the others show a sprout;
 - the app keeps no map tiles, so a map opened offline is blank;
-- the language switch works offline.
+- the language switch works offline;
+- a kind's list on a Today already shown can still be shared: WhatsApp or SMS sends it when the signal returns.
 
 When the signal is back, tap **Retry** or move to another screen.
 
@@ -821,6 +869,7 @@ npm run dev
 ## 16. Limits
 
 - One account and two fixed sites. A helper or a third site would be a change to the app.
+- Work is not assigned to a person in the app, and helpers have no account. A kind's list goes out as a one-way copy (chapter 4), framed in the app's language with titles and instructions as the profile wrote them. Nothing done from it comes back on its own.
 - Identification, profiles, diagnoses, questions and checks need a connection, and the lists are not kept on the phone.
 - The morning notifications come once a day, at 06:00 Tunis time or up to an hour later, and the hour cannot be changed in the app. Web Push is the only channel; there is no email.
 - The notifications, the morning run's notes, the identifications, the profiles and the diagnoses are in English whatever the app's language, and so are the task titles copied from a profile. A check before planting is written in the app's language, and Ask Claude answers in the language of the question.

@@ -2,7 +2,7 @@
 
 Single-user plant-care app for Mohamed: photograph a plant at the backyard (walled garden at home) or at the farm (borgdanet, Menzel Bouzelfa, Cap Bon, Tunisia), identify it with the Claude API, store a species profile written for Cap Bon conditions, and get reminders for water, pruning, feeding, mulching, harvest, pest scouting, propagation and protection.
 
-`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 12 are built (0.12.0). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE12.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
+`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 13 are built (0.13.0). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE13.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
 
 ## Decisions already made (do not reopen)
 
@@ -37,23 +37,26 @@ api/                 Vercel functions (one file per route)
   daily.ts           cron: fetch the weather, expand tasks, skip waterings after rain, send the weather push and the digest; ?dry=1 composes without sending
   push-subscribe.ts  POST → store or remove a push subscription (DELETE removes too)
 prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, check.md, *.schema.json
-public/              icons/, and push-sw.js (the push and notification-tap handlers the service worker imports)
+public/              icons/, and push-sw.js (the push and notification-tap handlers the service worker imports; each push also tells the open app, which reads Today again)
 scripts/             make-icons.mjs (npm run icons)
 src/                 the PWA (screens: Login, Today, Capture, Check, Plant, Plants with its map, the species library, Species, Settings, Tags, and the tag link /t/:code; map/ holds the Leaflet screens, loaded lazily)
+                     Today shows each site's work due now by kind of task (a heading per kind that folds for the day and shares the kind's list), the coming days below
   components/        Layout (the tab bar and the banners), TaskCard, RecordForm, the profile sections
   lib/               the data and API layer (db, api, supabase), photos (image, photoCache), push, the exports (export, csv),
-                     and the pure rules: dates, batches and weather, which api/ imports too, and today, map, location, check, ask, diagnosis
+                     the list a kind of work is handed out with (handout) and its share or copy (share),
+                     and the pure rules: dates, batches, activities and weather, which api/ imports or could, and today, map, location, check, ask, diagnosis
   i18n/              en.ts, fr.ts, and index.ts, which picks one
   types.ts           shared types, mirrored by prompts/*.schema.json and supabase/schema.sql; the diagnosis: and manual: rule-key prefixes
   version.ts         the version Settings shows
 supabase/schema.sql  tables, enums, the journal view, owners and is_owner(), RLS, the photos bucket and its policy; run once, on a new project only
-tests/               vitest over the dates, the task expansion, the digest, the Today reading, the zone batches, the token verdict, the owner check,
-                     the app's task writes, the planting check, the weather, the map and tags, the photos and their cache, the keep-alive and the
-                     app's calls to the functions (mockdb.ts imitates the query builder; fixtures.ts builds rules, plants and tasks; data/ holds a
-                     real Open-Meteo answer and the spray texts)
+tests/               vitest over the dates, the task expansion, the digest, the Today reading, the zone batches, the kinds of work and their
+                     folds, the shared list and its share, the token verdict, the owner check, the app's task writes, the planting check, the
+                     weather, the map and tags, the photos and their cache, the keep-alive and the app's calls to the functions (mockdb.ts
+                     imitates the query builder; fixtures.ts builds rules, plants and tasks; data/ holds a real Open-Meteo answer and the spray texts)
 docs/                SPEC.md (the design), DECISIONS.md (the deviations), REVIEW-2026-10-30.md (the review of 0.9.0 behind Phase 10;
-                     Phase 11 is item 1 of the feature review of 2026-10-25, Phase 12 Mohamed's request of 2026-11-01), USER-GUIDE.md (the app as built)
-PHASE1.md … PHASE12.md, UI-REFRESH.md   milestones with their ★ setup steps and acceptance tests
+                     Phase 11 is item 1 of the feature review of 2026-10-25, Phases 12 and 13 Mohamed's requests of 2026-11-01 and
+                     2026-11-03), USER-GUIDE.md (the app as built)
+PHASE1.md … PHASE13.md, UI-REFRESH.md   milestones with their ★ setup steps and acceptance tests
 vercel.json, vite.config.ts, .env.example   the cron and the function limits; the manifest and the service worker; the variable names
 ```
 
@@ -110,7 +113,7 @@ export async function callJson<T>(opts: {
 5. Digest: pending tasks with `due_on <= today`, grouped by site, one push per site per subscription (Farm, then Backyard; a site with nothing sends nothing), after the weather push: title "Farm: 6 tasks", body the first three lines in digest order (early notices, late, due today, open windows), each `title · tag`; a zone's batch of a site (plants with no zone count as one zone), for two plant records or more, shares one line at the place of the most pressing of its tasks (`src/lib/batches.ts`, which Today uses for its batch cards): the periodic waterings the calendar wrote that fall due together, `Water 9 plants (20 L each) · zone` (Phase 11), and the windows the calendar wrote of one kind, title and window, `Scout for olive fly · 10 plants · zone` (Phase 12; an early notice's batch takes the "From 1 Nov: " in front). No zone part when the plants have none; a group of 12 in one record stays a single line; the rows the app wrote never batch; the title and "+N more" still count tasks. A window task's early notice goes out on the one day exactly `lead_days` before its `due_on`, as "From 1 Nov: …"; waterings get none. A push lives 12 hours at the push service; a 404 or 410 deletes the subscription, and a 403 is logged as a key mismatch and kept.
 6. Weather (Phase 8; the spec had it out of scope, Mohamed asked for it on 2026-10-26): the run first fetches Open-Meteo into `weather_days` (a failure is reported and the rest runs, but that morning has no rain skip and no weather push), and after the expansion closes the periodic waterings (`window_end` null, a manual water reminder included) due today or overdue as skipped when the last two days' rain, or today's rain forecast at 70 % or more, reaches the `weather` setting's threshold (on at 10 mm by default; 5, 10, 15 or 20 in Settings). A read of the setting that fails for another reason than a missing row or table skips nothing. Alerts (heat, sirocco, frost, gale, heavy rain) for today and tomorrow, and the skip, go out as one more push, sent first; Today's card shows the alerts of today and the next two days. The rules live in `src/lib/weather.ts`, shared with Today's card.
 
-The app runs the expansion itself through `/api/expand`: at Today's first opening in an app session and on Refresh (all plants), after Save plant and after Edit record (that plant), and after a care rule is saved or deleted (all plants); not after a regeneration, whose calendar waits for the next run. These runs never apply the rain skip or send pushes; like the 06:00 run, they close ended windows and stale waterings as skipped.
+The app runs the expansion itself through `/api/expand`: at Today's first opening in an app session and on Refresh (all plants), after Save plant and after Edit record (that plant), and after a care rule is saved or deleted (all plants); not after a regeneration, whose calendar waits for the next run. These runs never apply the rain skip or send pushes; like the 06:00 run, they close ended windows and stale waterings as skipped. Today also reads its list again as soon as a push reaches an open app, once per burst of 10 s (`public/push-sw.js` posts `plantcare:push` to the windows), so a list read before the morning run does not outlive its rain skip.
 
 ## Working agreements
 

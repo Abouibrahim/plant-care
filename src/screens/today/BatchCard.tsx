@@ -12,8 +12,8 @@ import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Check, ChevronRight, ListChecks, MapPin, NotebookPen, X } from "lucide-react";
 import { t } from "../../i18n";
-import { DUE_NOW, summarize, type Batch, type BatchPlant, type BatchSummary } from "../../lib/batches";
-import { batchDonePrimary, dueLabel, scopedNote, scopedNoteRoom, shortDate, weekdayDate, type BatchAction, type DueState } from "../../lib/today";
+import { DUE_NOW, summarize, type Batch, type BatchPlant } from "../../lib/batches";
+import { batchDonePrimary, dueLabel, roundDueLabel, scopedNote, scopedNoteRoom, sharedInstruction, shortDate, weekdayDate, type BatchAction } from "../../lib/today";
 import { Burst, DueIcon, type TaskAction } from "../../components/TaskCard";
 import { TypeTile } from "../../components/TypeIcon";
 import { TASK_MAX_NOTE_CHARS, type TaskWithPlant } from "../../types";
@@ -32,14 +32,6 @@ interface Props {
 
 /** Tags shown per amount (or for a window job) while Choose is closed; the rest read "+N". */
 const TAGS_SHOWN = 8;
-
-/** The due line of a round of waterings, counted in plants: "Today · 3 overdue", "Overdue · 12 Jul", a coming day. */
-function roundDue(batch: Batch<TaskWithPlant>, summary: BatchSummary): { text: string; state: DueState } {
-  if (batch.day !== DUE_NOW) return { text: weekdayDate(batch.day), state: "upcoming" };
-  if (summary.late === 0) return { text: t.today.dueToday, state: "today" };
-  if (summary.late === summary.plants) return { text: `${t.today.overdue} · ${shortDate(summary.since)}`, state: "overdue" };
-  return { text: `${t.today.dueToday} · ${t.today.batchLate(summary.late)}`, state: "overdue" };
-}
 
 function PlantTag({ plant, out }: { plant: BatchPlant; out: boolean }) {
   return (
@@ -94,11 +86,11 @@ export function BatchCard({ batch, today, leaving, left, onLeaveOut, onAct }: Pr
 
   const coming = batch.day !== DUE_NOW;
   // A window batch shares its window, so it reads the single card's due line from its first task.
-  const due = round ? roundDue(batch, summary) : dueLabel(tasks[0], today);
+  const due = round ? roundDueLabel(batch.day, summary) : dueLabel(tasks[0], today);
   const job = round ? t.today.batchPlants(summary.plants) : (batch.title ?? "");
   const title = coming ? `${weekdayDate(batch.day)} · ${job}` : job;
   // The single card shows its instruction; a batch does when every task in it says the same.
-  const instruction = tasks.every((x) => x.instruction === tasks[0].instruction) ? tasks[0].instruction : "";
+  const instruction = sharedInstruction(tasks);
   // The green Done is for today's round; a window merely open gets a plain one, as a coming day does.
   const primary = batchDonePrimary(tasks, today);
 

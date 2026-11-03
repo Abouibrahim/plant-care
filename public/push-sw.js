@@ -3,9 +3,20 @@
  * so the precaching stays with vite-plugin-pwa and only this part is hand-written. Plain JavaScript:
  * it is served as is, outside the Vite bundle.
  *
- * Payload sent by api/_push.ts: { title, body, tag, url }. */
+ * Payload sent by api/_push.ts: { title, body, tag, url }. Every push also tells the open app
+ * windows ({ type: "plantcare:push" }), so Today reads the morning run's result (Phase 13). */
 
 /* global self, clients */
+
+/** Tells the open app windows that a push arrived; a failure here never stops the notification. */
+function tellWindows() {
+  return clients
+    .matchAll({ type: "window", includeUncontrolled: true })
+    .then(function (list) {
+      for (var i = 0; i < list.length; i++) list[i].postMessage({ type: "plantcare:push" });
+    })
+    .catch(function () {});
+}
 
 self.addEventListener("push", function (event) {
   var payload = {};
@@ -24,7 +35,7 @@ self.addEventListener("push", function (event) {
     renotify: true,
     data: { url: payload.url || "/" },
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([self.registration.showNotification(title, options), tellWindows()]));
 });
 
 self.addEventListener("notificationclick", function (event) {
