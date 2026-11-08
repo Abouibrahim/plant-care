@@ -3,7 +3,7 @@
 // weather_days, the 06:00 rain skip of the waterings due, and the morning weather push. Run by
 // /api/daily (fetch, then skip and push) and /api/weather (fetch only, for Today).
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { en } from "../src/i18n/en.js";
+import { en, type Strings } from "../src/i18n/en.js";
 import { addDays } from "../src/lib/dates.js";
 import { rainDecision, TOWN, upcomingAlerts, weatherSettings, type RainDecision } from "../src/lib/weather.js";
 import type { PushMessage, SprayWindow, WeatherDay, WeatherPoint, WeatherSettings } from "../src/types.js";
@@ -284,7 +284,8 @@ export async function previewRainSkip(db: SupabaseClient, days: WeatherDay[], to
 /**
  * Closes the periodic waterings due today or overdue as skipped when the rain decided so, with the
  * reason in the note, and adds them to today's count on the weather row (a second run the same day
- * adds what it closed). Waterings due later keep their dates.
+ * adds what it closed). Waterings due later keep their dates. The note is in the language of
+ * `strings` (the choice in Settings, api/_lang.ts), English by default.
  */
 export async function applyRainSkip(
   db: SupabaseClient,
@@ -292,10 +293,11 @@ export async function applyRainSkip(
   todayIso: string,
   settings: WeatherSettings,
   nowIso: string = new Date().toISOString(),
+  strings: Strings = en,
 ): Promise<RainSkip> {
   const decision = rainDecision(days, todayIso, settings);
   if (!decision) return { decision: null, skipped: 0 };
-  const { data, error } = await dueWaterings(db, todayIso, "update", nowIso, en.weather.rainNote(decision.mm, decision.reason));
+  const { data, error } = await dueWaterings(db, todayIso, "update", nowIso, strings.weather.rainNote(decision.mm, decision.reason));
   if (error) throw error;
   const skipped = ((data ?? []) as unknown[]).length;
   if (skipped > 0) {
@@ -308,9 +310,12 @@ export async function applyRainSkip(
   return { decision, skipped };
 }
 
-/** The morning weather push: today's and tomorrow's alerts with what to do, and what the rain skipped. Null when there is nothing to say. */
-export function composeWeatherMessage(days: WeatherDay[], todayIso: string, rain: RainSkip): PushMessage | null {
-  const w = en.weather;
+/**
+ * The morning weather push: today's and tomorrow's alerts with what to do, and what the rain
+ * skipped, in the language of `strings`. Null when there is nothing to say.
+ */
+export function composeWeatherMessage(days: WeatherDay[], todayIso: string, rain: RainSkip, strings: Strings = en): PushMessage | null {
+  const w = strings.weather;
   const alerts = upcomingAlerts(days, todayIso, 2);
   const when = (day: string) => (day === todayIso ? w.when.today : w.when.tomorrow);
   // Advice for the day itself, or for preparing the day before.

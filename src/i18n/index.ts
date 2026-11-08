@@ -27,6 +27,16 @@ function detectLang(): Lang {
 /** The language this load runs in. */
 export const lang: Lang = detectLang();
 
+/** The choice stored on this phone, or null when the phone's language decides. */
+export function storedLang(): Lang | null {
+  try {
+    const stored = localStorage.getItem(LANG_KEY);
+    return isLang(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 export const t: Strings = lang === "fr" ? fr : en;
 
 /** Stores the choice for the next load; false when storage is blocked. The caller reloads the app. */

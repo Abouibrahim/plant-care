@@ -4,7 +4,8 @@
 // writes through the service client. /api/daily and /api/expand both call it.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, ageInMonths, isoDate, isoDateIn, lastDayOfMonth, parseIso, ruleApplies, SITE_TIME_ZONE } from "../src/lib/dates.js";
-import { en } from "../src/i18n/en.js";
+import { en, type Strings } from "../src/i18n/en.js";
+import { fr } from "../src/i18n/fr.js";
 import {
   isAppWrittenRule,
   TASK_TYPES,
@@ -318,6 +319,9 @@ export interface ActedWindow {
   acted_at: string | null;
 }
 
+/** The note the expansion writes on a window it closed as ended, in either language the server writes (Phase 14). */
+const WINDOW_ENDED_NOTES = new Set([en.expansion.windowEnded, fr.expansion.windowEnded]);
+
 /**
  * Whether a fresh seed for a window already open today should be left out because the grower acted
  * on it under a rule key that no longer applies: the rule's months or age were edited, a regeneration
@@ -343,7 +347,7 @@ export function carriedOver(seed: TaskInsert, acted: ActedWindow[], currentKeys:
       a.window_end >= seed.due_on &&
       day >= seed.due_on &&
       day <= end &&
-      (a.status === "done" || (a.status === "skipped" && a.note !== en.expansion.windowEnded))
+      (a.status === "done" || (a.status === "skipped" && !WINDOW_ENDED_NOTES.has(a.note)))
     );
   });
 }
@@ -378,10 +382,11 @@ async function closeTasks(db: SupabaseClient, ids: string[], note: string): Prom
  * Expands every plant (or one) for the next 90 days from `todayIso`, inserts the tasks that do not exist
  * yet (same plant_id, rule_key and due_on; the unique constraint is the final guard) and removes pending
  * tasks whose rule no longer applies: the rule left the calendar after a regeneration, or the plant
- * changed stage. Then it closes ended windows and stale waterings as `skipped` (see `staleTasks`).
+ * changed stage. Then it closes ended windows and stale waterings as `skipped` (see `staleTasks`),
+ * with the notes of `strings`: the language chosen in Settings (api/_lang.ts), English by default.
  * Acted tasks (done, skipped, snoozed) are never touched.
  */
-export async function runExpansion(db: SupabaseClient, todayIso: string, plantId?: string): Promise<ExpandResponse> {
+export async function runExpansion(db: SupabaseClient, todayIso: string, plantId?: string, strings: Strings = en): Promise<ExpandResponse> {
   const plantRows = await readAll<PlantRow>((from, to) => {
     const q = db.from("plants").select("id, planted_on, species(care_calendar)");
     return (plantId ? q.eq("id", plantId) : q).order("id").range(from, to);
@@ -473,9 +478,9 @@ export async function runExpansion(db: SupabaseClient, todayIso: string, plantId
     return (plantId ? q.eq("plant_id", plantId) : q).order("id").range(from, to);
   });
   const stale = staleTasks(staleRows, todayIso);
-  const expired = await closeTasks(db, stale.expired, en.expansion.windowEnded);
-  let superseded = await closeTasks(db, stale.superseded, en.expansion.superseded);
-  superseded += await closeTasks(db, stale.missed, en.expansion.missed);
+  const expired = await closeTasks(db, stale.expired, strings.expansion.windowEnded);
+  let superseded = await closeTasks(db, stale.superseded, strings.expansion.superseded);
+  superseded += await closeTasks(db, stale.missed, strings.expansion.missed);
 
   return { plants: plants.length, created, removed: obsolete.length, expired, superseded, today: todayIso };
 }

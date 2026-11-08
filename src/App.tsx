@@ -18,16 +18,18 @@ import { TagRoute } from "./screens/TagRoute";
 const TagsScreen = lazy(() => import("./screens/TagsScreen"));
 
 export default function App() {
-  const { session, loading, configured } = useAuth();
+  const { session, loading, configured, offline } = useAuth();
 
-  if (loading) {
+  // While the stored sign-in is read; offline from the start, the shell shows on the phone's copy meanwhile (Phase 14).
+  if (loading && !offline) {
     return (
       <div className="center">
         <Spinner />
       </div>
     );
   }
-  if (!configured || !session) {
+  // Offline with a sign-in the server could not refresh, the shell shows on the phone's copy (Phase 14).
+  if (!configured || (!session && !offline)) {
     return <LoginScreen />;
   }
 

@@ -7,10 +7,11 @@ import { Banner } from "../../components/Banner";
 import { PhotoImg } from "../../components/PhotoImg";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, LostReplyError } from "../../lib/api";
 import { addDays, localIsoDate } from "../../lib/dates";
-import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, uploadPhoto, uploadThumbnail } from "../../lib/db";
+import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, removePhotoObject, uploadPhoto, uploadThumbnail } from "../../lib/db";
 import { problemResult, rephotoDays, rephotoTask } from "../../lib/diagnosis";
+import { isNetworkFailure } from "../../lib/errors";
 import { prepareImage, type PreparedImage } from "../../lib/image";
 import { useBackClose } from "../../lib/useBackClose";
 import {
@@ -30,6 +31,19 @@ import { DiagnosisCard } from "./DiagnosisCard";
 type Phase = "idle" | "preparing" | "sending" | "result";
 const MAX_NOTE = 500;
 
+/**
+ * A diagnosis's photo as planned before the call (Phase 14): its row id, its storage path, its time
+ * taken, and the upload that runs beside the call. The route writes the photos row under the same id
+ * once Claude has answered; the app's save finishes or repeats the upload and upserts the row.
+ */
+interface Planned {
+  id: string;
+  path: string;
+  takenAt: string;
+  uploaded: boolean;
+  upload: Promise<boolean> | null;
+}
+
 interface Props {
   plant: PlantWithSpecies;
   /** The plant's photos, so a new storage key never collides with one already stored. */
@@ -41,12 +55,8 @@ interface Props {
   onClose: () => void;
 }
 
-/** A fetch that never got an answer: supabase-js reports it as a TypeError, with the browser's wording. */
-function isNetworkFailure(err: unknown): boolean {
-  return err instanceof TypeError || (err instanceof Error && /failed to fetch|network ?error|load failed/i.test(err.message));
-}
-
 function describeError(err: unknown): string {
+  if (err instanceof LostReplyError) return t.errors.answerLost;
   if (err instanceof ApiError) {
     if (err.status === 401) return t.errors.unauthorized;
     if (err.status === 0) return t.errors.network;
@@ -69,14 +79,15 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
   const [saveError, setSaveError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [tasksKey, setTasksKey] = useState(0);
+  /** The reply was lost on the way and the app is looking for the row the route stored (Phase 14). */
+  const [reconnecting, setReconnecting] = useState(false);
   const mountedRef = useRef(true);
+  // Stops the looking for a lost reply when the panel is left.
   // Preview object URLs made here; revoked when the panel closes.
   const urlsRef = useRef(new Set<string>());
-  // The storage path chosen for this diagnosis's photo and the row id made for it, kept from the
-  // first attempt so Save again writes the same object and the same row (and so one re-photograph
-  // reminder) instead of a path Storage refuses or a second row.
-  const plannedRef = useRef<{ path: string; takenAt: string; uploaded: boolean } | null>(null);
-  const photoIdRef = useRef<string | null>(null);
+  // The photo's plan, kept from the first attempt so Save again writes the same object and the same
+  // row (and so one re-photograph reminder) instead of a path Storage refuses or a second row.
+  const plannedRef = useRef<Planned | null>(null);
 
   useEffect(() => {
     const urls = urlsRef.current;
@@ -85,6 +96,8 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      // Left while the app was looking for a lost reply: the looking goes on, and the diagnosis, when it
+      // arrives, is saved with its reminder and the Health tab told (onChanged), so nothing is paid twice.
       mounted.current = false;
       document.body.style.overflow = previous;
       for (const u of urls) URL.revokeObjectURL(u);
@@ -110,7 +123,9 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
   const stored = existing ? problemResult(existing.ai_result) : null;
   const fresh = response && !isRefusal(response) ? response : null;
   const refusal = response && isRefusal(response) ? response.refusal : null;
-  const busy = phase === "preparing" || phase === "sending" || saving;
+  // Close and the back gesture wait while a call runs or the photo is being saved, but not while the
+  // app only looks for a lost reply: the row, if any, reaches the journal without the panel.
+  const busy = phase === "preparing" || (phase === "sending" && !reconnecting) || saving;
   const speciesName = plant.species.common_names.en || plant.species.scientific_name;
   // A fresh diagnosis whose save failed exists only on this screen: Close asks before losing it.
   const unsaved = fresh !== null && saved === null && !saving;
@@ -146,51 +161,91 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
     }
   }
 
+  /** The row id, the storage path and the time of a new diagnosis's photo: a timestamp key stepped past any photo of this plant already stored at that millisecond. */
+  function plan(img: PreparedImage): Planned {
+    let takenAt = img.takenAt ? new Date(img.takenAt) : new Date();
+    if (Number.isNaN(takenAt.getTime())) takenAt = new Date();
+    const used = new Set(photos.map((p) => p.storage_path));
+    while (used.has(photoPath(plant.id, takenAt))) takenAt = new Date(takenAt.getTime() + 1);
+    return { id: newId(), path: photoPath(plant.id, takenAt), takenAt: takenAt.toISOString(), uploaded: false, upload: null };
+  }
+
+  /** Uploads the photo and its thumbnail over the planned path (the object may be there from an earlier attempt); true when both are stored. */
+  function upload(planned: Planned, img: PreparedImage): Promise<boolean> {
+    return Promise.all([uploadPhoto(planned.path, img.blob, true), uploadThumbnail(planned.path, img.thumb, true)]).then(
+      () => {
+        planned.uploaded = true;
+        return true;
+      },
+      () => false,
+    );
+  }
+
+  /** Removes the object a call that declined or failed left in Storage, once its upload has settled; best effort. */
+  async function discard(planned: Planned): Promise<void> {
+    await planned.upload;
+    if (planned.uploaded) await removePhotoObject(planned.path);
+  }
+
   async function send() {
-    if (!image) return;
+    if (!image || phase === "sending") return;
     setPhase("sending");
     setError(null);
-    // A new diagnosis: its photo gets a fresh path and row id, whatever an earlier attempt planned.
-    plannedRef.current = null;
-    photoIdRef.current = null;
+    setReconnecting(false);
+    // A new diagnosis: its photo gets a fresh path and row id, whatever an earlier attempt planned. The
+    // upload runs beside the call, not before it, so a weak link is not crossed twice in a row and a
+    // failed upload does not stop a diagnosis that would succeed: the save finishes it. The route
+    // writes the row under the planned id once Claude has answered, so a reply lost on the way is
+    // found again instead of paid for twice.
+    const planned = plan(image);
+    planned.upload = upload(planned, image);
+    plannedRef.current = planned;
+    const grower = note.trim();
     try {
-      const grower = note.trim();
-      const res = await api.diagnose({ plant_id: plant.id, images: [image.payload], note: grower || undefined });
+      const res = await api.diagnose(
+        { plant_id: plant.id, images: [image.payload], note: grower || undefined, photo: { id: planned.id, storage_path: planned.path, taken_at: planned.takenAt } },
+        {
+          onReconnecting: () => {
+            if (mountedRef.current) setReconnecting(true);
+          },
+        },
+      );
       // The answer is paid for: save it before asking whether the panel is still there, so a diagnosis
-      // that arrives after the sheet was left still reaches the journal with its reminder.
-      if (!isRefusal(res)) void save(image, res, grower);
+      // that arrives after the sheet was left still reaches the journal with its reminder. A refusal
+      // is saved by neither side, so its object goes.
+      if (isRefusal(res)) void discard(planned);
+      else void save(image, res, grower);
       if (!mountedRef.current) return;
       setResponse(res);
       setPhase("result");
     } catch (err) {
+      // An answered failure, or a reply lost for good (no row in time): no row points at the object,
+      // so it goes. A reply lost while the looking could not go on (the table refused the read) keeps it: the row may exist.
+      const lostForNow = err instanceof ApiError && err.status === 0 && !(err instanceof LostReplyError);
+      if (!lostForNow) void discard(planned);
       if (mountedRef.current) {
         setError(`${t.diagnose.failed}: ${describeError(err)}`);
         setPhase("idle");
       }
+    } finally {
+      if (mountedRef.current) setReconnecting(false);
     }
   }
 
-  /** Storage first, then the photos row, then the follow-up reminder; the row carries the result. */
+  /** The upload, finished or repeated, then the photos row, then the follow-up reminder; the row carries the result. */
   async function save(img: PreparedImage, res: Diagnosis & Usage, grower: string) {
     setSaving(true);
     setSaveError(null);
     try {
-      let planned = plannedRef.current;
-      if (!planned) {
-        let takenAt = img.takenAt ? new Date(img.takenAt) : new Date();
-        if (Number.isNaN(takenAt.getTime())) takenAt = new Date();
-        // Storage keys are timestamps: step past any photo of this plant already stored at that millisecond.
-        const used = new Set(photos.map((p) => p.storage_path));
-        while (used.has(photoPath(plant.id, takenAt))) takenAt = new Date(takenAt.getTime() + 1);
-        planned = { path: photoPath(plant.id, takenAt), takenAt: takenAt.toISOString(), uploaded: false };
-        plannedRef.current = planned;
-      }
+      const planned = (plannedRef.current ??= plan(img));
       if (!planned.uploaded) {
-        // Save again uploads over the path it chose before: the object may be there from a reply that was lost.
-        await Promise.all([uploadPhoto(planned.path, img.blob, true), uploadThumbnail(planned.path, img.thumb, true)]);
-        planned.uploaded = true;
+        // The upload that started beside the call, or a Save again over the path chosen before.
+        const stored = planned.upload ? await planned.upload : false;
+        if (!stored) {
+          planned.upload = upload(planned, img);
+          if (!(await planned.upload)) throw new Error(t.record.uploadFailed);
+        }
       }
-      photoIdRef.current ??= newId();
       const ai: ProblemAiResult = { ...res, note: grower };
       const row = await insertPhoto(
         {
@@ -201,7 +256,7 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
           ai_result: ai,
           note: grower,
         },
-        photoIdRef.current,
+        planned.id,
       );
       // The follow-up reminder; if this fails the card offers "Set the reminder".
       const days = rephotoDays(res);
@@ -269,7 +324,8 @@ export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClo
             )}
 
             {phase === "preparing" && <Spinner label={t.diagnose.preparing} />}
-            {phase === "sending" && <Spinner label={t.diagnose.sending} />}
+            {phase === "sending" && !reconnecting && <Spinner label={t.diagnose.sending} />}
+            {reconnecting && <Banner kind="info">{t.diagnose.reconnecting}</Banner>}
             {error && <Banner kind="error">{error}</Banner>}
 
             {image && phase === "idle" && (

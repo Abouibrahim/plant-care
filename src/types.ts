@@ -103,6 +103,12 @@ export interface DiagnoseRequest {
   images: ImagePayload[]; // 1 or 2
   /** What the grower sees; optional. */
   note?: string;
+  /**
+   * The photo row the app planned before the call (Phase 14): its id, its path under the plant's
+   * folder and the time taken. With it, the route writes the photos row with the diagnosis once
+   * Claude has answered, so a reply lost on the way is found again by its id.
+   */
+  photo?: { id: string; storage_path: string; taken_at: string };
 }
 
 export type DiagnoseResponse = (Diagnosis & Usage) | ({ refusal: string } & Usage);
@@ -160,6 +166,13 @@ export interface AskRequest {
   question: string;
   /** The conversation so far, oldest first; the route reads the last six exchanges. */
   history?: AskTurn[];
+  /**
+   * The questions row the app made before the call (Phase 14): all three, or none. With them, the
+   * route writes the row once Claude has answered, so a reply lost on the way is found again by its id.
+   */
+  id?: string;
+  thread_id?: string;
+  asked_at?: string;
 }
 
 export type AskResponse = (Answer & Usage) | ({ refusal: string } & Usage);
@@ -219,6 +232,9 @@ export interface CheckRequest {
   note?: string;
   /** The language of the text fields; English when omitted. */
   lang?: "en" | "fr";
+  /** The planting_checks row the app made before the call (Phase 14): both, or none; see AskRequest. */
+  id?: string;
+  checked_at?: string;
 }
 
 export type CheckResponse = (PlantingCheck & Usage) | ({ refusal: string } & Usage);
@@ -472,6 +488,8 @@ export interface DailyResponse extends ExpandResponse {
   digest_error?: string;
   /** The 06:00 weather: whether the forecast was fetched and stored, why not, what the rain skipped, the push. */
   weather: { fetched: boolean; error?: string; skipped: number; message: PushMessage | null };
+  /** Set when the run's record could not be written (the settings table missing, a fault). */
+  record_error?: string;
   dry_run: boolean;
 }
 
@@ -536,3 +554,80 @@ export interface WeatherResponse {
 
 /** The value of the `zones` row of the settings table: the zone names of each site, in display order. */
 export type ZoneLists = Record<Site, string[]>;
+
+// ---- the morning run's record, the usage ledger, the server's language (Phase 14) -------------
+
+/** The settings keys of a real morning run's start marker and record (api/_record.ts). */
+export const DAILY_STARTED_KEY = "daily:started";
+export const DAILY_RECORD_KEY = "daily:last";
+
+/** Written as a real run begins, so a run that never finishes still leaves a trace. */
+export interface DailyStart {
+  at: string;
+  /** The Tunis date the run is for, YYYY-MM-DD. */
+  today: string;
+}
+
+/**
+ * What /api/daily writes once its data is final (never on a dry run): when, for which Tunis date,
+ * and what it did; the push counts follow in a second write that keeps `at`. Today reads its list
+ * again when the record it sees is not the one it read with the list; Settings says it.
+ */
+export interface DailyRecord {
+  /** When the run's data was final, ISO: the tasks written and tidied, the rain skip applied. */
+  at: string;
+  /** The Tunis date the run was for, YYYY-MM-DD. */
+  today: string;
+  created: number;
+  removed: number;
+  expired: number;
+  superseded: number;
+  /** Waterings the rain skip closed. */
+  skipped: number;
+  pushes_sent: number;
+  pushes_failed: number;
+  /** The phones the notifications went to. */
+  subscriptions: number;
+  weather_error?: string;
+  digest_error?: string;
+  /** Set when the run itself failed before its end; the counts are then zero. */
+  error?: string;
+}
+
+/** The settings key of a month's usage ledger: "usage:2026-11" (api/_usage.ts). */
+export const USAGE_KEY_PREFIX = "usage:";
+
+export function usageKey(month: string): string {
+  return `${USAGE_KEY_PREFIX}${month}`;
+}
+
+/** The routes that call Claude. */
+export type UsageRoute = "identify" | "profile" | "diagnose" | "ask" | "check";
+export const USAGE_ROUTES: UsageRoute[] = ["identify", "profile", "diagnose", "ask", "check"];
+
+/** How a Claude call ended, for the ledger: answered, declined, or failed after tokens were spent. */
+export type CallOutcome = "answered" | "refused" | "failed";
+
+/**
+ * Token totals of a set of calls; `thinking` is the part of `output` spent thinking. `failed` counts
+ * the calls that spent tokens and then failed (a cut output, no text), `fallback` the calls another
+ * model answered after Fable declined, whose tokens the estimate still prices at Fable's rates.
+ */
+export interface UsageTotals {
+  calls: number;
+  failed: number;
+  fallback: number;
+  input: number;
+  output: number;
+  thinking: number;
+  cache_read: number;
+  cache_write: number;
+}
+
+/** The value of a month's `usage:YYYY-MM` row: the month's totals and the same per route. */
+export interface UsageLedger extends UsageTotals {
+  by_route: Partial<Record<UsageRoute, UsageTotals>>;
+}
+
+/** The settings key under which the language chosen in Settings reaches the server (api/_lang.ts). */
+export const LANG_SETTING_KEY = "lang";

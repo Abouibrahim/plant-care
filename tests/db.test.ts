@@ -16,6 +16,8 @@ const {
   snoozeTask,
   completeTask,
   completeTasks,
+  readTaskStates,
+  overrideServerClose,
   reopenTask,
   reopenTasks,
   skipTasks,
@@ -398,5 +400,38 @@ describe("findPlantsByTagCode and listPlantSpots", () => {
       ["OL-02", null],
       ["FIG-01", null],
     ]);
+  });
+});
+
+describe("the write options of Phase 14", () => {
+  it("writes the tap's time as acted_at, single and set, and refuses a write whose bound has run out", async () => {
+    const at = "2026-11-08T05:30:00.000Z";
+    const task = addTask({});
+    expect(await completeTask(task.id, "", { actedAt: at })).toBe(true);
+    expect(byId(task.id)).toMatchObject({ status: "done", acted_at: at });
+    const set = [addTask({}), addTask({})];
+    expect((await completeTasks(set.map((x) => x.id), "", { actedAt: at })).sort()).toEqual(set.map((x) => x.id).sort());
+    expect(set.map((x) => byId(x.id).acted_at)).toEqual([at, at]);
+    // The bound ran out (AbortSignal.timeout): the failure reads as a lost connection, and the row is untouched.
+    const other = addTask({});
+    await expect(completeTask(other.id, "", { signal: AbortSignal.abort() })).rejects.toThrow(/aborted/i);
+    expect(byId(other.id).status).toBe("pending");
+  });
+
+  it("reads the states of a set back, and closes as asked only the rows the server had skipped", async () => {
+    const mine = addTask({ status: "skipped", note: en.expansion.windowEnded, acted_at: "2026-11-08T05:41:00.000Z" });
+    const theirs = addTask({ status: "done", note: "", acted_at: "2026-11-08T07:00:00.000Z" });
+    const states = await readTaskStates([mine.id, theirs.id]);
+    expect(states.map((s) => [s.id, s.status, s.note, s.acted_at]).sort()).toEqual(
+      [
+        [mine.id, "skipped", en.expansion.windowEnded, "2026-11-08T05:41:00.000Z"],
+        [theirs.id, "done", "", "2026-11-08T07:00:00.000Z"],
+      ].sort(),
+    );
+    expect(await readTaskStates([])).toEqual([]);
+    const at = "2026-11-08T05:30:00.000Z";
+    expect(await overrideServerClose([mine.id, theirs.id], { status: "done", note: "", acted_at: at })).toEqual([mine.id]);
+    expect(byId(mine.id)).toMatchObject({ status: "done", note: "", acted_at: at });
+    expect(byId(theirs.id)).toMatchObject({ status: "done", acted_at: "2026-11-08T07:00:00.000Z" });
   });
 });

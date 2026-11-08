@@ -1,22 +1,22 @@
-// The app's calls to the functions (src/lib/api.ts): a reply sent behind the keep-alive, and the
-// profile looked up after its reply was lost, with fetch and the Supabase session mocked.
+// The app's calls to the functions (src/lib/api.ts): a reply sent behind the keep-alive, the profile
+// looked up after its reply was lost, and (Phase 14) the rows of Ask, Check and Diagnose found in the
+// tables after a lost reply, with fetch mocked, the Supabase session mocked and the tables in memory.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProfileRequest } from "../src/types";
 
 const signOut = vi.fn(async () => ({ error: null }));
 
-vi.mock("../src/lib/supabase", () => ({
-  supabase: {
-    auth: {
-      getSession: async () => ({ data: { session: { access_token: "token" } } }),
-      signOut,
-    },
-  },
-  PHOTOS_BUCKET: "photos",
-  supabaseConfigured: true,
-}));
+vi.mock("../src/lib/supabase", async () => {
+  const { makeDb, sharedState } = await import("./mockdb");
+  return {
+    supabase: { ...makeDb(sharedState), auth: { getSession: async () => ({ data: { session: { access_token: "token" } } }), signOut } },
+    PHOTOS_BUCKET: "photos",
+    supabaseConfigured: true,
+  };
+});
 
-const { api, ApiError, callApi } = await import("../src/lib/api");
+const { api, ApiError, callApi, LostReplyError } = await import("../src/lib/api");
+const { resetState, sharedState } = await import("./mockdb");
 
 type Reply = { status: number; body: string } | Error;
 
@@ -46,6 +46,7 @@ const pear: ProfileRequest = { scientific_name: "Pyrus communis", cultivar: "", 
 beforeEach(() => {
   vi.useFakeTimers();
   signOut.mockClear();
+  resetState(sharedState);
 });
 
 afterEach(() => {
@@ -114,14 +115,14 @@ describe("api.profile after a lost reply", () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it("gives the original error once the function must have stopped", async () => {
+  it("says the reply was lost once the function must have stopped", async () => {
     const { fetchMock } = mockFetch([lost(), ...Array.from({ length: 40 }, notYet)]);
     const result = api.profile(pear);
     const settled = result.catch((e: unknown) => e);
     await vi.advanceTimersByTimeAsync(300_000);
     const err = await settled;
-    expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 0, message: "Failed to fetch" });
+    expect(err).toBeInstanceOf(LostReplyError);
+    expect(err).toMatchObject({ status: 0 });
     // One lookup at once, then one every 10 s up to the function's 300 s, the last one after it.
     expect(fetchMock).toHaveBeenCalledTimes(32);
   });
@@ -150,5 +151,82 @@ describe("api.profile after a lost reply", () => {
     const answered = mockFetch([{ status: 502, body: JSON.stringify({ error: "Claude output was cut" }) }]);
     await expect(api.profile(pear)).rejects.toMatchObject({ status: 502 });
     expect(answered.fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+const PLANT = "11111111-1111-4111-8111-111111111111";
+const ROW = "22222222-2222-4222-8222-222222222222";
+const THREAD = "33333333-3333-4333-8333-333333333333";
+const AT = "2026-11-08T09:00:00.000Z";
+const usage = { model: "claude-fable-5-1", input_tokens: 10, output_tokens: 20, thinking_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
+
+describe("a lost reply looked for in the tables (Phase 14)", () => {
+  it("gives the row /api/ask wrote as the answer once it appears, without a second call", async () => {
+    const { fetchMock } = mockFetch([lost()]);
+    const settled = api.ask({ plant_id: PLANT, question: "Why?", id: ROW, thread_id: THREAD, asked_at: AT }).then(
+      (r) => r,
+      (e: unknown) => e,
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    sharedState.questions.push({ id: ROW, plant_id: PLANT, thread_id: THREAD, asked_at: AT, question: "Why?", answer: { answer: "Water less.", profile_note: "", follow_ups: [], ...usage } });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await settled).toMatchObject({ answer: "Water less." });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("gives the check and the diagnosis back the same way", async () => {
+    mockFetch([lost()]);
+    const check = api.check({ species_id: PLANT, id: ROW, checked_at: AT }).then(
+      (r) => r,
+      (e: unknown) => e,
+    );
+    sharedState.planting_checks.push({ id: ROW, species_id: PLANT, checked_at: AT, site: null, zone: "", note: "", result: { verdict: "plant", summary: "Fine.", ...usage } });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await check).toMatchObject({ verdict: "plant" });
+
+    mockFetch([lost()]);
+    const path = `${PLANT}/1762590600000.jpg`;
+    const diagnosis = api
+      .diagnose({ plant_id: PLANT, images: [{ media_type: "image/jpeg", data: "abc" }], photo: { id: ROW, storage_path: path, taken_at: AT } })
+      .then(
+        (r) => r,
+        (e: unknown) => e,
+      );
+    sharedState.photos.push({
+      id: ROW,
+      plant_id: PLANT,
+      taken_at: AT,
+      storage_path: path,
+      kind: "problem",
+      ai_result: { summary: "Chlorosis.", likely_causes: [], checks_to_do: [], organic_treatment: "", prevention: "", urgency: "watch", rephotograph_in_days: 7, note: "", ...usage },
+      note: "",
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(await diagnosis).toMatchObject({ summary: "Chlorosis.", rephotograph_in_days: 7 });
+  });
+
+  it("does not look without a row id, and says when nothing came in time", async () => {
+    const plain = mockFetch([lost()]);
+    await expect(api.ask({ plant_id: PLANT, question: "Why?" })).rejects.toMatchObject({ status: 0 });
+    expect(plain.fetchMock).toHaveBeenCalledOnce();
+
+    mockFetch([lost()]);
+    const settled = api.ask({ plant_id: PLANT, question: "Why?", id: ROW, thread_id: THREAD, asked_at: AT }).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(300_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(LostReplyError);
+    expect(err).toMatchObject({ status: 0 });
+  });
+
+  it("stops at once when the panel is left, with the loss itself as the error", async () => {
+    mockFetch([lost()]);
+    const stop = new AbortController();
+    const settled = api.check({ species_id: PLANT, id: ROW, checked_at: AT }, { signal: stop.signal }).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(2_000);
+    stop.abort();
+    await vi.advanceTimersByTimeAsync(20_000);
+    const err = await settled;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).not.toBeInstanceOf(LostReplyError);
   });
 });

@@ -3,8 +3,11 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { BookOpen, Camera, Settings, Sprout, Sun, type LucideIcon } from "lucide-react";
 import { t } from "../i18n";
+import { useAuth } from "../lib/auth-context";
 import { localIsoDate } from "../lib/dates";
 import { countDueTasks, isOwner, TASKS_CHANGED } from "../lib/db";
+import { syncLangWithServer } from "../lib/langSync";
+import { dueCountOf, readQueue, recallToday } from "../lib/offline";
 
 interface Tab {
   to: string;
@@ -44,10 +47,14 @@ function UpdateBanner() {
  * table to it (PHASE10.md). Asked once per sign-in; silent before the table exists or on a failed read.
  */
 function OwnerBanner() {
+  const { session } = useAuth();
   const [shutOut, setShutOut] = useState(false);
 
   useEffect(() => {
     let active = true;
+    // Without a session (the shell on the phone's copy, Phase 14) the read would go out under the anon
+    // key and say "not the owner" of nothing.
+    if (!session) return;
     isOwner()
       .then((owner) => {
         if (active) setShutOut(owner === false);
@@ -56,9 +63,9 @@ function OwnerBanner() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [session]);
 
-  if (!shutOut) return null;
+  if (!shutOut || !session) return null;
   return (
     <div className="banner warn update-banner" role="alert">
       {t.app.notOwner}
@@ -72,18 +79,28 @@ function OwnerBanner() {
  * to the foreground, since the date may have turned. Mirrored to the app icon where the phone can.
  */
 function useDueCount(pathname: string): number {
+  const { session } = useAuth();
   const [count, setCount] = useState(0);
 
   useEffect(() => {
     let active = true;
+    // Offline, or without a session (the shell on the phone's copy, Phase 14): the list kept on the
+    // phone counts instead, less the actions waiting; without one, the last count stays.
+    const fromCopy = (today: string) => {
+      const kept = recallToday(today);
+      if (active && kept) setCount(dueCountOf(kept.tasks, readQueue(), today));
+    };
     const load = () => {
-      countDueTasks(localIsoDate())
+      const today = localIsoDate();
+      if (!session) {
+        fromCopy(today);
+        return;
+      }
+      countDueTasks(today)
         .then((n) => {
           if (active) setCount(n);
         })
-        .catch(() => {
-          // Offline or signed out: keep the last count rather than flashing zero.
-        });
+        .catch(() => fromCopy(today));
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") load();
@@ -96,7 +113,7 @@ function useDueCount(pathname: string): number {
       window.removeEventListener(TASKS_CHANGED, load);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [pathname]);
+  }, [pathname, session]);
 
   useEffect(() => {
     if (!("setAppBadge" in navigator)) return;
@@ -110,6 +127,11 @@ function useDueCount(pathname: string): number {
 export function Layout() {
   const { pathname } = useLocation();
   const due = useDueCount(pathname);
+
+  // The language chosen in Settings reaches the server's row once per app start (Phase 14).
+  useEffect(() => {
+    void syncLangWithServer();
+  }, []);
 
   const tabLink = (tab: Tab) => {
     const Icon = tab.icon;

@@ -10,7 +10,7 @@ import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { lang, t } from "../i18n";
-import { api, ApiError } from "../lib/api";
+import { api, ApiError, LostReplyError } from "../lib/api";
 import { storedCheck } from "../lib/check";
 import { ChecksUnavailable, emptyZones, getCheck, getSpecies, insertCheck, loadZones, newId } from "../lib/db";
 import {
@@ -36,6 +36,7 @@ interface Shown {
 }
 
 function describeError(err: unknown): string {
+  if (err instanceof LostReplyError) return t.errors.answerLost;
   if (err instanceof ApiError) {
     if (err.status === 401) return t.errors.unauthorized;
     if (err.status === 0) return t.errors.network;
@@ -87,9 +88,10 @@ function CheckScreen() {
   /** A profile call that spent tokens: a new profile, or one written and then matched to a species already kept. */
   const [profileCall, setProfileCall] = useState<{ usage: Usage; created: boolean } | null>(null);
   const [shown, setShown] = useState<Shown | null>(null);
+  /** The check's reply was lost on the way and the app is looking for the row the route stored (Phase 14). */
+  const [reconnecting, setReconnecting] = useState(false);
   const mountedRef = useRef(true);
-  // Stops the profile lookups after a lost reply when the screen is left.
-  const leftRef = useRef(new AbortController());
+  // Stops the lookups after a lost reply (the profile's, the check's) when the screen is left.
   // The check on screen, for the one more save given to it when the screen is left unsaved.
   const shownRef = useRef<Shown | null>(null);
 
@@ -100,12 +102,11 @@ function CheckScreen() {
   useEffect(() => {
     const mounted = mountedRef;
     const latest = shownRef;
-    const left = leftRef;
     mounted.current = true;
-    if (left.current.signal.aborted) left.current = new AbortController(); // remounted (StrictMode)
     return () => {
+      // Left while the app was looking for a lost reply: the looking goes on, and the check, when it
+      // arrives, is kept (insertCheck below), so nothing is paid twice.
       mounted.current = false;
-      left.current.abort();
       // Left with a save that failed: one more try on the way out, since the check was paid for.
       retryUnsaved(latest.current);
     };
@@ -184,7 +185,6 @@ function CheckScreen() {
         setPhase("profiling");
         const res = await api.profile(
           scientific ? { scientific_name: scientific, site: site ?? undefined } : { name: typed, site: site ?? undefined },
-          { signal: leftRef.current.signal },
         );
         if (!mountedRef.current) return; // left: a new profile stays in the library, no check is run
         if (isRefusal(res)) {
@@ -202,7 +202,18 @@ function CheckScreen() {
       setPhase("checking");
       const zoneSent = site ? zone.replace(/\s+/g, " ").trim() : "";
       const noteSent = note.replace(/\s+/g, " ").trim();
-      const res = await api.check({ species_id: target.id, site: site ?? undefined, zone: zoneSent, note: noteSent, lang });
+      // The row is named before the call (Phase 14): the route writes it under this id once Claude has
+      // answered, so a reply lost on the way is found again instead of paid for twice.
+      const id = newId();
+      const checkedAt = new Date().toISOString();
+      const res = await api.check(
+        { species_id: target.id, site: site ?? undefined, zone: zoneSent, note: noteSent, lang, id, checked_at: checkedAt },
+        {
+          onReconnecting: () => {
+            if (mountedRef.current) setReconnecting(true);
+          },
+        },
+      );
       if (isRefusal(res)) {
         if (mountedRef.current) {
           setRefusal({ text: `${t.check.refusal}: ${res.refusal}`, usage: res });
@@ -219,9 +230,9 @@ function CheckScreen() {
         return;
       }
       const row: PlantingCheckRow = {
-        id: newId(),
+        id,
         species_id: target.id,
-        checked_at: new Date().toISOString(),
+        checked_at: checkedAt,
         site,
         zone: zoneSent,
         note: noteSent,
@@ -241,6 +252,8 @@ function CheckScreen() {
         setError(`${t.check.failed}: ${describeError(err)}`);
         setPhase("form");
       }
+    } finally {
+      if (mountedRef.current) setReconnecting(false);
     }
   }
 
@@ -372,7 +385,7 @@ function CheckScreen() {
           </label>
 
           {phase === "profiling" && <Spinner label={t.check.profiling} />}
-          {phase === "checking" && <Spinner label={t.check.running} />}
+          {phase === "checking" && (reconnecting ? <Banner kind="info">{t.check.reconnecting}</Banner> : <Spinner label={t.check.running} />)}
           {error && <Banner kind="error">{error}</Banner>}
           {refusal && (
             <Banner kind="error">

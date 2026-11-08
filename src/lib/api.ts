@@ -1,6 +1,10 @@
-// Calls to the Vercel functions. Every call carries the Supabase access token.
+// Calls to the Vercel functions. Every call carries the Supabase access token. A Claude call whose
+// reply is lost on the way is not a failed call: the routes store their row before they reply (Phase
+// 14, and /api/profile since 0.8.2), so the app looks for the stored row instead of paying twice.
 import { supabase } from "./supabase";
-import { notifyTasksChanged } from "./db";
+import { getCheck, getPhoto, getQuestion, notifyTasksChanged } from "./db";
+import { problemResult } from "./diagnosis";
+import { isNetworkFailure } from "./errors";
 import {
   expansionChanged,
   type AskRequest,
@@ -26,6 +30,17 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
     this.status = status;
+  }
+}
+
+/**
+ * A reply lost on the way whose stored row never appeared in time: the call may have been declined
+ * (a refusal is not stored) or lost, and asking again is a new call. Status 0, like the loss itself.
+ */
+export class LostReplyError extends ApiError {
+  constructor(cause: ApiError) {
+    super(0, cause.message);
+    this.name = "LostReplyError";
   }
 }
 
@@ -97,13 +112,15 @@ const REQUEST_TIMEOUT_MS = 300_000;
 const EXPAND_TIMEOUT_MS = 30_000;
 /** vercel.json's maxDuration: by then a function writing a profile has stored it or stopped. */
 const FUNCTION_MAX_MS = 300_000;
-/** How often the app asks whether a profile whose reply was lost has been stored. */
+/** How often the app asks whether a call whose reply was lost has stored its row. */
 const LOOKUP_EVERY_MS = 10_000;
+/** One read of the table during the asking is given this long; on a weak signal a hung read must not stall the loop. */
+const LOOKUP_TIMEOUT_MS = 10_000;
 
-export interface ProfileOptions {
-  /** Called once the reply is lost and the app starts asking for the stored profile. */
+export interface RecoverOptions {
+  /** Called once the reply is lost and the app starts asking for the stored row. */
   onReconnecting?: () => void;
-  /** Stops the asking (Start over, another choice, the screen left). */
+  /** Stops the asking (Start over, another choice, the screen or the panel left). */
   signal?: AbortSignal;
 }
 
@@ -127,43 +144,82 @@ function pause(ms: number, signal?: AbortSignal): Promise<boolean> {
 }
 
 /**
- * A new profile takes Claude a minute or more, and the function stores it even when the phone loses
- * the reply meanwhile (a dropped mobile connection, a switch between Wi-Fi and mobile data). So a
- * lost reply is not a failed profile: the app asks for the stored row (lookup_only, no Claude call)
- * at once and then every LOOKUP_EVERY_MS until that function must have stopped, rather than paying
- * for the profile twice. When nothing arrives, the original error stands.
+ * A Claude call takes up to a few minutes, and the function finishes and stores its row even when
+ * the phone loses the reply meanwhile (a dropped mobile connection, a switch between Wi-Fi and
+ * mobile data). So a lost reply (status 0) is not a failed call: `lookup` is asked for the stored
+ * row at once and then every LOOKUP_EVERY_MS until the function must have stopped. It answers null
+ * while there is nothing yet; a network failure keeps the asking going; a route's own answer (a 403)
+ * is shown; any other error ends it with the original failure (a table that does not exist: the
+ * route could not have written either). Without a lookup the failure stands at once. When nothing
+ * arrives in time, a LostReplyError says so.
  */
-async function profile(req: ProfileRequest, opts: ProfileOptions = {}): Promise<ProfileApiResponse> {
+async function withRecovery<T>(call: () => Promise<T>, lookup: (() => Promise<T | null>) | null, opts: RecoverOptions = {}): Promise<T> {
   const sentAt = Date.now();
   try {
-    return await callApi<ProfileApiResponse>("profile", req);
+    return await call();
   } catch (err) {
-    if (!(err instanceof ApiError) || err.status !== 0 || req.regenerate_species_id) throw err;
+    if (!(err instanceof ApiError) || err.status !== 0 || !lookup) throw err;
     opts.onReconnecting?.();
     const deadline = sentAt + FUNCTION_MAX_MS;
     for (;;) {
       if (opts.signal?.aborted) throw err;
       try {
-        return await callApi<ProfileApiResponse>("profile", { ...req, lookup_only: true }, EXPAND_TIMEOUT_MS);
+        const found = await lookup();
+        if (found !== null) return found;
       } catch (lookupErr) {
-        // 404: not stored yet; 0: still no connection. Any other answer is the one to show.
-        if (!(lookupErr instanceof ApiError) || (lookupErr.status !== 404 && lookupErr.status !== 0)) throw lookupErr;
+        if (lookupErr instanceof ApiError && lookupErr.status !== 0) throw lookupErr;
+        if (!(lookupErr instanceof ApiError) && !isNetworkFailure(lookupErr)) throw err;
       }
-      if (Date.now() >= deadline || !(await pause(LOOKUP_EVERY_MS, opts.signal))) throw err;
+      if (Date.now() >= deadline) throw new LostReplyError(err);
+      // Stopped (the panel left): the loss itself stands, since the row may still arrive without us.
+      if (!(await pause(LOOKUP_EVERY_MS, opts.signal))) throw err;
     }
   }
 }
 
+/** The profile's lookup: the stored row through the route (lookup_only, no Claude call), 404 while there is none. */
+function profileLookup(req: ProfileRequest): () => Promise<ProfileApiResponse | null> {
+  return () =>
+    callApi<ProfileApiResponse>("profile", { ...req, lookup_only: true }, EXPAND_TIMEOUT_MS).catch((err: unknown) => {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    });
+}
+
+const lookupBound = () => AbortSignal.timeout(LOOKUP_TIMEOUT_MS);
+
 export const api = {
   identify: (req: IdentifyRequest) => callApi<IdentifyResponse>("identify", req),
-  /** Looks for the stored profile when the reply is lost on the way (see `profile`). */
-  profile: (req: ProfileRequest, opts?: ProfileOptions) => profile(req, opts),
-  /** A problem photo read against the plant's context; the app saves the photo and the result afterwards. */
-  diagnose: (req: DiagnoseRequest) => callApi<DiagnoseResponse>("diagnose", req),
-  /** A free question about one plant, with the earlier exchanges of the conversation; the app saves the answer. */
-  ask: (req: AskRequest) => callApi<AskResponse>("ask", req),
-  /** Before planting: the species read against the sites and what grows there; the app saves the check. */
-  check: (req: CheckRequest) => callApi<CheckResponse>("check", req),
+  /** Looks for the stored profile when the reply is lost on the way; not for a regeneration, which the route stores in place. */
+  profile: (req: ProfileRequest, opts?: RecoverOptions) =>
+    withRecovery(() => callApi<ProfileApiResponse>("profile", req), req.regenerate_species_id ? null : profileLookup(req), opts),
+  /** A problem photo read against the plant's context; with the planned photo row, the route stores the diagnosis and a lost reply is found again. */
+  diagnose: (req: DiagnoseRequest, opts?: RecoverOptions) => {
+    const photoId = req.photo?.id;
+    return withRecovery(
+      () => callApi<DiagnoseResponse>("diagnose", req),
+      photoId ? () => getPhoto(photoId, lookupBound()).then((row) => (row ? problemResult(row.ai_result) : null)) : null,
+      opts,
+    );
+  },
+  /** A free question about one plant, with the earlier exchanges; with the row's id, the route stores the answer and a lost reply is found again. */
+  ask: (req: AskRequest, opts?: RecoverOptions) => {
+    const rowId = req.id;
+    return withRecovery(
+      () => callApi<AskResponse>("ask", req),
+      rowId ? () => getQuestion(rowId, lookupBound()).then((row) => (row ? (row.answer as AskResponse) : null)) : null,
+      opts,
+    );
+  },
+  /** Before planting: the species read against the sites and what grows there; with the row's id, the route stores the check and a lost reply is found again. */
+  check: (req: CheckRequest, opts?: RecoverOptions) => {
+    const rowId = req.id;
+    return withRecovery(
+      () => callApi<CheckResponse>("check", req),
+      rowId ? () => getCheck(rowId, lookupBound()).then((row) => (row ? (row.result as CheckResponse) : null)) : null,
+      opts,
+    );
+  },
   /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
   expand: async (req: ExpandRequest = {}) => {
     const r = await callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS);

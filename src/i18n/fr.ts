@@ -1,6 +1,7 @@
 // French as used in Tunisia. Same shape as en.ts, checked by the Strings type: a key missing or
 // added here fails `npm run typecheck`. Profile text written by Claude is not translated here.
-import type { Strings } from "./en";
+// The `.js` specifier is for the functions, which import this table for the notifications in French (api/_lang.ts).
+import type { Strings } from "./en.js";
 
 /** A decimal written the French way: 2.5 → "2,5". */
 const frNumber = (n: number) => String(n).replace(".", ",");
@@ -156,6 +157,17 @@ export const fr: Strings = {
     shareCopied: "Liste copiée : collez-la dans un message.",
     shareFailed: "La liste n'a pu être ni partagée ni copiée",
     handoutAmount: (amount, tags) => `${amount} : ${tags}`,
+    offline: "Hors connexion",
+    shownAsOf: (time) => `Affiché tel qu'à ${time}, pas mis à jour`,
+    queued: (n) => (n === 1 ? "1 action en attente" : `${n} actions en attente`),
+    sendNow: "Envoyer maintenant",
+    savedOnPhone: "gardé sur le téléphone",
+    keepFailed: "L'action n'a pas pu être gardée sur le téléphone : son stockage est plein ou bloqué.",
+    queueSent: (n) => (n === 1 ? "1 action gardée envoyée." : `${n} actions gardées envoyées.`),
+    queueNotApplied: (n) =>
+      n === 1 ? "1 action gardée n'a pas été appliquée : la tâche avait été close entre-temps." : `${n} actions gardées n'ont pas été appliquées : les tâches avaient été closes entre-temps.`,
+    queueFailed: (error) => `Les actions gardées n'ont pas pu être envoyées : ${error}`,
+    snoozeOffline: "Reporter demande une connexion.",
   },
 
   capture: {
@@ -292,13 +304,14 @@ export const fr: Strings = {
     send: "Envoyer à Claude",
     preparing: "Préparation de la photo…",
     sending: "Diagnostic en cours…",
+    reconnecting: "La connexion a été perdue pendant le diagnostic. Vérification que le diagnostic est arrivé… Vous pouvez fermer : il ira dans le journal.",
     failed: "Le diagnostic a échoué",
     refusal: "Claude a décliné cette demande",
     saving: "Enregistrement de la photo…",
     saveFailed: "La photo n'a pas pu être enregistrée",
     saveAgain: "Réessayer l'enregistrement",
     unsaved: "Le journal du traitement et le rappel ont besoin de la photo enregistrée.",
-    closeUnsaved: "Le diagnostic n'est pas encore enregistré. Fermer quand même et le perdre ?",
+    closeUnsaved: "Le diagnostic n'est pas encore enregistré de ce côté. Fermer quand même ? Si le serveur l'a gardé, il apparaît dans l'onglet Santé, sans son rappel.",
     diagnosedOn: (date) => `Diagnostiqué le ${date}`,
     likelyCauses: "Causes probables",
     evidence: "Indices",
@@ -356,6 +369,7 @@ export const fr: Strings = {
     placeholder: "ex. Faut-il la tailler avant les pluies ?",
     send: "Demander",
     sending: "Claude réfléchit…",
+    reconnecting: "La connexion a été perdue pendant que Claude répondait. Vérification que la réponse est arrivée… Vous pouvez fermer : la réponse ira dans le journal.",
     failed: "La question n'a pas pu recevoir de réponse",
     refusal: "Claude a décliné cette question",
     loading: "Chargement de la conversation…",
@@ -365,7 +379,7 @@ export const fr: Strings = {
     saving: "Enregistrement dans le journal…",
     saveFailed: "La réponse n'est pas encore dans le journal.",
     saveAgain: "Réessayer l'enregistrement",
-    closeUnsaved: "Une réponse n'est pas encore dans le journal. Fermer quand même et la perdre ?",
+    closeUnsaved: "Une réponse n'est pas encore enregistrée de ce côté. Fermer quand même ? Si le serveur l'a gardée, elle apparaît dans le journal.",
     unavailable:
       "Les réponses ne sont pas encore gardées : la table questions n'existe pas. Exécutez le SQL de la section Setup de PHASE6.md dans l'éditeur SQL de Supabase.",
     journalLabel: "Question",
@@ -390,6 +404,7 @@ export const fr: Strings = {
     run: "Vérifier",
     profiling: "Recherche de l'espèce (une nouvelle est d'abord décrite)…",
     running: "Vérification de l'adaptation…",
+    reconnecting: "La connexion a été perdue pendant la vérification. Recherche de la vérification enregistrée…",
     failed: "La vérification n'a pas pu être faite",
     profileRefusal: "Claude a refusé de rédiger une fiche pour ce nom",
     refusal: "Claude a décliné cette vérification",
@@ -439,7 +454,7 @@ export const fr: Strings = {
     filteredEmpty: "Aucune espèce ici",
   },
 
-  /** Météo (phase 8) : la carte d'Aujourd'hui, la carte des Réglages ; les notes des fonctions restent en anglais. */
+  /** Météo (phase 8) : la carte d'Aujourd'hui, la carte des Réglages, et les notes des fonctions, écrites dans la langue choisie dans les Réglages (api/_lang.ts, phase 14). */
   weather: {
     title: "Météo",
     credit: "Données météo : Open-Meteo",
@@ -493,6 +508,25 @@ export const fr: Strings = {
     pointTown: "Prévisions pour Menzel Bouzelfa : aucune plante de la ferme n'a de position GPS à moins de 30 km.",
     lastFetch: (time) => `Dernière mise à jour : ${time}`,
     never: "Pas encore de prévisions ; elles viennent avec le passage de 6 h ou à l'ouverture d'Aujourd'hui.",
+    lastRun: (time, what) => `Dernier passage du matin : ${time}${what ? ` · ${what}` : ""}`,
+    lastRunFailed: (time, error) => `Le passage du matin du ${time} a échoué : ${error}`,
+    runCounts: (created, skipped, tidied) => {
+      const parts: string[] = [];
+      parts.push(created === 1 ? "1 tâche ajoutée" : `${created} tâches ajoutées`);
+      if (skipped > 0) parts.push(skipped === 1 ? "1 arrosage passé après la pluie" : `${skipped} arrosages passés après la pluie`);
+      if (tidied > 0) parts.push(tidied === 1 ? "1 tâche rangée" : `${tidied} tâches rangées`);
+      return parts.join(", ");
+    },
+    runPushes: (sent, failed, phones) =>
+      `${sent === 1 ? "1 notification" : `${sent} notifications`} vers ${phones === 1 ? "1 téléphone" : `${phones} téléphones`}${failed > 0 ? ` (${failed} en échec)` : ""}`,
+    runNoPhones: "aucun téléphone n'a les rappels activés",
+    runWeatherError: "la météo n'a pas pu être lue",
+    runRainSkipError: "le passage des arrosages après la pluie a échoué",
+    runStarted: (time) => `Passage du matin commencé à ${time}, encore en cours.`,
+    runUnfinished: (time) => `Passage du matin commencé à ${time} et jamais terminé.`,
+    runMissing: "Aucun passage du matin enregistré aujourd'hui (attendu avant 7 h).",
+    noRunToday: "Pas encore de passage aujourd'hui.",
+    noRunYet: "Aucun passage du matin enregistré pour l'instant.",
     saveFailed: "Le réglage n'a pas pu être enregistré",
     unavailable:
       "La météo n'est pas encore gardée : la table weather_days n'existe pas. Exécutez le SQL de la section Setup de PHASE8.md dans l'éditeur SQL de Supabase.",
@@ -692,9 +726,9 @@ export const fr: Strings = {
     version: "Version",
     installTitle: "Installer sur le téléphone",
     installBody: "Ouvrez cette page dans Chrome, puis menu → Ajouter à l'écran d'accueil.",
-    phaseTitle: "Phase 13",
+    phaseTitle: "Phase 14",
     phaseBody:
-      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, le journal des soins faits à la main, les arrosages d'une zone sur une seule carte d'Aujourd'hui et une seule ligne du rappel du matin, de même pour les fenêtres que partagent les plantes d'une zone (une taille, une récolte, une surveillance), et maintenant le travail d'Aujourd'hui par type de tâche, chaque type se repliant pour la journée et s'envoyant en liste à qui le fait.",
+      "Photographier, identifier, fiche espèce, calendrier des tâches avec l'écran Aujourd'hui, rappels push, diagnostic des photos de problème, interface en français, exports CSV, zones par site, modification à la main du calendrier et des ravageurs, questions à Claude sur une plante, vérification avant de planter, la météo, la carte des plantes et les étiquettes QR des arbres, les tables fermées à tout compte sauf celui du propriétaire, les vignettes des photos gardées sur le téléphone, les arrosages d'un site faits en un geste, une note sur Fait, le journal des soins faits à la main, les arrosages et les fenêtres partagées d'une zone sur une seule carte et une seule ligne du rappel du matin, le travail d'Aujourd'hui par type de tâche avec une liste à partager, et maintenant Aujourd'hui sans connexion avec Fait et Passer gardés sur le téléphone jusqu'à son retour, une question, une vérification ou un diagnostic dont la réponse s'est perdue retrouvés au lieu d'être payés deux fois, le passage du matin enregistré, ce que coûtent les appels à Claude ce mois-ci, et les notifications dans la langue choisie ici.",
     reminders: {
       title: "Rappels",
       body: "Chaque matin à 6 h, une notification par site avec les tâches du jour, celles en retard et les fenêtres qui s'ouvrent bientôt, et une notification météo quand une alerte ou un arrosage passé après la pluie le justifie.",
@@ -718,9 +752,25 @@ export const fr: Strings = {
     },
     language: {
       title: "Langue",
-      body: "La langue des écrans. L'application se recharge pour appliquer le choix. Le texte des fiches rédigé par Claude garde la langue dans laquelle il a été écrit.",
+      body: "La langue des écrans et, une fois choisie ici, celle des notifications du matin et des notes écrites par le serveur. L'application se recharge pour appliquer le choix. Le texte des fiches rédigé par Claude garde la langue dans laquelle il a été écrit.",
       names: { en: "English", fr: "Français" },
       saveFailed: "Le choix n'a pas pu être mémorisé sur ce téléphone",
+      server: (name) => `Notifications : ${name}`,
+      serverDefault: "Notifications : anglais, tant qu'aucune langue n'est choisie ici.",
+      notSynced: "Le choix n'a pas encore atteint le serveur ; il est renvoyé à la prochaine ouverture avec une connexion.",
+    },
+    usage: {
+      title: "Usage de Claude",
+      body: "Les appels de ce mois et du mois précédent, additionnés par les fonctions au fil des appels, avec une estimation aux prix publics de Claude Fable 5.1. Vercel et Supabase restent sur leurs offres gratuites.",
+      month: (month, calls, cost) => `${month} : ${calls === 1 ? "1 appel" : `${calls} appels`}, environ ${cost}`,
+      none: (month) => `${month} : aucun appel`,
+      routes: { identify: "identifications", profile: "fiches", diagnose: "diagnostics", ask: "questions", check: "vérifications" },
+      byRoute: (parts) => `Par type : ${parts}`,
+      tokens: (input, output) => `${input.toLocaleString()} jetons en entrée / ${output.toLocaleString()} en sortie (réflexion comprise)`,
+      failed: (n) => (n === 1 ? "1 appel en échec après dépense" : `${n} appels en échec après dépense`),
+      fallback: (n) => (n === 1 ? "1 appel répondu par un modèle de repli, compté aux prix de Fable" : `${n} appels répondus par un modèle de repli, comptés aux prix de Fable`),
+      prices: (input, output, read, write) => `Prix publics par million de jetons : ${input} en entrée, ${output} en sortie, ${read} lecture de cache, ${write} écriture de cache.`,
+      loadFailed: "L'usage n'a pas pu être chargé",
     },
     export: {
       title: "Export",
@@ -746,14 +796,14 @@ export const fr: Strings = {
     },
   },
 
-  /** Notes écrites par l'expansion (api/_tasks.ts) ; le serveur lit la table anglaise, celles-ci servent au typage. */
+  /** Notes écrites par l'expansion (api/_tasks.ts) : le serveur les prend ici quand le français est choisi (phase 14). */
   expansion: {
     windowEnded: "Fenêtre terminée",
     superseded: "Remplacé par l'arrosage suivant",
     missed: "Arrosage manqué",
   },
 
-  /** Le résumé push, composé sur le serveur (api/_push.ts) à partir de la table anglaise. */
+  /** Le résumé push, composé sur le serveur (api/_push.ts) dans la langue choisie (phase 14). */
   digest: {
     title: (site, n) => `${site} : ${n === 1 ? "1 tâche" : `${n} tâches`}`,
     line: (title, tag) => (tag ? `${title} · ${tag}` : title),
@@ -768,6 +818,7 @@ export const fr: Strings = {
   errors: {
     generic: "Quelque chose s'est mal passé",
     network: "Erreur réseau. Vérifiez la connexion et réessayez.",
+    answerLost: "Aucune réponse trouvée. L'appel a pu être refusé ou perdu ; redemander est un nouvel appel.",
     unauthorized: "Déconnecté. Reconnectez-vous.",
     notFound: "Introuvable",
     tooLarge: "La photo est trop grande",

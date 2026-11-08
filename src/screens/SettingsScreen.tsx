@@ -3,6 +3,7 @@ import {
   Bell,
   CircleUser,
   CloudSun,
+  Coins,
   Download,
   Info,
   Languages,
@@ -17,25 +18,48 @@ import {
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
-import { lang, LANGS, storeLang, t, type Lang } from "../i18n";
+import { lang, LANGS, storedLang, storeLang, t, type Lang } from "../i18n";
 import { useAuth } from "../lib/auth-context";
-import { localIsoDate } from "../lib/dates";
+import { localIsoDate, toLocalDate } from "../lib/dates";
 import {
   emptyZones,
   listWeather,
+  loadDailyRecord,
+  loadDailyStart,
+  loadLang,
+  loadUsage,
   loadWeatherSettings,
   loadZones,
   recentZones,
+  saveLang,
   saveWeatherSettings,
   saveZones,
   SettingsUnavailable,
   WeatherUnavailable,
 } from "../lib/db";
 import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
+import { syncLangWithServer } from "../lib/langSync";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
+import { runState } from "../lib/record";
+import { estimateCost, formatDollars, monthOf, previousMonth, PRICES_PER_MILLION } from "../lib/usage";
 import { TOWN } from "../lib/weather";
-import { RAIN_SKIP_CHOICES, SITES, type Site, type WeatherDay, type WeatherSettings, type ZoneLists } from "../types";
+import {
+  RAIN_SKIP_CHOICES,
+  SITES,
+  USAGE_ROUTES,
+  type DailyRecord,
+  type DailyStart,
+  type Site,
+  type UsageLedger,
+  type WeatherDay,
+  type WeatherSettings,
+  type ZoneLists,
+} from "../types";
+
 import { APP_VERSION } from "../version";
+
+/** A write to the settings table that hangs this long is given up, so the screen never waits on it. */
+const SETTING_WRITE_TIMEOUT_MS = 5_000;
 
 function message(err: unknown): string {
   return err instanceof Error && err.message ? err.message : t.errors.generic;
@@ -131,20 +155,52 @@ function RemindersCard() {
 
 /**
  * English or French. `t` is a constant imported by every screen, so the choice is stored and the
- * app reloaded; the service worker serves the shell from its cache, so this works offline too.
+ * app reloaded; the service worker serves the shell from its cache, so this works offline too. The
+ * choice also goes to the settings table (Phase 14), where the morning run reads it for the
+ * notifications and the notes it writes; without a connection that write fails and the server
+ * keeps the language it had.
  */
 function LanguageCard() {
   const s = t.settings.language;
   const [error, setError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
+  /** The language the server holds: null when no choice has reached it, undefined while unknown or unreadable. */
+  const [server, setServer] = useState<Lang | null | undefined>(undefined);
 
-  function choose(next: Lang) {
-    if (next === lang) return;
+  useEffect(() => {
+    let active = true;
+    // After the start-up write (src/lib/langSync.ts), so the line does not read the row that write
+    // is about to replace.
+    syncLangWithServer()
+      .then(() => loadLang())
+      .then((value) => {
+        if (active) setServer(value);
+      })
+      .catch(() => {
+        // Offline or no settings table: the line stays out.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function choose(next: Lang) {
+    if (next === lang || switching) return;
     if (!storeLang(next)) {
       setError(s.saveFailed);
       return;
     }
+    setSwitching(true);
+    // The row for the server, bounded so the switch still works offline; a write that is cut or fails
+    // is made again at the next app start (src/lib/langSync.ts).
+    await Promise.race([saveLang(next).catch(() => undefined), new Promise((resolve) => setTimeout(resolve, SETTING_WRITE_TIMEOUT_MS))]);
     window.location.reload();
   }
+
+  // Without a choice on this phone the screens follow its language, and the server writes in the
+  // language a choice made elsewhere gave it, English until then.
+  const serverLine =
+    server === undefined ? null : storedLang() === null ? (server ? s.server(s.names[server]) : s.serverDefault) : server === lang ? s.server(s.names[server]) : s.notSynced;
 
   return (
     <div className="card">
@@ -159,12 +215,18 @@ function LanguageCard() {
             lang={l}
             aria-checked={lang === l}
             className={lang === l ? "active" : ""}
-            onClick={() => choose(l)}
+            disabled={switching}
+            onClick={() => void choose(l)}
           >
             {s.names[l]}
           </button>
         ))}
       </div>
+      {serverLine && (
+        <p className="small muted" style={{ margin: "8px 0 0" }}>
+          {serverLine}
+        </p>
+      )}
       {error && (
         <div style={{ marginTop: 10 }}>
           <Banner kind="error">{error}</Banner>
@@ -181,13 +243,56 @@ const Z = t.settings.zones;
  * used on plants but not listed yet are offered as one-tap additions. Without the table (the ★ SQL
  * of PHASE5.md not run yet) the card shows the instruction instead of the lists.
  */
-/** Weather (Phase 8): the rain skip and its threshold, the point the forecast is read for, the last fetch. */
+/** "Tue 4 Nov, 06:41" in the phone's language. */
+function runTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/** One run as the Settings card tells it: when, what it did, and the phones it reached, or why it stopped. */
+function describeRun(record: DailyRecord): string {
+  const W = t.weather;
+  if (record.error) return W.lastRunFailed(runTime(record.at), record.error);
+  const what = [
+    W.runCounts(record.created, record.skipped, record.removed + record.expired + record.superseded),
+    record.subscriptions > 0 ? W.runPushes(record.pushes_sent, record.pushes_failed, record.subscriptions) : W.runNoPhones,
+    record.weather_error ? (record.weather_error.startsWith("rain skip:") ? W.runRainSkipError : W.runWeatherError) : "",
+    record.digest_error ?? "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  return W.lastRun(runTime(record.at), what);
+}
+
+/**
+ * The morning run's line (Phase 14): the day's run and what it did, a start without an end, or
+ * nothing yet today with the last run; a warning once the run should have come and has not.
+ */
+function runLine(record: DailyRecord | null, start: DailyStart | null, now: Date): { text: string; warn: boolean } {
+  const W = t.weather;
+  const state = runState(record, start, localIsoDate(now), now);
+  switch (state.kind) {
+    case "never":
+      return { text: W.noRunYet, warn: false };
+    case "ran":
+      return { text: describeRun(state.record), warn: state.record.error !== undefined };
+    case "started":
+      return {
+        text: [state.unfinished ? W.runUnfinished(runTime(state.start.at)) : W.runStarted(runTime(state.start.at)), state.previous ? describeRun(state.previous) : ""].filter(Boolean).join(" "),
+        warn: state.unfinished,
+      };
+    case "pending":
+      return { text: [state.late ? W.runMissing : W.noRunToday, state.previous ? describeRun(state.previous) : ""].filter(Boolean).join(" "), warn: state.late };
+  }
+}
+
+/** Weather (Phase 8): the rain skip and its threshold, the point the forecast is read for, the last fetch, and the morning run's record (Phase 14). */
 function WeatherSettingsCard() {
   const W = t.weather;
   const [settings, setSettings] = useState<WeatherSettings | null>(null);
   const [settingsMissing, setSettingsMissing] = useState(false);
   const [latest, setLatest] = useState<WeatherDay | null | undefined>(undefined);
   const [weatherMissing, setWeatherMissing] = useState(false);
+  const [run, setRun] = useState<{ record: DailyRecord | null; start: DailyStart | null } | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -201,6 +306,13 @@ function WeatherSettingsCard() {
         if (!active) return;
         if (err instanceof SettingsUnavailable) setSettingsMissing(true);
         else setError(message(err));
+      });
+    Promise.all([loadDailyRecord(), loadDailyStart()])
+      .then(([record, start]) => {
+        if (active) setRun({ record, start });
+      })
+      .catch(() => {
+        // A failed read says nothing about the run, and without the settings table the instruction above says what to do: the line stays out.
       });
     const today = localIsoDate();
     listWeather(today, today)
@@ -297,11 +409,104 @@ function WeatherSettingsCard() {
           )}
         </p>
       )}
+      {run !== undefined &&
+        !settingsMissing &&
+        (() => {
+          const line = runLine(run.record, run.start, new Date());
+          return line.warn ? (
+            <div style={{ marginTop: 8 }}>
+              <Banner kind="warn">{line.text}</Banner>
+            </div>
+          ) : (
+            <p className="small muted" style={{ margin: "4px 0 0" }}>
+              {line.text}
+            </p>
+          );
+        })()}
       <p className="small muted" style={{ margin: "4px 0 0" }}>
         <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
           {W.credit}
         </a>
       </p>
+    </div>
+  );
+}
+
+/** "November 2026" in the phone's language, from "2026-11". */
+function monthLabel(month: string): string {
+  const d = toLocalDate(`${month}-01`);
+  const label = d ? d.toLocaleDateString(undefined, { month: "long", year: "numeric" }) : month;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/**
+ * The usage ledger (Phase 14, review 5.3): this month's Claude calls and last month's, with an
+ * estimate at list prices (src/lib/usage.ts), read from the rows the functions keep.
+ */
+function UsageCard() {
+  const U = t.settings.usage;
+  const [months, setMonths] = useState<Array<{ month: string; ledger: UsageLedger | null }> | null>(null);
+  const [missing, setMissing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const month = monthOf(localIsoDate());
+    const before = previousMonth(month);
+    Promise.all([loadUsage(month), loadUsage(before)])
+      .then(([now, prev]) => {
+        if (active) setMonths([{ month, ledger: now }, { month: before, ledger: prev }]);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        if (err instanceof SettingsUnavailable) setMissing(true);
+        else setError(`${U.loadFailed}: ${message(err)}`);
+      });
+    return () => {
+      active = false;
+    };
+  }, [U.loadFailed]);
+
+  const current = months?.[0]?.ledger ?? null;
+  const byRoute = current
+    ? USAGE_ROUTES.filter((route) => (current.by_route[route]?.calls ?? 0) > 0)
+        .map((route) => `${current.by_route[route]?.calls ?? 0} ${U.routes[route]}`)
+        .join(", ")
+    : "";
+
+  return (
+    <div className="card">
+      <CardHead icon={Coins} tone="sun" title={U.title} />
+      <p className="small">{U.body}</p>
+      {missing && <Banner kind="warn">{t.settings.zones.missingTable}</Banner>}
+      {!missing && months === null && !error && <Spinner label={t.common.loading} />}
+      {error && <Banner kind="error">{error}</Banner>}
+      {months &&
+        months.map(({ month, ledger }, i) => (
+          <div key={month} style={{ marginTop: i === 0 ? 0 : 8 }}>
+            <p style={{ margin: 0, fontWeight: i === 0 ? 600 : 400 }}>
+              {ledger && ledger.calls > 0 ? U.month(monthLabel(month), ledger.calls, formatDollars(estimateCost(ledger))) : U.none(monthLabel(month))}
+            </p>
+            {i === 0 && ledger && ledger.calls > 0 && (
+              <p className="small muted" style={{ margin: "2px 0 0" }}>
+                {byRoute && <>{U.byRoute(byRoute)} · </>}
+                {U.tokens(ledger.input + ledger.cache_read + ledger.cache_write, ledger.output)}
+                {ledger.failed > 0 && <> · {U.failed(ledger.failed)}</>}
+                {ledger.fallback > 0 && <> · {U.fallback(ledger.fallback)}</>}
+              </p>
+            )}
+          </div>
+        ))}
+      {months && (
+        <p className="small muted" style={{ margin: "8px 0 0" }}>
+          {U.prices(
+            formatDollars(PRICES_PER_MILLION.input),
+            formatDollars(PRICES_PER_MILLION.output),
+            formatDollars(PRICES_PER_MILLION.cache_read),
+            formatDollars(PRICES_PER_MILLION.cache_write),
+          )}
+        </p>
+      )}
     </div>
   );
 }
@@ -519,6 +724,7 @@ export function SettingsScreen() {
       <LanguageCard />
       <ZonesCard />
       <ExportCard />
+      <UsageCard />
 
       <div className="card">
         <div className="card-head">

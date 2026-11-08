@@ -9,8 +9,10 @@ import { CloudRain, CloudSun, Droplets, Snowflake, SprayCan, Sun, ThermometerSun
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { api } from "../../lib/api";
+import { useAuth } from "../../lib/auth-context";
 import { addDays, toLocalDate } from "../../lib/dates";
 import { listRecentTreatments, listWeather, WeatherUnavailable } from "../../lib/db";
+import { keepWeather, recallWeather } from "../../lib/offline";
 import {
   isFresh,
   markWindows,
@@ -62,6 +64,7 @@ interface Props {
 }
 
 export function WeatherCard({ today, hour, tasks, reloadKey }: Props) {
+  const { session } = useAuth();
   const [days, setDays] = useState<WeatherDay[] | null>(null);
   const [updating, setUpdating] = useState(false);
   const [treatments, setTreatments] = useState<SprayTreatment[]>([]);
@@ -86,10 +89,18 @@ export function WeatherCard({ today, hour, tasks, reloadKey }: Props) {
     const from = addDays(today, -RAIN_DAYS);
     const to = addDays(today, NEXT_DAYS);
     async function load() {
+      // Without a session (the shell on the phone's copy, Phase 14) the read would come back empty
+      // under the anon key: the kept rows show instead, until the session is back.
+      if (!session) {
+        setDays(recallWeather() ?? []);
+        return;
+      }
       try {
         let rows = await listWeather(from, to);
         if (!active) return;
         setDays(rows);
+        // Kept on the phone for the next open without a connection (Phase 14).
+        keepWeather(rows);
         setUpdating(false);
         const now = Date.now();
         if (isFresh(rows.find((d) => d.day === today), new Date(now)) || now - lastRefreshAt < REFRESH_EVERY_MS) return;
@@ -99,21 +110,23 @@ export function WeatherCard({ today, hour, tasks, reloadKey }: Props) {
           await api.weather();
           rows = await listWeather(from, to);
           if (active) setDays(rows);
+          keepWeather(rows);
         } catch {
           // The stored rows stay on screen; the 06:00 run will try again.
         } finally {
           if (active) setUpdating(false);
         }
       } catch (err) {
-        // Without the table (before the Phase 8 SQL) or on a failed read the card stays hidden.
-        if (active && !(err instanceof WeatherUnavailable)) setDays([]);
+        // Without the table (before the Phase 8 SQL) the card stays hidden; on a failed read (no
+        // connection) it shows the rows kept from the last read, or stays hidden when there are none.
+        if (active && !(err instanceof WeatherUnavailable)) setDays(recallWeather() ?? []);
       }
     }
     void load();
     return () => {
       active = false;
     };
-  }, [today, reloadKey]);
+  }, [today, reloadKey, session]);
 
   if (days === null || (days.length === 0 && !updating)) return null;
   if (days.length === 0) {

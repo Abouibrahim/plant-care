@@ -60,7 +60,7 @@ describe("parseCheckRequest", () => {
   });
 
   it("collapses whitespace, defaults to English and no site, and drops a zone without a site", () => {
-    expect(parseCheckRequest({ species_id: SPECIES_ID })).toEqual({ species_id: SPECIES_ID, site: null, zone: "", note: "", lang: "en" });
+    expect(parseCheckRequest({ species_id: SPECIES_ID })).toEqual({ species_id: SPECIES_ID, site: null, zone: "", note: "", lang: "en", row: null });
     expect(parseCheckRequest({ species_id: SPECIES_ID, site: null, zone: "row 2" })).toMatchObject({ site: null, zone: "" });
     expect(parseCheckRequest({ species_id: SPECIES_ID, site: "backyard", zone: "  north   wall ", note: " shade\nfor hens ", lang: "fr" })).toEqual({
       species_id: SPECIES_ID,
@@ -68,6 +68,7 @@ describe("parseCheckRequest", () => {
       zone: "north wall",
       note: "shade for hens",
       lang: "fr",
+      row: null,
     });
   });
 });

@@ -4,11 +4,12 @@
 // the push service no longer knows. /api/daily calls the three after the expansion.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import { localeOf } from "./_lang.js";
 import { HORIZON_DAYS, readAll, ruleKey } from "./_tasks.js";
 import { requireEnv } from "./_supabase.js";
 import { DUE_NOW, summarize, withBatches } from "../src/lib/batches.js";
 import { addDays, parseIso } from "../src/lib/dates.js";
-import { en } from "../src/i18n/en.js";
+import { en, type Strings } from "../src/i18n/en.js";
 import { TASK_TYPES, type CareRule, type DigestMessage, type PushMessage, type PushSubscriptionJson, type Site, type TaskType } from "../src/types.js";
 
 /** Farm first, then Backyard, as on the Today screen. */
@@ -95,11 +96,11 @@ export function inDigest(task: DigestTask, todayIso: string): boolean {
   return lead > 0 && task.due_on === addDays(todayIso, lead);
 }
 
-/** "1 Nov" from YYYY-MM-DD, without a time zone shift. */
-function shortDate(iso: string): string {
+/** "1 Nov" (or "1 nov." in French) from YYYY-MM-DD, without a time zone shift. */
+function shortDate(iso: string, locale: string): string {
   const p = parseIso(iso);
   if (!p) return iso;
-  return new Date(Date.UTC(p.y, p.m - 1, p.d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  return new Date(Date.UTC(p.y, p.m - 1, p.d)).toLocaleDateString(locale, { day: "numeric", month: "short", timeZone: "UTC" });
 }
 
 /**
@@ -132,9 +133,12 @@ function sortTasks(tasks: DigestTask[], todayIso: string): DigestTask[] {
  * Today (src/lib/batches.ts): its waterings due together, "Water 9 plants (20 L each) · row 2", and
  * each window job its plants share, "Scout for olive fly · 10 plants · row 2", with "From 1 Nov: " in
  * front of an early notice. Plants with no zone get no zone part. The title counts the tasks, and
- * "+N more" the tasks the shown lines leave out.
+ * "+N more" the tasks the shown lines leave out. `strings` is the language chosen in Settings
+ * (api/_lang.ts), English by default.
  */
-export function composeDigest(tasks: DigestTask[], todayIso: string): DigestMessage[] {
+export function composeDigest(tasks: DigestTask[], todayIso: string, strings: Strings = en): DigestMessage[] {
+  const d = strings.digest;
+  const locale = localeOf(strings);
   const due = tasks.filter((t) => t.plant !== null && inDigest(t, todayIso));
   const messages: DigestMessage[] = [];
   for (const site of SITE_ORDER) {
@@ -147,22 +151,22 @@ export function composeDigest(tasks: DigestTask[], todayIso: string): DigestMess
         const { batch } = item;
         covered += batch.tasks.length;
         const { plants, range } = summarize(batch.tasks, todayIso);
-        const what = batch.title === null ? en.digest.batch(plants, range?.min ?? null, range?.max ?? null) : en.digest.group(batch.title, plants);
-        const line = en.digest.line(what, batch.zone);
-        return batch.day === DUE_NOW ? line : en.digest.soon(shortDate(batch.day), line);
+        const what = batch.title === null ? d.batch(plants, range?.min ?? null, range?.max ?? null) : d.group(batch.title, plants);
+        const line = d.line(what, batch.zone);
+        return batch.day === DUE_NOW ? line : d.soon(shortDate(batch.day, locale), line);
       }
       covered += 1;
       const t = item.task;
-      const line = en.digest.line(t.title, t.plant?.tag ?? "");
-      return t.due_on > todayIso ? en.digest.soon(shortDate(t.due_on), line) : line;
+      const line = d.line(t.title, t.plant?.tag ?? "");
+      return t.due_on > todayIso ? d.soon(shortDate(t.due_on, locale), line) : line;
     });
-    if (mine.length > covered) lines.push(en.digest.more(mine.length - covered));
+    if (mine.length > covered) lines.push(d.more(mine.length - covered));
     messages.push({
       site,
-      title: en.digest.title(en.site[site], mine.length),
+      title: d.title(strings.site[site], mine.length),
       body: lines.join("\n"),
       tag: `digest-${site}`,
-      url: en.digest.openUrl,
+      url: d.openUrl,
       tasks: mine.length,
     });
   }

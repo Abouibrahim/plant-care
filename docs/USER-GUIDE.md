@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.13.0, as of 3 November 2026.
+For version 0.14.0, as of 8 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -74,7 +74,7 @@ Only Capture, a profile rewrite, Diagnose, Ask Claude and Check before planting 
 
 The app has one account, the owner's, created in Supabase (chapter 15). The Sign in screen has **Email**, **Password** and **Sign in**. There is no sign-up, no password reset and no language switch: the screen follows the language chosen earlier on the phone, or the phone's own. A wrong email or password reads "Sign-in failed: Invalid login credentials".
 
-The sign-in stays on the phone until you tap **Sign out** in Settings or the server stops accepting it. While the app is open with a connection, it renews itself about once an hour. Using the app does not restart that hour, so it can run out a few minutes after you last used the app online. Opened without a connection once it has run out, the app spins for about 25 seconds and then shows Sign in. The saved sign-in comes back by itself once the connection returns, or you can sign in again. If the screen says "Supabase keys are missing…", the app was built without its database settings and nothing can be done on the phone (chapter 15).
+The sign-in stays on the phone until you tap **Sign out** in Settings or the server stops accepting it. While the app is open with a connection, it renews itself about once an hour. Using the app does not restart that hour, so it can run out a few minutes after you last used the app online. Opened without a connection once it has run out, the app still opens, on what the phone kept (chapter 12), and the sign-in comes back by itself once the connection returns; only a sign-in the server refuses shows Sign in. If the screen says "Supabase keys are missing…", the app was built without its database settings and nothing can be done on the phone (chapter 15).
 
 The sign-in, the language choice and the photos kept on the phone live in Chrome's storage for the app. In an Incognito tab, or after the app's site data is cleared, none of them last.
 
@@ -88,7 +88,7 @@ Each phone turns on for itself, and **Turn off** stops that phone only. Signing 
 
 ### Choose the language
 
-Settings → Language → **English** or **Français**. The app reloads in that language, offline too. Until you choose, the phone decides: French for a phone set to French, English otherwise. The choice belongs to the phone. Some text keeps the language it was written in (chapter 10).
+Settings → Language → **English** or **Français**. The app reloads in that language, offline too. Until you choose, the phone decides: French for a phone set to French, English otherwise. The choice belongs to the phone; once made here, the morning notifications and the notes the server writes follow it as well (chapter 10). Some text keeps the language it was written in (chapter 10).
 
 ### New versions
 
@@ -97,7 +97,7 @@ After an update, the app finds the new version the next time it starts afresh; s
 ### Finding your way
 
 - The tab bar has **Today**, **Plants**, the round camera button in the middle (Capture), **Species** and **Settings**.
-- The badge on Today counts the tasks late or due today at both sites ("99+" above 99). An open window counts on its first day and again once it has ended, not in between. The number appears once the app has counted it, so an app opened without a connection shows none. Browsers that support icon badges also show it on the app's icon; Chrome on Android does not.
+- The badge on Today counts the tasks late or due today at both sites ("99+" above 99). An open window counts on its first day and again once it has ended, not in between. Without a connection it counts the list kept on the phone, less the actions waiting to be sent. Browsers that support icon badges also show it on the app's icon; Chrome on Android does not.
 - Full-screen sheets (Diagnose, Ask Claude, Log something done, Position) close with their **×** or with the phone's back gesture. While a sheet is working, with Claude answering or a save running, it stays open.
 - Light or dark follows the phone. With the phone's reduce-motion setting on, the animations, the falling leaves and the vibration are off.
 - Two notices can appear at the top of every screen: the update notice, and "This account is not listed as the owner…", which means the database does not accept the account you are signed in with (chapter 14).
@@ -243,11 +243,21 @@ Today also keeps itself current:
 
 - it runs the same task calendar once per app session, the first time it opens;
 - it follows the clock on the hour: the greeting, the scene and the spraying marks;
-- it reads everything again at midnight, and again after 06:05 if it was read before 06:05;
-- it reads its list, the weather and the badge again as soon as a notification arrives while the app is open or in the background. The morning run can come as late as 06:59, so a list read between 06:05 and the run is brought up to date by the run's own notification, without **Refresh**. An app that was closed reads everything when it opens;
+- it reads everything again at midnight; and from 06:05 it looks at the morning run's record (chapter 11) every five minutes while it is visible, and each time you come back to it, until it has seen the day's run or 07:15 has passed, and reads everything again when the run came after its list;
+- it reads its list, the weather and the badge again as soon as a notification arrives while the app is open or in the background. The morning run can come as late as 06:59, so a list read between 06:05 and the run is brought up to date by the run's own notification or by the next look at its record, without **Refresh**. An app that was closed reads everything when it opens;
 - the badge is counted again whenever you move between screens or come back to the app.
 
 When nothing is due this week at either site, Today shows "Nothing due this week." with **Photograph a plant**. When only the site you filtered, or the day you chose, has nothing, the list reads "Nothing due on this day."; tap **All** or **Whole week** to see the rest.
+
+### Today without a connection
+
+Today keeps the last list it read on the phone. Opened without signal, it shows that list at once under today's date, with the banner "Offline · Shown as of 19:12, not updated" (with the day when the list is from another day) and **Retry**; the round starts at 0 done unless the list was read today; the weather card shows its last rows; the Today badge counts the kept list. Tap **Retry**, or come back with signal, and the fresh list takes its place.
+
+**Done** and **Skip** work without a connection, on one card, on a batch and with Done-all. The card leaves as usual, the round counts the Done, and the toast reads "Done: Water OL-01 · saved on the phone" with **Undo**, which brings the card back as long as the action has not been sent. The banner then counts "2 actions waiting", with **Send now**. The actions go out when the connection returns, when the app comes back to the foreground, when Today opens or on Send now, one at a time, each written with the time of your tap, so the journal shows when the work was done. A write that hangs for more than 8 seconds on a weak signal is kept the same way, so nothing spins for minutes; a tap whose write landed but whose reply was lost is recognised by its time when it is sent, and counted as done rather than "closed meanwhile". **Snooze** needs a connection and says so, after the same 8 seconds when its writes hang.
+
+When a saved action reaches the server, a task the morning run had closed meanwhile (the rain skip, an ended window) is closed as you asked, since your tap came first; a task you had closed from another screen is left as it is, and the banner says "1 saved action was not applied: the task had been closed meanwhile." If the sending fails while the phone is online, the banner says why and keeps the actions for the next try. After a sent action, Undo on its toast reopens the task as the online Undo does.
+
+The saved actions belong to the phone: a Sign out keeps them, and they go out after the next sign-in. A Done made offline on a plant's Calendar tab is not kept; only Today's are.
 
 ## 5. Adding a plant with Capture
 
@@ -369,7 +379,7 @@ A reminder shows on the Calendar tab once it is among the plant's twelve earlies
 1. Tap **Diagnose**.
 2. Tap **Take a photo** or **Choose from gallery**: the affected leaf, shoot, fruit or trunk, close and in focus. **Another photo** opens the camera and replaces the photo; to choose another one from the gallery, close the sheet and tap **Diagnose** again. One photo is sent.
 3. Optionally fill **What you see**, up to 500 characters, such as "yellow edges on the lower leaves since last week".
-4. Tap **Send to Claude**. "Diagnosing…" shows, and the sheet stays open until the answer comes.
+4. Tap **Send to Claude**. "Diagnosing…" shows, and the sheet stays open until the answer comes. If the connection drops meanwhile, the sheet says "The connection dropped while Claude was diagnosing. Checking whether the diagnosis has arrived…" and looks for it for up to five minutes: the server saves the diagnosis as soon as Claude has answered, so it is found rather than paid for again. You can close the sheet while it looks; the looking goes on, and the diagnosis then shows on the Health tab with its reminder set.
 
 Claude reads the photo with this plant's context: the profile's needs and its pests, the plant's age, site and zone, the weather of the last week and the next three days, and its recent tasks. The answer is in English, whatever the app's language. The result shows:
 
@@ -379,7 +389,7 @@ Claude reads the photo with this plant's context: the profile's needs and its pe
 - the follow-up, such as "Re-photograph in 14 days (14 Nov)" and "Reminder set for 14 Nov", or "No follow-up photo needed.";
 - the usage line.
 
-The photo and the diagnosis are saved in the journal as a problem photo. A gallery photo keeps the day it was taken, and the diagnosis is dated and sorted by that day. The follow-up becomes a scout task, "Re-photograph OL-01: …", or "Scout OL-01 for …" when a pest leads at 50 % or more, counted from today. It shows on Today when due and in the morning notification, and the morning run never removes it. If the save fails, tap **Save again**: it writes nothing twice and does not call Claude again. When the treatment calls for a spray, the plant appears on Today's spraying line for up to 14 days from the photo's day, until a newer diagnosis says otherwise.
+The photo and the diagnosis are saved in the journal as a problem photo: the photo is uploaded while Claude works, the server writes the diagnosis as soon as Claude has answered, and the app then adds the follow-up. A gallery photo keeps the day it was taken, and the diagnosis is dated and sorted by that day. The follow-up becomes a scout task, "Re-photograph OL-01: …", or "Scout OL-01 for …" when a pest leads at 50 % or more, counted from today. It shows on Today when due and in the morning notification, and the morning run never removes it. If the save fails, tap **Save again**: it writes nothing twice and does not call Claude again. A declined or failed call leaves no photo behind. When the treatment calls for a spray, the plant appears on Today's spraying line for up to 14 days from the photo's day, until a newer diagnosis says otherwise.
 
 **Mark treated** opens a field: type what you applied ("savon noir 2%, evening spray") and tap **Log it**. It is logged as a protect task done today, shown in the journal as "Treated: …"; left empty, the field logs the leading cause. One treatment per diagnosis per day ("Already logged today.").
 
@@ -389,13 +399,13 @@ Reopen a diagnosis with **Open** on its journal entry, or from Past diagnoses on
 
 1. Tap **Ask Claude about this plant**.
 2. Tap a starter question to fill the box ("What should I do for it this month?", "How should I water it now?", "What would grow well beside it?"), or type your own, up to 1,000 characters. A chip replaces what is in the box, and nothing is sent until **Ask**.
-3. Tap **Ask**. "Claude is thinking…" shows.
+3. Tap **Ask**. "Claude is thinking…" shows. If the connection drops meanwhile, the panel says "The connection dropped while Claude was answering. Checking whether the answer has arrived…" and looks for it for up to five minutes: the server saves the answer as soon as Claude has answered, so it is found rather than paid for again. You can close the panel while it looks; the looking goes on, and the answer then shows in the journal. When nothing is found in time, "No answer was found. The call may have been declined or lost; asking again is a new call."
 4. Read the answer. When it departs from the profile, an amber "Check the profile" note names the field, with **Open the species profile**. Nothing changes the profile by itself.
 5. Tap a suggested next question to carry on, or type another.
 
 Claude reads the profile and its care calendar, whether you confirmed and edited it, the plant record, the other plants of its zone, the last time each kind of task was done, the tasks of the last 30 days and the next 30, the last three diagnoses with their treatments, and the weather. It answers in the language of the question. It says "the app has no record of…" rather than assume care was not given, since you may do things the app never records. Each question carries the last six exchanges of the conversation.
 
-Each answer is saved in the journal as a "Question", and **Open the conversation** reopens the thread to carry on. A declined question is shown but not kept. For something you can see, Diagnose with a photo gives a better answer.
+Each answer is saved in the journal as a "Question", by the server as soon as Claude has answered and then by the app, which finds it already there; **Open the conversation** reopens the thread to carry on. A declined question is shown but not kept. For something you can see, Diagnose with a photo gives a better answer.
 
 ### Delete this plant
 
@@ -561,7 +571,7 @@ Then "Where to plant it" (a zone from your inventory or the kind of spot, and th
 
 ### Saved checks
 
-Every check is saved with its species. The newest shows on the species page's "Before planting" card, where **Open** reads it back at no cost, and as the verdict on the species' library card. **Check again** makes a new check. The older ones stay saved, but the app cannot open them again, so read what you need before you check again. From the species page Check again starts with an empty form; on a check's own screen it keeps that check's site, zone and note. If "The check is not saved yet." shows, tap **Save again**. A check is written in the app's language at the time.
+Every check is saved with its species. The newest shows on the species page's "Before planting" card, where **Open** reads it back at no cost, and as the verdict on the species' library card. **Check again** makes a new check. The older ones stay saved, but the app cannot open them again, so read what you need before you check again. From the species page Check again starts with an empty form; on a check's own screen it keeps that check's site, zone and note. The server saves a check as soon as Claude has answered; if the connection drops while Claude checks, the screen says "The connection dropped while Claude was checking. Looking for the saved check…" and finds it within a few minutes rather than paying again. If "The check is not saved yet." shows, tap **Save again**. A check is written in the app's language at the time.
 
 ## 10. Settings
 
@@ -588,12 +598,14 @@ Each phone or browser is turned on separately and gets every notification, for b
 
 Each tap saves at once, and the next morning run uses it; chapter 11 gives the rule. There is one setting for both sites and every phone. Below, a line names the point the forecast is read for, with "Last update: …", the time of the latest fetch, whether by the morning run, a dry run (chapter 15) or Today.
 
+The next line is the morning run's record: "Last morning run: Tue 4 Nov, 06:41 · 3 tasks added, 2 waterings skipped after rain, 6 tasks tidied, 3 notifications to 1 phone" ("no phone has reminders on" when no phone is turned on; "the weather could not be fetched" when that step failed), or "Last morning run failed on …: …" with the error. Before 07:15 a day with no run yet reads "No run yet today." with the last run; after 07:15 it warns "No morning run recorded today (expected by 07:00)."; a run under way reads "started at 06:41, still running", and one that began and never ended says so. The line reads the record a real run writes; a dry run (chapter 15) leaves none.
+
 ### Language
 
 **English** or **Français**, for this phone; the app reloads. Some text keeps its language:
 
 - what Claude writes in Capture (evidence, advice), every profile and every diagnosis are in English, whatever the app's language, and so are the task titles and instructions copied from a profile's calendar;
-- the morning notifications, the notes the morning run writes on tasks and the server's error messages are always in English;
+- the morning notifications, the notes the morning run writes on tasks ("Window ended", the rain note) and their dates follow the language chosen here, once chosen; the card reads "Notifications: Français" when the choice has reached the server, or says it has not yet, in which case it is sent again when the app opens with a connection. Until a language is chosen here, they are in English, as the server's error messages always are; on a phone with no choice of its own the card still reads the language another phone chose;
 - a check before planting keeps the language it was written in, and Ask Claude answers in the language of the question;
 - dates follow the phone's own regional format.
 
@@ -610,6 +622,10 @@ A list of zones for each site, offered first on the plant record form and in the
 
 The exports cover the plants and the tasks only: not the profiles, diagnoses, questions, checks or photos.
 
+### Claude usage
+
+This month's Claude calls and last month's, added up by the functions as the calls are made: "November 2026: 23 calls, about $2.10", with the calls by kind beneath (identifications, profiles, diagnoses, questions, checks), the tokens in and out (thinking included), the calls that failed after Claude had spent tokens, and those a fallback model answered, counted at Fable prices. The last line gives the list prices the estimate uses: $10 per million tokens in, $50 out, $0.25 for a cache read, $12.50 for a cache write. The estimate is for Claude alone; Vercel and Supabase stay on their free tiers. A call that Vercel stops before it ends is the one thing the ledger misses; the Claude Console has the bill itself.
+
 ### Account, install, phase and version
 
 "Signed in as" shows the account. **Sign out** forgets the sign-in on this phone only and does not stop the notifications, so turn Reminders off first if they should stop. Sign out needs a connection to stick: offline, an expired sign-in is kept and renewed later. The last cards say how to install the app, what this version does, and its number.
@@ -623,9 +639,10 @@ Every morning the server:
 1. fetches the forecast from Open-Meteo and stores it;
 2. writes each plant's tasks for the next 90 days and tidies the stale ones;
 3. skips the waterings due when the last two days' rain, or today's likely rain, reaches the setting (the rain skip, below);
-4. sends each phone that turned reminders on a weather notification when there is something to say, then one notification for each site with something due.
+4. writes its record: when it ran and what it did, which Settings → Weather shows (chapter 10) and Today watches from 06:05 (chapter 4);
+5. sends each phone that turned reminders on a weather notification when there is something to say, then one notification for each site with something due, and adds their count to the record.
 
-It is scheduled for 06:00 Tunis time (05:00 UTC; Tunisia has no daylight saving). On the Vercel plan the app runs on, it can start at any minute of that hour, so the notifications can come up to an hour late. Nothing needs to be open on the phone. If the weather step fails, that morning has no rain skip and no weather notification, while the tasks and the site notifications go ahead. If the task step fails, the run stops and no notification comes that morning.
+It is scheduled for 06:00 Tunis time (05:00 UTC; Tunisia has no daylight saving). On the Vercel plan the app runs on, it can start at any minute of that hour, so the notifications can come up to an hour late. Nothing needs to be open on the phone. If the weather step fails, that morning has no rain skip and no weather notification, while the tasks and the site notifications go ahead, and the record says the weather could not be fetched. If the task step fails, the run stops, no notification comes that morning, and the record carries the error. The notifications and the notes are written in the language chosen in Settings → Language, English until one is chosen.
 
 ### From a care rule to tasks
 
@@ -643,7 +660,7 @@ It is scheduled for 06:00 Tunis time (05:00 UTC; Tunisia has no daylight saving)
 Each task refresh, at the morning run and at each of the app's own runs listed below:
 
 - deletes the pending tasks whose rule no longer applies, because the rule was deleted, its type, months, age or days between waterings changed, a rewrite dropped it, or the plant changed stage. A new title, litres, warning or instruction deletes nothing. Deleted tasks leave no line in the journal;
-- closes a window past its last day as skipped, with "Window ended";
+- closes a window past its last day as skipped, with "Window ended" ("Fenêtre terminée" when the chosen language is French);
 - closes the older waterings of a rule when a newer one is due, with "Superseded by the next watering", so a week away leaves one late watering per rule rather than one per interval;
 - closes a rule's newest pending watering once a whole interval has passed with none newer, with "Missed watering". This is usually the season's last watering, but it can happen mid-season when the next one was done early or snoozed.
 
@@ -659,7 +676,7 @@ Besides the morning run, tasks are written the first time Today opens in an app 
 - **Order.** Early notices first, then late tasks, then today's, then the open windows. Unlike Today, the notification orders its lines by urgency, not by kind of task: three lines grouped by kind would often all be waterings.
 - **Lines.** The title counts the tasks ("Farm: 6 tasks"). The body shows up to three lines, each "title · tag", then "+N more". A zone's batch (chapter 4), for two plant records or more, shares one line: a round of waterings due now reads "Water 9 plants (20 L each) · row 2", and a window job "Scout for olive fly · 10 plants · row 2", or "From 1 Oct: Harvest olives · 10 plants · row 2" for its early notice. Its "9 plants" counts plants, a group by its size; the title and "+N more" count tasks. The litres show as a range when the amounts differ, and are left out when one is missing.
 - **Weather.** A separate "Weather: …" notification comes first when there is an alert for today or tomorrow, or when the rain skip closed waterings. Its title names the first alert, and each alert has its own line.
-- **The rest.** A site with nothing due sends nothing. Each morning's notification replaces the day before's of the same kind; a morning that sends none of a kind leaves the day before's in place until you clear it. The text is always in English. A phone that is off gets them when it comes back on, if that is within 12 hours; after that, that morning's notifications are lost.
+- **The rest.** A site with nothing due sends nothing. Each morning's notification replaces the day before's of the same kind; a morning that sends none of a kind leaves the day before's in place until you clear it. The text follows the language chosen in Settings → Language, its dates too ("À partir du 1 nov."), and is English until a language is chosen there. A phone that is off gets them when it comes back on, if that is within 12 hours; after that, that morning's notifications are lost.
 
 A tap on a notification opens Today. If the app is open on another screen, it reloads on Today and what was on that screen is lost, so finish a capture first. If Today is already open, it has read the run's result when the notification came.
 
@@ -700,18 +717,20 @@ The model's rain is an estimate. After a skip, check that the soil really got we
 
 ## 12. Without a connection
 
-The app itself is stored on the phone, so it opens and moves between screens without a signal, as long as the sign-in has not run out (chapter 3). Your data is not:
+The app itself is stored on the phone, so it opens and moves between screens without a signal, even when the sign-in has run out (chapter 3): it then opens on what the phone kept, and the sign-in comes back with the signal. What the phone keeps, and what it does not:
 
-- every list (Today, Plants, Species, a plant's page) is read from the online database each time; without a connection it shows "Loading…" for a few seconds, then its error with **Retry**;
-- saves and Claude calls fail, and nothing waits to be sent later; only a species profile is slow to fail, since the app keeps looking for it for up to 5 minutes, so a check of a typed name stays that long on "Finding the species (a new one is profiled first)…" (leave the screen to stop it);
+- Today keeps the last list it read, and shows it under today's date with "Shown as of …" (chapter 4); the weather card keeps its last rows; the Today badge counts the kept list;
+- Done and Skip on Today are kept on the phone and sent when the connection returns, with the time of the tap (chapter 4); Snooze is not;
+- every other list (Plants, Species, a plant's page) is read from the online database each time; without a connection it shows "Loading…" for a few seconds, then its error with **Retry**;
+- the other saves and the Claude calls fail, and nothing else waits to be sent later; only a species profile is slow to fail, since the app keeps looking for it for up to 5 minutes, so a check of a typed name stays that long on "Finding the species (a new one is profiled first)…" (leave the screen to stop it);
 - the photos the phone has already shown or taken, about 500, stay on it, so on a weak signal they show at once; without one they show only on a page already open when the signal went, and the others show a sprout;
 - the app keeps no map tiles, so a map opened offline is blank;
-- the language switch works offline;
+- the language switch works offline; the server learns of it at the next open with a connection;
 - a kind's list on a Today already shown can still be shared: WhatsApp or SMS sends it when the signal returns.
 
-When the signal is back, tap **Retry** or move to another screen.
+When the signal is back, tap **Retry** or move to another screen; Today's saved actions go out by themselves.
 
-On a weak mobile signal, long Claude calls keep their connection alive so that the reply is not dropped. If it is lost anyway, a new species profile is found again without paying twice when it was asked for by its scientific name (a confirmed candidate, or **Check this one**) or by a typed name that is exactly one of its names (chapter 5). An identification, a diagnosis, a question or a check has to be sent again, and that is a new call. A rewrite from **Regenerate from Claude** is not looked for, but the server may still finish it: reopen the profile after a few minutes before regenerating again, since a second rewrite is paid again (chapter 8).
+On a weak mobile signal, long Claude calls keep their connection alive so that the reply is not dropped, and every Today write gives up after 8 seconds rather than hang. If a reply is lost anyway, it is looked for rather than paid twice: a new species profile when it was asked for by its scientific name (a confirmed candidate, or **Check this one**) or by a typed name that is exactly one of its names (chapter 5); a question, a check or a diagnosis by the row the server writes as soon as Claude has answered (chapters 6 and 9), for up to five minutes, with the panel saying so and Close available. An identification has to be sent again, and that is a new call. A rewrite from **Regenerate from Claude** is not looked for, but the server may still finish it: reopen the profile after a few minutes before regenerating again, since a second rewrite is paid again (chapter 8).
 
 ## 13. What the Claude calls cost
 
@@ -727,7 +746,7 @@ Every call runs on Claude Fable 5.1. When Fable declines, Anthropic's fallback m
 
 The weather adds a fraction of a cent to a diagnosis, a question or a check. Everything else is free: the daily round, the morning run, the notifications, the weather, the map, the tags, the exports, and a second plant of a species already profiled, which pays only for its identification. A plant is only ever added through Capture, after a photo and its identification.
 
-Each answer shows "Usage: N in / M out tokens". "In" leaves out the cached part of the input, "out" includes the thinking, and a call retried after being cut short shows both attempts together. A call that fails after Claude has worked on it, such as "Claude output was cut at …", or whose reply was lost, shows no usage line, although it was paid. A new profile that Capture finds again after a lost reply shows "Usage: 0 in / 0 out tokens", although it was paid too. A profile refused in Capture, and a refused rewrite, show no usage line, although they were paid. An error before Claude is reached, such as "Signed out. Sign in again." or "Server is not configured: …", costs nothing. The Claude Console's usage page adds up the spending; the app keeps no total.
+Each answer shows "Usage: N in / M out tokens". "In" leaves out the cached part of the input, "out" includes the thinking, and a call retried after being cut short shows both attempts together. A call that fails after Claude has worked on it, such as "Claude output was cut at …", shows no usage line, although it was paid; a reply lost on the way is looked for and, when found, shows its usage (chapter 12). A new profile that Capture finds again after a lost reply shows "Usage: 0 in / 0 out tokens", although it was paid too. A profile refused in Capture, and a refused rewrite, show no usage line, although they were paid. An error before Claude is reached, such as "Signed out. Sign in again." or "Server is not configured: …", costs nothing. Settings → Claude usage (chapter 10) adds up the month's calls and their estimated cost from the tokens the functions record, the failed and refused calls included; the Claude Console's usage page has the bill itself.
 
 ## 14. Messages and what to do
 
@@ -738,8 +757,15 @@ Each answer shows "Usage: N in / M out tokens". "In" leaves out the cached part 
 | "This account is not the owner of this app" | The server accepts only the account named as the owner. | Sign in with the owner's account. If it already is, the owner id in Vercel is wrong (chapter 15). |
 | "Sign-in failed: Invalid login credentials" | The email or the password is wrong. | Type them again. |
 | "Signed out. Sign in again." | The server no longer accepts the sign-in, or, offline, the phone could not renew it. | Sign in again, or retry once there is signal. |
-| "Network error. Check the connection and try again." | A Claude call got no complete answer, or Save plant or the diagnosis photo could not reach the database. | Find signal and try again; **Save plant** and **Save again** write into the same plant and photo. A new profile is looked for by itself. |
+| "Network error. Check the connection and try again." | A Claude call got no complete answer, or Save plant or the diagnosis photo could not reach the database; on Today, its list could not be read. | Find signal and try again; **Save plant** and **Save again** write into the same plant and photo. A new profile, a question, a check and a diagnosis are looked for by themselves. |
 | "TypeError: Failed to fetch" | A list could not be read, or a change could not be sent, usually for lack of a connection. | Tap **Retry** once there is signal. Where there is no **Retry**, as in Settings or on a species page, leave the screen and open it again. |
+| "Offline · Shown as of 19:12, not updated · 2 actions waiting" | Today shows the list kept on the phone, and holds actions made without a connection (chapter 4). | Nothing: the list is read and the actions sent when the signal returns, or tap **Retry** and **Send now**. |
+| "Done: … · saved on the phone" | The Done or Skip is kept on the phone until the connection returns. | Nothing; **Undo** takes it back while it waits. |
+| "1 saved action was not applied: the task had been closed meanwhile." | A task done offline had been closed from another screen before the action was sent. | Check the plant's journal; log the care with **Log something done** if it is missing. |
+| "The saved actions could not be sent: …" | The phone is online but the actions failed to reach the server. | Tap **Send now** again later; the actions are kept. |
+| "Snooze needs a connection." | A snooze was tapped without a connection, or its writes hung. | Snooze once there is signal. |
+| "The connection dropped while Claude was answering. Checking whether the answer has arrived…" (and the same for a check or a diagnosis) | The reply was lost on the way; the server saves the answer when Claude is done, and the app looks for it for up to five minutes. | Wait, or close: the answer reaches the journal by itself. |
+| "No answer was found. The call may have been declined or lost; asking again is a new call." | Nothing arrived within five minutes: Claude may have declined (a refusal is not saved) or the call was lost. | Ask again if you still want the answer; it is a new paid call. |
 | "signal is aborted without reason" | Refresh, or Turn on or off, waited 30 seconds without an answer. | Try again with a better signal; a Refresh may have finished on the server anyway. |
 | "Error: 400 {"type":"error",…}", or "Error:" with another number and the same kind of text | Claude's service refused the call. "credit balance is too low" means the Claude account has run out of credit; "authentication_error", that the Claude key in Vercel is wrong; "overloaded_error" or "rate_limit_error", that Claude is busy. Nothing is saved. | Add credit in the Claude Console, or fix the key (chapter 15). When Claude is busy, try again in a few minutes. |
 | "Server is not configured: … is missing" | A server setting is missing in Vercel. | Add it in Vercel and redeploy (chapter 15). |
@@ -830,7 +856,7 @@ curl -H "Authorization: Bearer <CRON_SECRET>" "https://plant-care-phi-fawn.verce
 
 The answer gives the Tunis date, the number of plants, the tasks added and removed, the windows and waterings closed, each site's notification, and the weather part: whether the forecast came in, what the rain would skip, and the weather notification. In a dry run the counts of notifications and subscriptions always read 0. The weather notification reads as if the waterings had been skipped, but each site's notification still lists them, while a real run closes them first and leaves them out.
 
-A dry run is not read-only: it stores the forecast and writes and closes tasks as a real run does, holding back only the rain skip and the sending. It shows what a run would do at that moment, not what the morning run did. That is read from the rain notes on the waterings it skipped and from today's weather card; the other closing notes can also come from Today's own refresh, and nothing records the notifications it sent. A call without `?dry=1` is a full second run, and the notifications go out again.
+A dry run is not read-only: it stores the forecast and writes and closes tasks as a real run does, holding back only the rain skip, the sending and the record. It shows what a run would do at that moment, not what the morning run did. That is read from the run's record: Settings → Weather shows it (chapter 10), and the settings table holds it as `daily:last` (`at`, the date, the counts, the pushes sent and failed, the phones they went to, a weather or digest error, or the error that stopped the run), with `daily:started` marking the start of the last run. A call without `?dry=1` is a full second run: the notifications go out again, and the record is that second run's.
 
 ### What the Vercel logs show
 
@@ -839,7 +865,7 @@ On the Hobby plan the runtime logs reach back about an hour. The app logs a noti
 ### Rotate a key or change the owner
 
 - **Web Push keys.** Generate a new pair, and replace `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VITE_VAPID_PUBLIC_KEY` (the same new public key). Redeploy, tap **Reload** on each phone, then **Turn on** again, since Settings reads Off under the new key. A phone that has not done this gets nothing. If the two public keys differ, the card still reads On but every notification is refused.
-- **Missing push keys.** If the server's keys are missing, Turn on still works and nothing is sent. Only a real run's answer says so, as `digest_error`, and only on a morning with something to send to a phone that is turned on. To see it, call the run by hand without `?dry=1`; the logs show nothing.
+- **Missing push keys.** If the server's keys are missing, Turn on still works and nothing is sent. A real run's answer says so, as `digest_error`, and so does its record on the Settings → Weather line, on a morning with something to send to a phone that is turned on. The logs show nothing.
 - **Any other key.** Replace it in Vercel and in `.env.local`, then redeploy. A new `CRON_SECRET` is the one Vercel sends from then on.
 - **The owner.** Create the new user and add its row to `owners`, then remove the old row (or the old user). Set `OWNER_USER_ID` to the new UUID and redeploy. Sign out and sign in with the new account; the reminders belong to the phone and keep working.
 
@@ -870,9 +896,9 @@ npm run dev
 
 - One account and two fixed sites. A helper or a third site would be a change to the app.
 - Work is not assigned to a person in the app, and helpers have no account. A kind's list goes out as a one-way copy (chapter 4), framed in the app's language with titles and instructions as the profile wrote them. Nothing done from it comes back on its own.
-- Identification, profiles, diagnoses, questions and checks need a connection, and the lists are not kept on the phone.
+- Identification, profiles, diagnoses, questions and checks need a connection. Today keeps its last list and takes Done and Skip without one; the other lists are not kept on the phone, and nothing else waits to be sent.
 - The morning notifications come once a day, at 06:00 Tunis time or up to an hour later, and the hour cannot be changed in the app. Web Push is the only channel; there is no email.
-- The notifications, the morning run's notes, the identifications, the profiles and the diagnoses are in English whatever the app's language, and so are the task titles copied from a profile. A check before planting is written in the app's language, and Ask Claude answers in the language of the question.
+- The identifications, the profiles and the diagnoses are in English whatever the app's language, and so are the task titles copied from a profile. The notifications and the morning run's notes follow the language chosen in Settings, English until one is chosen. A check before planting is written in the app's language, and Ask Claude answers in the language of the question.
 - A diagnosis sends one photo, and Ask Claude takes none.
 - A plant is added only through Capture, after a photo and its identification: there is no form to add one by name alone.
 - There is no bulk move of plants to a zone, and no filter by zone or species beyond the search.

@@ -2,7 +2,8 @@
 import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, imagesThenText, readPrompt, readSchema } from "./_claude.js";
 import { parseImages } from "./_images.js";
-import { handleError, sendError, verifyUser } from "./_supabase.js";
+import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { recordUsage } from "./_usage.js";
 import type { IdentifyRequest, IdentifyResult } from "../src/types.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -38,12 +39,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       // Identification is perception, not planning: low effort keeps thinking short so the
       // 2,048-token budget is for the JSON (see docs/DECISIONS.md).
       effort: "low",
+      onUsage: (usage, outcome) => recordUsage(serviceClient(), "identify", usage, outcome),
     });
 
     if (!result.ok) {
       reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
+    await result.recorded;
     reply(res, 200, { ...result.data, ...result.usage });
   } catch (err) {
     handleError(res, err);

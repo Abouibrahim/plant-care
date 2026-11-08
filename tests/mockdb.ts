@@ -51,6 +51,7 @@ const UNIQUE: Record<string, string[][]> = {
   push_subscriptions: [["endpoint"]],
   weather_days: [["day"]],
   species: [["scientific_name", "cultivar"]],
+  settings: [["key"]],
 };
 
 let counter = 0;
@@ -77,6 +78,8 @@ function defaults(table: string): Row {
   if (table === "weather_days") return { spray: [], forecast: true, skipped: 0, fetched_at: nextTime() };
   if (table === "species") return { ...base, cultivar: "", user_edits: {}, confirmed: false, created_at: nextTime(), updated_at: nextTime() };
   if (table === "push_subscriptions") return { ...base, created_at: nextTime() };
+  // settings is keyed on `key`, not an id; its updated_at is kept by a trigger in the schema.
+  if (table === "settings") return { updated_at: nextTime() };
   return base;
 }
 
@@ -273,10 +276,17 @@ class Builder implements PromiseLike<Result> {
     this.op = "delete";
     return this;
   }
+  private signal: AbortSignal | null = null;
+
+  /** The app bounds its writes with AbortSignal.timeout (Phase 14); the mock answers at once, so only a signal already aborted is seen, answered as postgrest-js answers an abort. */
+  abortSignal(signal: AbortSignal) {
+    this.signal = signal;
+    return this;
+  }
 
   then<R1 = Result, R2 = never>(onfulfilled?: ((value: Result) => R1 | PromiseLike<R1>) | null, onrejected?: ((reason: unknown) => R2 | PromiseLike<R2>) | null): PromiseLike<R1 | R2> {
     return Promise.resolve()
-      .then(() => this.run())
+      .then(() => (this.signal?.aborted ? ({ data: null, error: { message: "AbortError: This operation was aborted", details: "", hint: "", code: "" } } as Result) : this.run()))
       .then(onfulfilled, onrejected);
   }
 
@@ -369,7 +379,10 @@ class Builder implements PromiseLike<Result> {
 
     if (this.op === "update") {
       const changed = this.matching();
-      for (const row of changed) Object.assign(row, this.patch);
+      for (const row of changed) {
+        Object.assign(row, this.patch);
+        if (this.table === "settings") row.updated_at = nextTime(); // the settings_updated trigger
+      }
       return this.finish(this.returning ? changed.map((r) => this.project(r, this.columns, this.table)) : null);
     }
 
@@ -390,6 +403,7 @@ class Builder implements PromiseLike<Result> {
         if (this.ignoreDuplicates) continue;
         const existing = this.rows().find((r) => clashKey.every((k) => String(r[k]).toLowerCase() === String(row[k]).toLowerCase()))!;
         Object.assign(existing, incoming);
+        if (this.table === "settings") existing.updated_at = nextTime(); // the settings_updated trigger
         written.push(existing);
         continue;
       }

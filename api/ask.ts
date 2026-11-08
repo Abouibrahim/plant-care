@@ -2,11 +2,15 @@
 // A free question about one plant, answered against its own context: the species profile with its
 // care calendar, the plant record, the plants in the same zone, the last time each kind of task was
 // done, what was done in the last 30 days, what is due in the next 30, and its last diagnoses with
-// the treatments logged for them. The app keeps the conversation, sends the earlier exchanges back
-// with each question and saves the answers; this route only reads.
+// the treatments logged for them. The app keeps the conversation and sends the earlier exchanges back
+// with each question. Since Phase 14 the app also sends the row it made for the exchange (id,
+// thread_id, asked_at), and the route writes the questions row itself once Claude has answered, so a
+// reply lost on the way is found again by its id instead of paid for twice; the app's own save then
+// meets the row. Without those fields (an older build) the route only reads, as before.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema } from "./_claude.js";
+import { isInstant, storeRow, UUID } from "./_rows.js";
 import {
   calendarBlock,
   guildUsesBlock,
@@ -25,6 +29,7 @@ import {
   type RecentTask,
 } from "./_context.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { recordUsage } from "./_usage.js";
 import { loadWeather } from "./_weather.js";
 import { addDays, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import {
@@ -36,10 +41,10 @@ import {
   type AskTurn,
   type CommonNames,
   type PlantWithSpecies,
+  type Usage,
   type WeatherDay,
 } from "../src/types.js";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** An earlier answer is cut to this length in the context. */
 const MAX_HISTORY_ANSWER_CHARS = 2000;
 /** Pending tasks due up to this many days ahead go into the context. */
@@ -58,6 +63,14 @@ export interface AskInput {
   question: string;
   /** Oldest first, at most ASK_MAX_HISTORY. */
   history: AskTurn[];
+  /** The questions row the app made before the call; null from an older build, which saves the row itself. */
+  row: { id: string; thread_id: string; asked_at: string } | null;
+}
+
+/** The questions row as the route writes it: what the app would write, with Claude's answer as it came plus the usage. */
+export function questionRow(input: AskInput, answer: Answer & Usage): Record<string, unknown> | null {
+  if (!input.row) return null;
+  return { id: input.row.id, plant_id: input.plant_id, thread_id: input.row.thread_id, asked_at: input.row.asked_at, question: input.question, answer };
 }
 
 /** Another plant in the same zone, with the names of its species. */
@@ -137,7 +150,18 @@ export function parseAskRequest(body: unknown): AskInput | string {
       answer: cut(turn.answer.trim(), MAX_HISTORY_ANSWER_CHARS),
     });
   }
-  return { plant_id: b.plant_id, question, history };
+
+  // The row's fields: all three, or none at all (an older build).
+  const named = [b.id, b.thread_id, b.asked_at].filter((v) => v !== undefined).length;
+  let row: AskInput["row"] = null;
+  if (named > 0) {
+    if (named < 3) return "id, thread_id and asked_at go together";
+    if (typeof b.id !== "string" || !UUID.test(b.id)) return "id must be a UUID";
+    if (typeof b.thread_id !== "string" || !UUID.test(b.thread_id)) return "thread_id must be a UUID";
+    if (!isInstant(b.asked_at)) return "asked_at must be an ISO time";
+    row = { id: b.id, thread_id: b.thread_id, asked_at: b.asked_at };
+  }
+  return { plant_id: b.plant_id, question, history, row };
 }
 
 function neighbourLine(n: Neighbour): string {
@@ -377,13 +401,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       maxTokens: 3072,
       // Weighing the plant's records against the question, like a diagnosis: medium effort.
       effort: "medium",
+      onUsage: (usage, outcome) => recordUsage(db, "ask", usage, outcome),
     });
 
     if (!result.ok) {
       reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    reply(res, 200, { ...result.data, ...result.usage });
+    const answer: Answer & Usage = { ...result.data, ...result.usage };
+    // The paid answer goes to the table before the reply, so a reply lost on the way is not lost at all.
+    const row = questionRow(input, answer);
+    if (row) await storeRow(db, "questions", row);
+    await result.recorded;
+    reply(res, 200, answer);
   } catch (err) {
     handleError(res, err);
   }

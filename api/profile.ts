@@ -4,10 +4,12 @@
 //   { regenerate_species_id }                              rewrite, keeping user_edits
 //   either of the first two with lookup_only: true         the stored row or 404, never Claude
 // Returns { species, created, ...usage }. Claude is called only when no species row matches.
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema, ZERO_USAGE } from "./_claude.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import { mergeDuplicateRules } from "./_tasks.js";
+import { recordUsage } from "./_usage.js";
 import type { ProfileRequest, Species, SpeciesProfile } from "../src/types.js";
 
 /** ilike without wildcards is a case-insensitive equality once the LIKE metacharacters are escaped. */
@@ -99,13 +101,15 @@ async function findByAnyName(name: string): Promise<Species | null> {
   return (data as Species | null) ?? null;
 }
 
-async function writeProfile(text: string) {
+async function writeProfile(db: SupabaseClient, text: string) {
   const result = await callJson<SpeciesProfile>({
     rules: readPrompt("profile.md"),
     schema: readSchema("profile.schema.json"),
     content: [{ type: "text", text }],
     maxTokens: 6000,
     effort: "medium",
+    // The lookups before this are free; only a call to Claude lands in the month's ledger.
+    onUsage: (usage, outcome) => recordUsage(db, "profile", usage, outcome),
   });
   // Two items with one rule key would share their tasks; the prompt asks Claude not to, this makes sure.
   if (result.ok && Array.isArray(result.data.care_calendar)) result.data.care_calendar = mergeDuplicateRules(result.data.care_calendar);
@@ -156,9 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       }
       const row = existing as Species;
       keepAlive(res);
-      const result = await writeProfile(
-        describe({ scientific_name: row.scientific_name, cultivar: row.cultivar, common_names: row.common_names }),
-      );
+      const result = await writeProfile(db, describe({ scientific_name: row.scientific_name, cultivar: row.cultivar, common_names: row.common_names }));
       if (!result.ok) {
         reply(res, 200, { refusal: result.refusal, ...result.usage });
         return;
@@ -186,6 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         .select("*")
         .single();
       if (updErr) throw updErr;
+      await result.recorded;
       reply(res, 200, { species: updated, created: true, ...result.usage });
       return;
     }
@@ -216,7 +219,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
     // --- write it ---------------------------------------------------------------
     keepAlive(res);
-    const result = await writeProfile(describe({ ...body, scientific_name: scientific || undefined, cultivar }));
+    const result = await writeProfile(db, describe({ ...body, scientific_name: scientific || undefined, cultivar }));
     if (!result.ok) {
       reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
@@ -234,6 +237,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     // A parallel request may have inserted the same species meanwhile.
     const race = await findSpecies(profile.scientific_name, profile.cultivar);
     if (race) {
+      await result.recorded;
       reply(res, 200, { species: race, created: false, ...result.usage });
       return;
     }
@@ -253,12 +257,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       if (insErr.code === "23505") {
         const again = await findByScientificName(profile.scientific_name, profile.cultivar);
         if (again) {
+          await result.recorded;
           reply(res, 200, { species: again, created: false, ...result.usage });
           return;
         }
       }
       throw insErr;
     }
+    await result.recorded;
     reply(res, 200, { species: inserted, created: true, ...result.usage });
   } catch (err) {
     handleError(res, err);

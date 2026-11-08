@@ -4,14 +4,22 @@ import { addDays, toLocalDate } from "./dates";
 import { forgetCachedPhotos, readCachedPhoto, storeCachedPhoto, thumbPath } from "./photoCache";
 import { problemResult, topCause } from "./diagnosis";
 import { tagIdRange } from "./map";
+import { parseDailyRecord, parseDailyStart } from "./record";
+import { parseLedger } from "./usage";
 import { weatherSettings, type SprayTreatment } from "./weather";
-import { t } from "../i18n";
+import { t, type Lang } from "../i18n";
 import {
+  DAILY_RECORD_KEY,
+  DAILY_STARTED_KEY,
   DIAGNOSIS_RULE_PREFIX,
+  LANG_SETTING_KEY,
   MANUAL_RULE_PREFIX,
   SITES,
+  usageKey,
   VERDICTS,
   type CheckSummary,
+  type DailyRecord,
+  type DailyStart,
   type JournalEntry,
   type LatestPhoto,
   type Photo,
@@ -28,6 +36,7 @@ import {
   type TaskStatus,
   type TaskType,
   type TaskWithPlant,
+  type UsageLedger,
   type Verdict,
   type WeatherDay,
   type WeatherSettings,
@@ -182,6 +191,26 @@ export async function insertPhoto(input: PhotoInsert, id?: string): Promise<Phot
 export async function listPhotos(plantId: string): Promise<Photo[]> {
   const r = await supabase.from("photos").select("*").eq("plant_id", plantId).order("taken_at", { ascending: false });
   return must(r) as Photo[];
+}
+
+/** One photo row by its id: the row /api/diagnose wrote once Claude answered (Phase 14), or null when there is none yet. */
+export async function getPhoto(id: string, signal?: AbortSignal): Promise<Photo | null> {
+  let q = supabase.from("photos").select("*").eq("id", id);
+  if (signal) q = q.abortSignal(signal);
+  const r = await q.maybeSingle();
+  return optional(r) as Photo | null;
+}
+
+/**
+ * Removes an object the app uploaded ahead of a Claude call that then declined or failed (Phase
+ * 14), with its thumbnail. Best effort: a failure leaves an orphaned file and nothing else.
+ */
+export async function removePhotoObject(storagePath: string): Promise<void> {
+  try {
+    await supabase.storage.from(PHOTOS_BUCKET).remove([storagePath, thumbPath(storagePath)]);
+  } catch {
+    // Orphaned files only; no row points at them.
+  }
 }
 
 /**
@@ -470,16 +499,28 @@ export async function listJournal(plantId: string): Promise<JournalEntry[]> {
 }
 
 /**
+ * How a task write is made (Phase 14): `actedAt` is the moment of the tap when an action kept on the
+ * phone is sent later (now otherwise), and `signal` bounds the request, so a write that hangs on a
+ * weak signal fails in time for Today to keep the action on the phone instead.
+ */
+export interface WriteOptions {
+  actedAt?: string;
+  signal?: AbortSignal;
+}
+
+/**
  * Closes a pending task. Only a pending row changes, so a second tap or a task already acted on
  * from another screen is a no-op; returns false in that case.
  */
-async function closeTask(id: string, status: "done" | "skipped" | "snoozed", note: string): Promise<boolean> {
-  const r = await supabase
+async function closeTask(id: string, status: "done" | "skipped" | "snoozed", note: string, opts: WriteOptions = {}): Promise<boolean> {
+  let q = supabase
     .from("tasks")
-    .update({ status, acted_at: new Date().toISOString(), note })
+    .update({ status, acted_at: opts.actedAt ?? new Date().toISOString(), note })
     .eq("id", id)
     .eq("status", "pending")
     .select("id");
+  if (opts.signal) q = q.abortSignal(opts.signal);
+  const r = await q;
   const changed = (must(r) as Array<{ id: string }>).length > 0;
   if (changed) notifyTasksChanged();
   return changed;
@@ -514,8 +555,8 @@ export async function reopenTask(id: string): Promise<boolean> {
 }
 
 /** An optional note ("12 kg", "cut back to three leaders") goes to `note`, which the journal shows in place of the title. */
-export function completeTask(id: string, note = ""): Promise<boolean> {
-  return closeTask(id, "done", note.trim());
+export function completeTask(id: string, note = "", opts: WriteOptions = {}): Promise<boolean> {
+  return closeTask(id, "done", note.trim(), opts);
 }
 
 /**
@@ -524,10 +565,12 @@ export function completeTask(id: string, note = ""): Promise<boolean> {
  * left out, as a single Done leaves it out. Without a reason the rows keep their note: a pending
  * reminder the grower wrote keeps its words when Done-all closes it.
  */
-async function closeTasks(ids: string[], status: "done" | "skipped", reason?: string): Promise<string[]> {
+async function closeTasks(ids: string[], status: "done" | "skipped", reason: string | undefined, opts: WriteOptions): Promise<string[]> {
   if (ids.length === 0) return [];
-  const patch = { status, acted_at: new Date().toISOString(), ...(reason === undefined ? {} : { note: reason }) };
-  const r = await supabase.from("tasks").update(patch).in("id", ids).eq("status", "pending").select("id");
+  const patch = { status, acted_at: opts.actedAt ?? new Date().toISOString(), ...(reason === undefined ? {} : { note: reason }) };
+  let q = supabase.from("tasks").update(patch).in("id", ids).eq("status", "pending").select("id");
+  if (opts.signal) q = q.abortSignal(opts.signal);
+  const r = await q;
   const changed = (must(r) as Array<{ id: string }>).map((row) => row.id);
   if (changed.length > 0) notifyTasksChanged();
   return changed;
@@ -537,14 +580,37 @@ async function closeTasks(ids: string[], status: "done" | "skipped", reason?: st
  * Done for a set: Today's "Done: all N waterings" and a batch's Done. A window batch's "Done with a
  * note" writes the note on every row; without one (or with only spaces) the rows keep theirs.
  */
-export function completeTasks(ids: string[], note = ""): Promise<string[]> {
+export function completeTasks(ids: string[], note = "", opts: WriteOptions = {}): Promise<string[]> {
   const text = note.trim();
-  return closeTasks(ids, "done", text === "" ? undefined : text);
+  return closeTasks(ids, "done", text === "" ? undefined : text, opts);
 }
 
 /** Skip for a zone batch: the same reason on each row, which the journal shows in place of the title. */
-export function skipTasks(ids: string[], reason: string): Promise<string[]> {
-  return closeTasks(ids, "skipped", reason.trim());
+export function skipTasks(ids: string[], reason: string, opts: WriteOptions = {}): Promise<string[]> {
+  return closeTasks(ids, "skipped", reason.trim(), opts);
+}
+
+/** The status, note and time of a set of tasks: what an action kept on the phone meets when it is sent (Phase 14). */
+export async function readTaskStates(ids: string[], signal?: AbortSignal): Promise<Array<{ id: string; status: TaskStatus; note: string; acted_at: string | null }>> {
+  if (ids.length === 0) return [];
+  let q = supabase.from("tasks").select("id, status, note, acted_at").in("id", ids);
+  if (signal) q = q.abortSignal(signal);
+  return must(await q) as Array<{ id: string; status: TaskStatus; note: string; acted_at: string | null }>;
+}
+
+/**
+ * Closes as the grower asked the rows the server had closed meanwhile as skipped (the rain skip, an
+ * ended window, a superseded or missed watering), when the tap kept on the phone came first: the
+ * tree was watered, whatever the machine wrote later. Only rows still skipped change; the ids that did
+ * are returned.
+ */
+export async function overrideServerClose(ids: string[], patch: { status: "done" | "skipped"; note: string; acted_at: string }, signal?: AbortSignal): Promise<string[]> {
+  if (ids.length === 0) return [];
+  let q = supabase.from("tasks").update(patch).in("id", ids).eq("status", "skipped").select("id");
+  if (signal) q = q.abortSignal(signal);
+  const changed = (must(await q) as Array<{ id: string }>).map((row) => row.id);
+  if (changed.length > 0) notifyTasksChanged();
+  return changed;
 }
 
 /**
@@ -564,8 +630,8 @@ export async function reopenTasks(ids: string[], status: "done" | "skipped", cle
 }
 
 /** The reason goes to `note`, which the journal shows in place of the title. */
-export function skipTask(id: string, reason: string): Promise<boolean> {
-  return closeTask(id, "skipped", reason.trim());
+export function skipTask(id: string, reason: string, opts: WriteOptions = {}): Promise<boolean> {
+  return closeTask(id, "skipped", reason.trim(), opts);
 }
 
 /** Days a snooze steps forward past days already taken by acted tasks of the same rule. */
@@ -582,13 +648,14 @@ const SNOOZE_SLOT_TRIES = 7;
  * shows. For a periodic watering the pending waterings between the two days close as `snoozed` too:
  * the grower asked for nothing until the new day. Returns the new due date.
  */
-export async function snoozeTask(task: Task, days: number, todayIso: string): Promise<string> {
+export async function snoozeTask(task: Task, days: number, todayIso: string, signal?: AbortSignal): Promise<string> {
   const from = task.due_on > todayIso ? task.due_on : todayIso;
   let due_on = addDays(from, Math.max(1, days));
   let inserted = false;
   for (let tries = 0; ; tries++) {
     const window_end = task.window_end !== null && task.window_end < due_on ? due_on : task.window_end;
-    const { error } = await supabase.from("tasks").insert({
+    // Each write carries the caller's bound (Today's 8 s, Phase 14), so a hung snooze ends with its message.
+    let ins = supabase.from("tasks").insert({
       plant_id: task.plant_id,
       type: task.type,
       rule_key: task.rule_key,
@@ -597,18 +664,16 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
       title: task.title,
       instruction: task.instruction,
     });
+    if (signal) ins = ins.abortSignal(signal);
+    const { error } = await ins;
     if (!error) {
       inserted = true;
       break;
     }
     if (error.code !== "23505") throw new Error(error.message);
-    const taken = await supabase
-      .from("tasks")
-      .select("status")
-      .eq("plant_id", task.plant_id)
-      .eq("rule_key", task.rule_key)
-      .eq("due_on", due_on)
-      .maybeSingle();
+    let sel = supabase.from("tasks").select("status").eq("plant_id", task.plant_id).eq("rule_key", task.rule_key).eq("due_on", due_on);
+    if (signal) sel = sel.abortSignal(signal);
+    const taken = await sel.maybeSingle();
     if (taken.error) throw new Error(taken.error.message);
     if ((taken.data as { status?: TaskStatus } | null)?.status === "pending") break;
     if (tries >= SNOOZE_SLOT_TRIES) throw new Error(t.today.snoozeNoDay);
@@ -616,15 +681,17 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
   }
   // The task may have been acted on since the screen loaded (Done on another screen, the expansion
   // closing it as superseded): then the copy just written is taken back and the tap fails plainly.
-  if (!(await closeTask(task.id, "snoozed", ""))) {
+  if (!(await closeTask(task.id, "snoozed", "", { signal }))) {
     if (inserted) {
-      await supabase.from("tasks").delete().eq("plant_id", task.plant_id).eq("rule_key", task.rule_key).eq("due_on", due_on).eq("status", "pending");
+      let del = supabase.from("tasks").delete().eq("plant_id", task.plant_id).eq("rule_key", task.rule_key).eq("due_on", due_on).eq("status", "pending");
+      if (signal) del = del.abortSignal(signal);
+      await del;
     }
     throw new Error(t.today.alreadyActed);
   }
 
   if (task.type === "water" && task.window_end === null) {
-    const covered = await supabase
+    let cov = supabase
       .from("tasks")
       .update({ status: "snoozed", acted_at: new Date().toISOString(), note: t.today.snoozeCovered(formatIso(due_on)) })
       .eq("plant_id", task.plant_id)
@@ -633,6 +700,8 @@ export async function snoozeTask(task: Task, days: number, todayIso: string): Pr
       .gt("due_on", from)
       .lt("due_on", due_on)
       .select("id");
+    if (signal) cov = cov.abortSignal(signal);
+    const covered = await cov;
     if (covered.error) throw new Error(covered.error.message);
     if ((covered.data ?? []).length > 0) notifyTasksChanged();
   }
@@ -826,6 +895,15 @@ export async function insertQuestion(row: Question): Promise<void> {
   if (error && error.code !== "23505") throw questionsError(error);
 }
 
+/** One exchange by its id: the row /api/ask wrote once Claude answered (Phase 14), or null when there is none yet. */
+export async function getQuestion(id: string, signal?: AbortSignal): Promise<Question | null> {
+  let q = supabase.from("questions").select("*").eq("id", id);
+  if (signal) q = q.abortSignal(signal);
+  const r = await q.maybeSingle();
+  if (r.error) throw questionsError(r.error);
+  return (r.data as Question | null) ?? null;
+}
+
 // ---- planting checks ----------------------------------------------------------
 // One row per "Check before planting" (Phase 7), written once Claude answered, under an id and a
 // time made on the phone. Until the SQL that creates the table has been run, reads and writes fail
@@ -849,8 +927,10 @@ export async function listChecks(speciesId: string): Promise<PlantingCheckRow[]>
   return (r.data ?? []) as PlantingCheckRow[];
 }
 
-export async function getCheck(id: string): Promise<PlantingCheckRow | null> {
-  const r = await supabase.from("planting_checks").select("*").eq("id", id).maybeSingle();
+export async function getCheck(id: string, signal?: AbortSignal): Promise<PlantingCheckRow | null> {
+  let q = supabase.from("planting_checks").select("*").eq("id", id);
+  if (signal) q = q.abortSignal(signal);
+  const r = await q.maybeSingle();
   if (r.error) throw checksError(r.error);
   return (r.data as PlantingCheckRow | null) ?? null;
 }
@@ -1066,4 +1146,36 @@ export async function saveZones(zones: ZoneLists): Promise<ZoneLists> {
   const clean: ZoneLists = { backyard: cleanZones(zones.backyard), farm: cleanZones(zones.farm) };
   await setSetting(ZONES_KEY, clean);
   return clean;
+}
+
+// ---- the morning run's record, the usage ledger, the server's language (Phase 14) ----------------
+// Three more rows of the settings table. The functions write the first two (api/_record.ts,
+// api/_usage.ts); the app reads them for Today's re-read and the Settings cards. The third is the
+// language chosen in Settings, written here so the 06:00 run composes its notifications in it.
+
+/** The last real morning run's record, or null when there is none; SettingsUnavailable without the settings table, since nothing can be known then. */
+export async function loadDailyRecord(): Promise<DailyRecord | null> {
+  return parseDailyRecord(await getSetting<unknown>(DAILY_RECORD_KEY));
+}
+
+/** The last real morning run's start marker, or null when there is none; SettingsUnavailable without the settings table. */
+export async function loadDailyStart(): Promise<DailyStart | null> {
+  return parseDailyStart(await getSetting<unknown>(DAILY_STARTED_KEY));
+}
+
+/** A month's ledger ("2026-11"), or null when no call was recorded that month. */
+export async function loadUsage(month: string): Promise<UsageLedger | null> {
+  const raw = await getSetting<unknown>(usageKey(month));
+  return raw === null ? null : parseLedger(raw);
+}
+
+/** Stores the language for the server's notifications and notes; the phone's own copy is src/i18n's. */
+export function saveLang(lang: Lang): Promise<void> {
+  return setSetting(LANG_SETTING_KEY, lang);
+}
+
+/** The language the server writes in, as stored; null when no choice has reached it. */
+export async function loadLang(): Promise<Lang | null> {
+  const value = await getSetting<unknown>(LANG_SETTING_KEY);
+  return value === "en" || value === "fr" ? value : null;
 }

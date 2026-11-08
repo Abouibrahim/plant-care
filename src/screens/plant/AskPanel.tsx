@@ -8,7 +8,7 @@ import { Send, X } from "lucide-react";
 import { Banner } from "../../components/Banner";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
-import { api, ApiError } from "../../lib/api";
+import { api, ApiError, LostReplyError } from "../../lib/api";
 import { historyOf, storedAnswer } from "../../lib/ask";
 import { insertQuestion, listThread, QuestionsUnavailable } from "../../lib/db";
 import { useBackClose } from "../../lib/useBackClose";
@@ -39,6 +39,7 @@ interface Props {
 }
 
 function describeError(err: unknown): string {
+  if (err instanceof LostReplyError) return t.errors.answerLost;
   if (err instanceof ApiError) {
     if (err.status === 401) return t.errors.unauthorized;
     if (err.status === 0) return t.errors.network;
@@ -74,10 +75,13 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
   const [loadKey, setLoadKey] = useState(0);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  /** The reply was lost on the way and the app is looking for the row the route stored (Phase 14). */
+  const [reconnecting, setReconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newestKey, setNewestKey] = useState<string | null>(null);
   const mountedRef = useRef(true);
-  // The conversation's id: the reopened one, or a new one made on the first question.
+  // Stops the looking for a lost reply when the panel is left.
+  // The conversation's id: the reopened one, or a new one made before the first question.
   const threadRef = useRef<string | null>(threadId);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const newestRef = useRef<HTMLDivElement>(null);
@@ -88,6 +92,8 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      // Left while the app was looking for a lost reply: the looking goes on, and the answer, when it
+      // arrives, is saved and the journal told (onChanged), so nothing is asked twice.
       mounted.current = false;
       document.body.style.overflow = previous;
     };
@@ -120,7 +126,9 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
 
   const speciesName = plant.species.common_names.en || plant.species.scientific_name;
   const saving = turns.some((turn) => turn.save === "saving");
-  const busy = sending || saving;
+  // Close and the back gesture wait while a call runs or an answer is being saved, but not while the
+  // app only looks for a lost reply: the row, if any, reaches the journal without the panel.
+  const busy = (sending && !reconnecting) || saving;
   const blocked = loading || loadError !== null;
   const unavailable = turns.some((turn) => turn.save === "unavailable");
   const last = turns.length > 0 ? turns[turns.length - 1] : null;
@@ -192,22 +200,35 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
   async function send(e?: FormEvent) {
     e?.preventDefault();
     const question = input.replace(/\s+/g, " ").trim();
-    if (!question || busy || blocked) return;
+    if (!question || busy || blocked || sending) return;
     setSending(true);
+    setReconnecting(false);
     setError(null);
+    // The row is named before the call (Phase 14): the route writes it under this id once Claude has
+    // answered, so a reply lost on the way is found again instead of paid for twice.
+    threadRef.current ??= crypto.randomUUID();
+    const thread_id = threadRef.current;
+    const id = crypto.randomUUID();
+    const askedAt = new Date().toISOString();
     try {
-      const res = await api.ask({ plant_id: plant.id, question, history: historyOf(turns) });
+      const res = await api.ask(
+        { plant_id: plant.id, question, history: historyOf(turns), id, thread_id, asked_at: askedAt },
+        {
+          onReconnecting: () => {
+            if (mountedRef.current) setReconnecting(true);
+          },
+        },
+      );
       const refusal = isRefusal(res) ? res.refusal : null;
       const answer = refusal === null ? storedAnswer(res) : null;
       if (refusal === null && !answer) {
         if (mountedRef.current) setError(`${t.ask.failed}: ${t.errors.noData}`);
         return;
       }
-      threadRef.current ??= crypto.randomUUID();
       const turn: Turn = {
-        id: crypto.randomUUID(),
+        id,
         question,
-        askedAt: new Date().toISOString(),
+        askedAt,
         answer,
         refusal,
         usage: usageOf(res),
@@ -226,7 +247,10 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
     } catch (err) {
       if (mountedRef.current) setError(`${t.ask.failed}: ${describeError(err)}`);
     } finally {
-      if (mountedRef.current) setSending(false);
+      if (mountedRef.current) {
+        setSending(false);
+        setReconnecting(false);
+      }
     }
   }
 
@@ -362,9 +386,10 @@ export function AskPanel({ plant, threadId = null, onChanged, onClose }: Props) 
               disabled={sending || blocked}
             />
           </label>
-          {sending && <Spinner label={t.ask.sending} />}
+          {sending && !reconnecting && <Spinner label={t.ask.sending} />}
+          {reconnecting && <Banner kind="info">{t.ask.reconnecting}</Banner>}
           {error && <Banner kind="error">{error}</Banner>}
-          <button type="submit" className="primary block" disabled={busy || blocked || !input.trim()}>
+          <button type="submit" className="primary block" disabled={sending || saving || blocked || !input.trim()}>
             <Send size={18} aria-hidden />
             {t.ask.send}
           </button>

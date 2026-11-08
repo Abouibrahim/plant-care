@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Usage } from "../src/types.js";
+import type { CallOutcome, Usage } from "../src/types.js";
 
 /** Anthropic's most capable generally available model. Thinking is always on; `effort` sets its depth. */
 export const MODEL = "claude-fable-5-1";
@@ -60,7 +60,8 @@ function getClient(): Anthropic {
 
 export type Effort = "low" | "medium" | "high";
 
-export type CallResult<T> = { ok: true; data: T; usage: Usage } | { ok: false; refusal: string; usage: Usage };
+/** An answered call carries `recorded`, settled once the month's ledger has taken the call (it never rejects): the route awaits it after its own row, before replying. */
+export type CallResult<T> = { ok: true; data: T; usage: Usage; recorded: Promise<void> } | { ok: false; refusal: string; usage: Usage };
 
 export const ZERO_USAGE: Usage = {
   model: null,
@@ -132,6 +133,11 @@ function retryAfterMs(err: unknown): number | null {
  * One structured-output call. Retries once with double max_tokens when the output is cut and
  * once on a transient API error, but only while the function budget allows it; returns the
  * refusal text when the model and its fallback both decline; otherwise parses the first text block.
+ * `onUsage` is told once what the call spent and how it ended, answered, refused or failed after
+ * spending (a cut output, no text), so the month's ledger counts the paid failures too; its own
+ * failure is logged and never reaches the caller. An answered call is reported without waiting,
+ * so the ledger never delays the row the route writes next (the one a lost reply is found by):
+ * the route awaits `recorded` once that row is written.
  */
 export async function callJson<T>(opts: {
   rules: string;
@@ -139,6 +145,7 @@ export async function callJson<T>(opts: {
   content: Anthropic.Beta.BetaContentBlockParam[];
   maxTokens: number;
   effort?: Effort;
+  onUsage?: (usage: Usage, outcome: CallOutcome) => Promise<unknown> | void;
 }): Promise<CallResult<T>> {
   const anthropic = getClient();
   const deadline = Date.now() + FUNCTION_BUDGET_MS;
@@ -146,6 +153,23 @@ export async function callJson<T>(opts: {
   let spent: Usage = { ...ZERO_USAGE, model: MODEL };
   let transientRetried = false;
 
+  const report = async (outcome: CallOutcome) => {
+    try {
+      await opts.onUsage?.(spent, outcome);
+    } catch (err) {
+      console.error(`usage not reported: ${(err as Error)?.message ?? String(err)}`);
+    }
+  };
+
+  try {
+    return await attempt();
+  } catch (err) {
+    // Tokens were spent and the call still failed: the ledger counts it before the error goes out.
+    if (spent.input_tokens + spent.output_tokens > 0) await report("failed");
+    throw err;
+  }
+
+  async function attempt(): Promise<CallResult<T>> {
   for (;;) {
     const remaining = deadline - Date.now();
     if (remaining < MIN_ATTEMPT_MS) throw new Error("Not enough time left for the Claude call; try again");
@@ -196,11 +220,15 @@ export async function callJson<T>(opts: {
     }
     if (msg.stop_reason === "refusal") {
       const explanation = msg.stop_details?.type === "refusal" ? msg.stop_details.explanation : null;
+      await report("refused");
       return { ok: false, refusal: textOf(msg) || explanation || "Claude declined this request.", usage: spent };
     }
     const text = textOf(msg);
     if (!text) throw new Error(`Claude returned no text (stop_reason ${msg.stop_reason})`);
-    return { ok: true, data: JSON.parse(text) as T, usage: spent };
+    const data = JSON.parse(text) as T;
+    const recorded = report("answered");
+    return { ok: true, data, usage: spent, recorded };
+  }
   }
 }
 

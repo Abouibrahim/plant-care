@@ -11,6 +11,7 @@ import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
 import { api, ApiError } from "../lib/api";
 import { deleteSpeciesIfUnused, insertPhoto, insertPlant, newId, photoPath, uploadPhoto, uploadThumbnail } from "../lib/db";
+import { isNetworkFailure } from "../lib/errors";
 import { prepareImage, type PreparedImage } from "../lib/image";
 import {
   isRefusal,
@@ -64,11 +65,6 @@ function writeSite(site: Site) {
   } catch {
     // private mode or storage blocked: the toggle still works for this visit
   }
-}
-
-/** A fetch that never got an answer: supabase-js reports it as a TypeError, with the browser's wording. */
-function isNetworkFailure(err: unknown): boolean {
-  return err instanceof TypeError || (err instanceof Error && /failed to fetch|network ?error|load failed/i.test(err.message));
 }
 
 function describeError(err: unknown): string {

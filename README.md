@@ -2,20 +2,20 @@
 
 Phone-first PWA for one grower with two sites in Cap Bon, the backyard at home and the farm at borgdanet. Photograph a plant, let Claude identify it and write a species profile for Cap Bon conditions, and the app turns the profile into a task calendar, a daily round on Today and a push digest every morning.
 
-How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE13.md` and `UI-REFRESH.md`, the review behind Phase 10 in `docs/REVIEW-2026-10-30.md` (the Phase 11 it proposes is still open).
+How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE14.md` and `UI-REFRESH.md`, the review behind Phases 10 and 14 in `docs/REVIEW-2026-10-30.md`.
 
 ## What it does
 
 - **Capture**: a photo goes to Claude, which names up to three candidates with their confidence and evidence; a confirmed species gets its profile once, shared by every plant of it.
 - **Profiles**: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests, companions, uses and toxicity. The grower confirms them and edits any part, the care calendar and the pests included; hand edits survive a regeneration.
-- **Today**: the tasks late, due today, open now (a window that has started) and due in the next six days, by site and then by kind of task (water, prune, harvest…), each kind folding away for the day and shared as a plain-text list with whoever does it, the coming days below; with Done (and a note), Skip, Snooze and Undo; a zone's waterings due together in one card, and so a zone's plants sharing a window job (a pruning, a harvest), done or skipped together with any plant left out; a site's waterings done in one tap.
-- **Morning push**: each morning at 06:00 Tunis time or within the hour after, one notification per site with something due (a zone's waterings, or a window job its plants share, on one line) and a weather notification when an alert or a rain skip applies.
+- **Today**: the tasks late, due today, open now (a window that has started) and due in the next six days, by site and then by kind of task (water, prune, harvest…), each kind folding away for the day and shared as a plain-text list with whoever does it, the coming days below; with Done (and a note), Skip, Snooze and Undo; a zone's waterings due together in one card, and so a zone's plants sharing a window job (a pruning, a harvest), done or skipped together with any plant left out; a site's waterings done in one tap. Without a connection Today shows its last list and keeps Done and Skip on the phone until the signal returns.
+- **Morning push**: each morning at 06:00 Tunis time or within the hour after, one notification per site with something due (a zone's waterings, or a window job its plants share, on one line) and a weather notification when an alert or a rain skip applies, in the language chosen in Settings. The run leaves its record, shown in Settings, and Today reads its list again as soon as the run has happened.
 - **Health**: Diagnose weighs a problem photo against the plant's own context and sets a follow-up reminder; treatments are logged from it.
-- **Ask Claude** about one plant, with the answers kept in its journal; **Check before planting** weighs a species against the sites before it is bought.
+- **Ask Claude** about one plant, with the answers kept in its journal; **Check before planting** weighs a species against the sites before it is bought. A question, check or diagnosis whose reply the phone loses is found again instead of paid for twice, and Settings shows what the month's Claude calls cost.
 - **Weather** (Open-Meteo): waterings skipped after rain; alerts for heat, sirocco, frost, gales and heavy rain; the hours that suit spraying when a task or a recent diagnosis asks for a spray.
 - **Map and tags**: the plants on a map (satellite with a map key, otherwise the street map), placed from the phone's location or by hand, and printable QR tags that open a tree's page.
 - **Journal**: photos, tasks, treatments and questions per plant; care done by hand can be logged and a one-off reminder set; a plant can be deleted from its page.
-- **Settings**: English or French, zone lists per site, the rain-skip threshold, CSV export of plants and tasks.
+- **Settings**: English or French (the notifications follow once chosen), zone lists per site, the rain-skip threshold, the morning run's record, the month's Claude usage, CSV export of plants and tasks.
 - Each photo is stored with a thumbnail and the phone keeps the photos it has shown; the tables are closed to every account but the owner's.
 
 ## Stack
@@ -42,7 +42,7 @@ Steps 7 to 10 and 12 bring a project set up before those phases up to date; step
 
 ## Running it
 
-The 06:00 run can be checked without sending anything. With the cron secret, a dry run composes the digest and the weather push and counts what the rain would skip; it still stores the forecast and writes the tasks, as a real run does. In PowerShell, type `curl.exe`.
+The 06:00 run can be checked without sending anything. With the cron secret, a dry run composes the digest and the weather push and counts what the rain would skip; it still stores the forecast and writes the tasks, as a real run does, but leaves no record (Settings → Weather shows the real run's). In PowerShell, type `curl.exe`.
 
 ```bash
 curl -H "Authorization: Bearer <CRON_SECRET>" "https://plant-care-phi-fawn.vercel.app/api/daily?dry=1"

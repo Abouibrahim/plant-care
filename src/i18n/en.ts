@@ -173,6 +173,18 @@ export const en = {
     shareFailed: "The list could not be shared or copied",
     /** One amount of a round in a shared list: "40 L: OL-01, OL-03". */
     handoutAmount: (amount: string, tags: string) => `${amount}: ${tags}`,
+    /** Today without a connection (Phase 14): the kept list, the actions waiting on the phone, and their sending. */
+    offline: "Offline",
+    shownAsOf: (time: string) => `Shown as of ${time}, not updated`,
+    queued: (n: number) => (n === 1 ? "1 action waiting" : `${n} actions waiting`),
+    sendNow: "Send now",
+    savedOnPhone: "saved on the phone",
+    keepFailed: "The action could not be kept on the phone: its storage is full or blocked.",
+    queueSent: (n: number) => (n === 1 ? "1 saved action sent." : `${n} saved actions sent.`),
+    queueNotApplied: (n: number) =>
+      n === 1 ? "1 saved action was not applied: the task had been closed meanwhile." : `${n} saved actions were not applied: the tasks had been closed meanwhile.`,
+    queueFailed: (error: string) => `The saved actions could not be sent: ${error}`,
+    snoozeOffline: "Snooze needs a connection.",
   },
 
   capture: {
@@ -310,13 +322,14 @@ export const en = {
     send: "Send to Claude",
     preparing: "Preparing the photo…",
     sending: "Diagnosing…",
+    reconnecting: "The connection dropped while Claude was diagnosing. Checking whether the diagnosis has arrived… You can close this: it goes to the journal.",
     failed: "The diagnosis failed",
     refusal: "Claude declined this request",
     saving: "Saving the photo…",
     saveFailed: "The photo could not be saved",
     saveAgain: "Save again",
     unsaved: "The treatment log and the reminder need the saved photo.",
-    closeUnsaved: "The diagnosis is not saved yet. Close anyway and lose it?",
+    closeUnsaved: "The diagnosis is not saved on this side yet. Close anyway? If the server kept it, it shows on the Health tab without its reminder.",
     diagnosedOn: (date: string) => `Diagnosed ${date}`,
     likelyCauses: "Likely causes",
     evidence: "Evidence",
@@ -374,6 +387,8 @@ export const en = {
     placeholder: "e.g. Should I prune it before the rains?",
     send: "Ask",
     sending: "Claude is thinking…",
+    /** The reply was lost on the way (Phase 14): the app looks for the row the route stored; Close works meanwhile. */
+    reconnecting: "The connection dropped while Claude was answering. Checking whether the answer has arrived… You can close this: the answer goes to the journal.",
     failed: "The question could not be answered",
     refusal: "Claude declined this question",
     loading: "Loading the conversation…",
@@ -383,7 +398,7 @@ export const en = {
     saving: "Saving to the journal…",
     saveFailed: "The answer is not in the journal yet.",
     saveAgain: "Save again",
-    closeUnsaved: "An answer is not in the journal yet. Close anyway and lose it?",
+    closeUnsaved: "An answer is not saved on this side yet. Close anyway? If the server kept it, it shows in the journal.",
     unavailable:
       "Answers are not kept yet: the questions table does not exist. Run the SQL from the Setup section of PHASE6.md in the Supabase SQL editor.",
     journalLabel: "Question",
@@ -408,6 +423,7 @@ export const en = {
     run: "Check",
     profiling: "Finding the species (a new one is profiled first)…",
     running: "Checking the fit…",
+    reconnecting: "The connection dropped while Claude was checking. Looking for the saved check…",
     failed: "The check could not be done",
     profileRefusal: "Claude declined to write a profile for this name",
     refusal: "Claude declined this check",
@@ -457,7 +473,7 @@ export const en = {
     filteredEmpty: "No species here",
   },
 
-  /** Weather (Phase 8): Today's card, the Settings card, and the push and task notes the functions write (in English). */
+  /** Weather (Phase 8): Today's card, the Settings card, and the push and task notes the functions write, in the language chosen in Settings (api/_lang.ts, Phase 14). */
   weather: {
     title: "Weather",
     credit: "Weather data: Open-Meteo",
@@ -512,6 +528,26 @@ export const en = {
     pointTown: "Forecast for Menzel Bouzelfa: no farm plant has a GPS position within 30 km.",
     lastFetch: (time: string) => `Last update: ${time}`,
     never: "No forecast stored yet; it comes with the next 06:00 run or when Today opens.",
+    /** The morning run's record (Phase 14): when it ran and what it did, or why it stopped. */
+    lastRun: (time: string, what: string) => `Last morning run: ${time}${what ? ` · ${what}` : ""}`,
+    lastRunFailed: (time: string, error: string) => `Last morning run failed on ${time}: ${error}`,
+    runCounts: (created: number, skipped: number, tidied: number) => {
+      const parts: string[] = [];
+      parts.push(created === 1 ? "1 task added" : `${created} tasks added`);
+      if (skipped > 0) parts.push(skipped === 1 ? "1 watering skipped after rain" : `${skipped} waterings skipped after rain`);
+      if (tidied > 0) parts.push(tidied === 1 ? "1 task tidied" : `${tidied} tasks tidied`);
+      return parts.join(", ");
+    },
+    runPushes: (sent: number, failed: number, phones: number) =>
+      `${sent === 1 ? "1 notification" : `${sent} notifications`} to ${phones === 1 ? "1 phone" : `${phones} phones`}${failed > 0 ? ` (${failed} failed)` : ""}`,
+    runNoPhones: "no phone has reminders on",
+    runWeatherError: "the weather could not be fetched",
+    runRainSkipError: "the rain skip failed",
+    runStarted: (time: string) => `Morning run started at ${time}, still running.`,
+    runUnfinished: (time: string) => `Morning run started at ${time} and did not finish.`,
+    runMissing: "No morning run recorded today (expected by 07:00).",
+    noRunToday: "No run yet today.",
+    noRunYet: "No morning run recorded yet.",
     saveFailed: "The setting could not be saved",
     unavailable:
       "The weather is not kept yet: the weather_days table does not exist. Run the SQL from the Setup section of PHASE8.md in the Supabase SQL editor.",
@@ -716,9 +752,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 13",
+    phaseTitle: "Phase 14",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, a log of care done by hand, a zone's waterings in one card on Today and one line of the morning push, the same for the windows a zone's plants share (a pruning, a harvest, a scouting), and now Today's work by kind of task, each kind folding away for the day and sent as a list to whoever does it.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, a log of care done by hand, a zone's waterings and shared window jobs in one card and one line of the morning push, Today's work by kind of task with a list to share, and now Today without a connection with Done and Skip kept on the phone until it returns, a question, check or diagnosis whose reply was lost found again instead of paid twice, the morning run on record, what the Claude calls cost this month, and the notifications in the language chosen here.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon, and a weather notification when an alert or a rain skip applies.",
@@ -742,9 +778,28 @@ export const en = {
     },
     language: {
       title: "Language",
-      body: "The language of the screens. The app reloads to apply the choice. Profile text written by Claude keeps the language it was written in.",
+      body: "The language of the screens, and of the morning notifications and the notes the server writes once it is chosen here. The app reloads to apply the choice. Profile text written by Claude keeps the language it was written in.",
       names: { en: "English", fr: "Français" },
       saveFailed: "The choice could not be stored on this phone",
+      /** What the server writes its notifications and notes in (Phase 14), read back from its row. */
+      server: (name: string) => `Notifications: ${name}`,
+      serverDefault: "Notifications: English, until a language is chosen here.",
+      notSynced: "The choice has not reached the server yet; it is sent again when the app opens with a connection.",
+    },
+    /** The usage ledger (Phase 14): what the Claude calls of the month cost, at list prices. */
+    usage: {
+      title: "Claude usage",
+      body: "The calls of this month and the one before, added up by the functions as they are made, with an estimate at Claude Fable 5.1 list prices. Vercel and Supabase stay on their free tiers.",
+      month: (month: string, calls: number, cost: string) => `${month}: ${calls === 1 ? "1 call" : `${calls} calls`}, about ${cost}`,
+      none: (month: string) => `${month}: no call`,
+      routes: { identify: "identifications", profile: "profiles", diagnose: "diagnoses", ask: "questions", check: "checks" },
+      byRoute: (parts: string) => `By kind: ${parts}`,
+      tokens: (input: number, output: number) => `${input.toLocaleString()} in / ${output.toLocaleString()} out tokens (thinking included)`,
+      failed: (n: number) => (n === 1 ? "1 call failed after spending" : `${n} calls failed after spending`),
+      fallback: (n: number) => (n === 1 ? "1 call answered by a fallback model, counted at Fable prices" : `${n} calls answered by a fallback model, counted at Fable prices`),
+      prices: (input: string, output: string, read: string, write: string) =>
+        `List prices per million tokens: ${input} in, ${output} out, ${read} cache read, ${write} cache write.`,
+      loadFailed: "The usage could not be loaded",
     },
     export: {
       title: "Export",
@@ -794,6 +849,8 @@ export const en = {
   errors: {
     generic: "Something went wrong",
     network: "Network error. Check the connection and try again.",
+    /** A lost reply whose stored row never came (Phase 14). */
+    answerLost: "No answer was found. The call may have been declined or lost; asking again is a new call.",
     unauthorized: "Signed out. Sign in again.",
     notFound: "Not found",
     tooLarge: "The photo is too large",

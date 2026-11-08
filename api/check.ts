@@ -1,10 +1,14 @@
 // POST /api/check  { species_id, site?, zone?, note?, lang? }  ->  PlantingCheck + usage
 // Before planting: does this species suit this ground? The species profile is read against the
 // grower's sites as they are, with every plant already recorded grouped by site and zone, and the
-// site and zone the grower has in mind. The app saves the check; this route only reads.
+// site and zone the grower has in mind. Since Phase 14 the app also sends the row it made for the
+// check (id, checked_at), and the route writes the planting_checks row itself once Claude has
+// answered, so a reply lost on the way is found again by its id; the app's own save then meets the
+// row. Without those fields (an older build) the route only reads, as before.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { keepAlive, reply, type VercelRequest, type VercelResponse } from "./_http.js";
 import { callJson, readPrompt, readSchema } from "./_claude.js";
+import { isInstant, storeRow, UUID } from "./_rows.js";
 import {
   calendarBlock,
   guildUsesBlock,
@@ -18,6 +22,7 @@ import {
   weatherBlock,
 } from "./_context.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
+import { recordUsage } from "./_usage.js";
 import { loadWeather } from "./_weather.js";
 import { addDays, ageInMonths, ageStage, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
 import {
@@ -29,11 +34,11 @@ import {
   type PlantingCheck,
   type Site,
   type Species,
+  type Usage,
   type WeatherDay,
   type ZoneLists,
 } from "../src/types.js";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** PostgREST answers at most this many rows per request; the inventory is read in pages of it. */
 const PAGE = 1000;
 /** Farm first, as on Today and in the digest. */
@@ -45,6 +50,14 @@ export interface CheckInput {
   zone: string;
   note: string;
   lang: "en" | "fr";
+  /** The planting_checks row the app made before the call; null from an older build, which saves the row itself. */
+  row: { id: string; checked_at: string } | null;
+}
+
+/** The planting_checks row as the route writes it: what the app would write, with Claude's check as it came plus the usage. */
+export function checkRow(input: CheckInput, result: PlantingCheck & Usage): Record<string, unknown> | null {
+  if (!input.row) return null;
+  return { id: input.row.id, species_id: input.species_id, checked_at: input.row.checked_at, site: input.site, zone: input.zone, note: input.note, result };
 }
 
 /** A recorded plant as the inventory reads it. */
@@ -89,6 +102,13 @@ export function parseCheckRequest(body: unknown): CheckInput | string {
   const note = clean((b.note as string | undefined) ?? "");
   if (zone.length > CHECK_MAX_ZONE_CHARS) return `zone is longer than ${CHECK_MAX_ZONE_CHARS} characters`;
   if (note.length > CHECK_MAX_NOTE_CHARS) return `note is longer than ${CHECK_MAX_NOTE_CHARS} characters`;
+  // The row's fields: both, or none at all (an older build).
+  let row: CheckInput["row"] = null;
+  if (b.id !== undefined || b.checked_at !== undefined) {
+    if (typeof b.id !== "string" || !UUID.test(b.id)) return "id must be a UUID";
+    if (!isInstant(b.checked_at)) return "checked_at must be an ISO time";
+    row = { id: b.id, checked_at: b.checked_at };
+  }
   return {
     species_id: b.species_id,
     site: (b.site as Site | null | undefined) ?? null,
@@ -96,6 +116,7 @@ export function parseCheckRequest(body: unknown): CheckInput | string {
     zone: b.site ? zone : "",
     note,
     lang: (b.lang as "en" | "fr" | undefined) ?? "en",
+    row,
   };
 }
 
@@ -266,13 +287,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       maxTokens: 4096,
       // Weighing a species against the site and what grows there: medium effort, like a diagnosis.
       effort: "medium",
+      onUsage: (usage, outcome) => recordUsage(db, "check", usage, outcome),
     });
 
     if (!result.ok) {
       reply(res, 200, { refusal: result.refusal, ...result.usage });
       return;
     }
-    reply(res, 200, { ...result.data, ...result.usage });
+    const check: PlantingCheck & Usage = { ...result.data, ...result.usage };
+    // The paid check goes to the table before the reply, so a reply lost on the way is not lost at all.
+    const stored = checkRow(input, check);
+    if (stored) await storeRow(db, "planting_checks", stored);
+    await result.recorded;
+    reply(res, 200, check);
   } catch (err) {
     handleError(res, err);
   }

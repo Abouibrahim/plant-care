@@ -1,7 +1,9 @@
 // POST /api/expand  { plant_id? }  ->  { plants, created, removed, expired, superseded, today }
 // The same expansion as the cron, on demand: the app calls it after a plant is saved and from the
-// Today screen, so new tasks do not wait for 06:00.
+// Today screen, so new tasks do not wait for 06:00. The notes it writes follow the language chosen
+// in Settings, like the 06:00 run's (Phase 14).
 import type { VercelRequest, VercelResponse } from "./_http.js";
+import { readStrings } from "./_lang.js";
 import { runExpansion } from "./_tasks.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import { isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
@@ -27,7 +29,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       sendError(res, 400, "plant_id must be a UUID");
       return;
     }
-    const result = await runExpansion(serviceClient(), isoDateIn(SITE_TIME_ZONE), plantId);
+    const db = serviceClient();
+    const result = await runExpansion(db, isoDateIn(SITE_TIME_ZONE), plantId, await readStrings(db));
     res.status(200).json(result);
   } catch (err) {
     handleError(res, err);
