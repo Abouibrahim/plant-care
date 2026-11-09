@@ -6,18 +6,19 @@ import { fr } from "../src/i18n/fr";
 import { localIsoDate } from "../src/lib/dates";
 import { isNetworkFailure } from "../src/lib/errors";
 import type { TaskWithPlant } from "../src/types";
-import { resetState, sharedState, type Row } from "./mockdb";
+import { resetState, sharedState, type QueryInfo, type Row } from "./mockdb";
 
 /** The session the mocked client reports; null for a phone whose sign-in could not be refreshed. */
 const sessionRef: { current: { access_token: string } | null } = { current: { access_token: "token" } };
-/** Set to make the next query fail like a dropped connection. */
-const failNext = { current: false };
+/** Set to make the next query fail like a dropped connection: true for whichever comes next, or a predicate for the first query it picks. */
+const failNext: { current: boolean | ((q: QueryInfo) => boolean) } = { current: false };
 
 vi.mock("../src/lib/supabase", async () => {
   const { makeDb, sharedState } = await import("./mockdb");
   const db = makeDb(sharedState, {
-    onQuery: () => {
-      if (failNext.current) {
+    onQuery: (q) => {
+      const when = failNext.current;
+      if (when === true || (typeof when === "function" && when(q))) {
         failNext.current = false;
         throw new TypeError("Failed to fetch");
       }
@@ -43,7 +44,7 @@ function memoryStorage(): Storage {
 vi.stubGlobal("localStorage", memoryStorage());
 
 const offline = await import("../src/lib/offline");
-const { applyQueue, dueCountOf, enqueue, isServerNote, keepToday, readQueue, recallToday, removeAction, sendQueue, sentIds } = offline;
+const { applyQueue, closedSoFar, dueCountOf, enqueue, forgetAction, isServerNote, keepToday, readQueue, recallToday, removeAction, sendQueue, sentIds } = offline;
 
 let n = 0;
 function task(partial: Partial<TaskWithPlant> & { id?: string } = {}): TaskWithPlant {
@@ -198,6 +199,100 @@ describe("sending the queue", () => {
 
     expect(await sendQueue()).toMatchObject({ sent: 1, waiting: 0 });
     expect(byId(a.id).status).toBe("done");
+  });
+
+  it("reports what a set write closed when the read-back of the rest then fails, and keeps the rest for the next round", async () => {
+    const a = seed();
+    const b = seed();
+    // Closed from another screen before the send: the write leaves it, so the rest is read back.
+    const elsewhere = seed({ status: "done", note: "", acted_at: "2026-11-08T07:00:00.000Z" });
+    const entry = kept({ kind: "done", ids: [a.id, b.id, elsewhere.id], single: false, note: "", at: TAP });
+    failNext.current = (q) => q.op === "select" && q.columns.includes("acted_at");
+    const report = await sendQueue();
+    // The two rows the write closed are closed, and the round says so: the list and the done count move by them.
+    expect(report.closed.sort()).toEqual([a.id, b.id].sort());
+    expect(report.done.sort()).toEqual([a.id, b.id].sort());
+    expect(report).toMatchObject({ sent: 0, leftOut: [], waiting: 1 });
+    expect(report.failed).toMatch(/Failed to fetch/);
+    expect(byId(a.id)).toMatchObject({ status: "done", acted_at: TAP });
+    expect(byId(b.id)).toMatchObject({ status: "done", acted_at: TAP });
+    // The action keeps only what it could not close, with the attempt counted, and is not sent yet.
+    expect(readQueue()).toEqual([expect.objectContaining({ id: entry.id, ids: [elsewhere.id], attempts: 1 })]);
+    expect(sentIds(entry.id)).toBeNull();
+    // The next round reads the rest back: closed by the grower elsewhere, so left out and reported;
+    // the action's outcome then holds what its rounds closed, for an Undo that comes after the send.
+    expect(await sendQueue()).toMatchObject({ sent: 1, closed: [], leftOut: [elsewhere.id], waiting: 0 });
+    expect(readQueue()).toEqual([]);
+    expect(sentIds(entry.id)?.sort()).toEqual([a.id, b.id].sort());
+    expect(closedSoFar(entry.id)).toEqual([]);
+  });
+
+  it("reports what the write closed when the override of a server-closed row then fails, and overrides it on the next round", async () => {
+    const a = seed();
+    const rained = seed({ status: "skipped", note: en.weather.rainNote(12, "past"), acted_at: "2026-11-08T05:41:00.000Z" });
+    const entry = kept({ kind: "done", ids: [a.id, rained.id], single: false, note: "", at: TAP });
+    // The first update is the write, the second the override of the rain-skipped row.
+    let updates = 0;
+    failNext.current = (q) => q.op === "update" && ++updates === 2;
+    const report = await sendQueue();
+    expect(report).toMatchObject({ sent: 0, closed: [a.id], done: [a.id], leftOut: [], waiting: 1 });
+    expect(report.failed).toMatch(/Failed to fetch/);
+    expect(byId(a.id)).toMatchObject({ status: "done", acted_at: TAP });
+    expect(byId(rained.id).status).toBe("skipped");
+    expect(readQueue()).toEqual([expect.objectContaining({ id: entry.id, ids: [rained.id], attempts: 1 })]);
+    expect(closedSoFar(entry.id)).toEqual([a.id]);
+    expect(await sendQueue()).toMatchObject({ sent: 1, closed: [rained.id], waiting: 0 });
+    expect(byId(rained.id)).toMatchObject({ status: "done", acted_at: TAP });
+    expect(sentIds(entry.id)?.sort()).toEqual([a.id, rained.id].sort());
+    expect(closedSoFar(entry.id)).toEqual([]);
+  });
+
+  it("remembers what a half-written action closed, for its Undo, and forgets it when the action is taken back", async () => {
+    const a = seed();
+    const b = seed();
+    const elsewhere = seed({ status: "done", note: "", acted_at: "2026-11-08T07:00:00.000Z" });
+    const entry = kept({ kind: "done", ids: [a.id, b.id, elsewhere.id], single: false, note: "", at: TAP });
+    failNext.current = (q) => q.op === "select" && q.columns.includes("acted_at");
+    await sendQueue();
+    expect(sentIds(entry.id)).toBeNull();
+    expect(closedSoFar(entry.id).sort()).toEqual([a.id, b.id].sort());
+    // Taking the action back leaves the memory, so a reopen that failed can be tried again from the
+    // toast; the screen forgets it once the rows are reopened.
+    expect(removeAction(entry.id)).toBe(true);
+    expect(closedSoFar(entry.id).sort()).toEqual([a.id, b.id].sort());
+    forgetAction(entry.id);
+    expect(closedSoFar(entry.id)).toEqual([]);
+    expect(await sendQueue()).toMatchObject({ sent: 0, closed: [], waiting: 0 });
+  });
+
+  it("keeps a set whole when its own write fails, and writes it on the next round", async () => {
+    const a = seed();
+    const b = seed();
+    const entry = kept({ kind: "done", ids: [a.id, b.id], single: false, note: "", at: TAP });
+    failNext.current = (q) => q.op === "update";
+    const report = await sendQueue();
+    expect(report).toMatchObject({ sent: 0, closed: [], waiting: 1 });
+    expect(report.failed).toMatch(/Failed to fetch/);
+    expect(readQueue()).toEqual([expect.objectContaining({ id: entry.id, ids: [a.id, b.id], attempts: 1 })]);
+    expect(byId(a.id).status).toBe("pending");
+    expect(byId(b.id).status).toBe("pending");
+    expect(await sendQueue()).toMatchObject({ sent: 1, closed: [a.id, b.id], waiting: 0 });
+    expect(byId(a.id)).toMatchObject({ status: "done", acted_at: TAP });
+    expect(byId(b.id)).toMatchObject({ status: "done", acted_at: TAP });
+  });
+
+  it("reports a half-written Skip's rows as closed but not as done", async () => {
+    const a = seed();
+    const b = seed();
+    const elsewhere = seed({ status: "done", note: "", acted_at: "2026-11-08T07:00:00.000Z" });
+    const entry = kept({ kind: "skip", ids: [a.id, b.id, elsewhere.id], single: false, reason: "rain", at: TAP });
+    failNext.current = (q) => q.op === "select" && q.columns.includes("acted_at");
+    const report = await sendQueue();
+    expect(report.closed.sort()).toEqual([a.id, b.id].sort());
+    expect(report.done).toEqual([]);
+    expect(byId(a.id)).toMatchObject({ status: "skipped", note: "rain", acted_at: TAP });
+    expect(byId(b.id)).toMatchObject({ status: "skipped", note: "rain", acted_at: TAP });
+    expect(readQueue()).toEqual([expect.objectContaining({ id: entry.id, ids: [elsewhere.id], attempts: 1 })]);
   });
 
   it("runs one round at a time", async () => {

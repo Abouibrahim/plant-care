@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.14.0, as of 8 November 2026.
+For version 0.14.1, as of 9 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -255,7 +255,7 @@ Today keeps the last list it read on the phone. Opened without signal, it shows 
 
 **Done** and **Skip** work without a connection, on one card, on a batch and with Done-all. The card leaves as usual, the round counts the Done, and the toast reads "Done: Water OL-01 · saved on the phone" with **Undo**, which brings the card back as long as the action has not been sent. The banner then counts "2 actions waiting", with **Send now**. The actions go out when the connection returns, when the app comes back to the foreground, when Today opens or on Send now, one at a time, each written with the time of your tap, so the journal shows when the work was done. A write that hangs for more than 8 seconds on a weak signal is kept the same way, so nothing spins for minutes; a tap whose write landed but whose reply was lost is recognised by its time when it is sent, and counted as done rather than "closed meanwhile". **Snooze** needs a connection and says so, after the same 8 seconds when its writes hang.
 
-When a saved action reaches the server, a task the morning run had closed meanwhile (the rain skip, an ended window) is closed as you asked, since your tap came first; a task you had closed from another screen is left as it is, and the banner says "1 saved action was not applied: the task had been closed meanwhile." If the sending fails while the phone is online, the banner says why and keeps the actions for the next try. After a sent action, Undo on its toast reopens the task as the online Undo does.
+When a saved action reaches the server, a task the morning run had closed meanwhile (the rain skip, an ended window) is closed as you asked, since your tap came first; a task you had closed from another screen is left as it is, and the banner says "1 saved action was not applied: the task had been closed meanwhile." If the sending fails while the phone is online, the banner says why and keeps for the next try what did not go through; a batch written in part keeps only the tasks still to write, the ones written leave the list (a Done counts in the round), and Undo on its toast reopens those while the rest comes back as tasks to do. After a sent action, Undo on its toast reopens the task as the online Undo does.
 
 The saved actions belong to the phone: a Sign out keeps them, and they go out after the next sign-in. A Done made offline on a plant's Calendar tab is not kept; only Today's are.
 
@@ -762,7 +762,7 @@ Each answer shows "Usage: N in / M out tokens". "In" leaves out the cached part 
 | "Offline · Shown as of 19:12, not updated · 2 actions waiting" | Today shows the list kept on the phone, and holds actions made without a connection (chapter 4). | Nothing: the list is read and the actions sent when the signal returns, or tap **Retry** and **Send now**. |
 | "Done: … · saved on the phone" | The Done or Skip is kept on the phone until the connection returns. | Nothing; **Undo** takes it back while it waits. |
 | "1 saved action was not applied: the task had been closed meanwhile." | A task done offline had been closed from another screen before the action was sent. | Check the plant's journal; log the care with **Log something done** if it is missing. |
-| "The saved actions could not be sent: …" | The phone is online but the actions failed to reach the server. | Tap **Send now** again later; the actions are kept. |
+| "The saved actions could not be sent: …" | The phone is online but the actions failed to reach the server, or a batch was written in part and the check after it failed; what was written has left the list (a Done counts in the round). | Tap **Send now** again later; what did not go through is kept. |
 | "Snooze needs a connection." | A snooze was tapped without a connection, or its writes hung. | Snooze once there is signal. |
 | "The connection dropped while Claude was answering. Checking whether the answer has arrived…" (and the same for a check or a diagnosis) | The reply was lost on the way; the server saves the answer when Claude is done, and the app looks for it for up to five minutes. | Wait, or close: the answer reaches the journal by itself. |
 | "No answer was found. The call may have been declined or lost; asking again is a new call." | Nothing arrived within five minutes: Claude may have declined (a refusal is not saved) or the call was lost. | Ask again if you still want the answer; it is a new paid call. |

@@ -1,14 +1,17 @@
 // What Today keeps on the phone (Phase 14, review 3.5): the last list it read, the weather card's
 // rows, and the Done and Skip actions made without a connection, sent when it returns. The copy is
 // the list as read; the queue is applied whenever a list is shown, kept or fresh, so a fresh read
-// never brings a queued task back and an Undo of a waiting action only takes it out of the queue.
+// never brings a queued task back and an Undo of a waiting action only takes it out of the queue,
+// unless a round has already closed part of it (below).
 // The sending runs one action at a time behind one promise, only with a session (a write with no
 // token goes out under the anon key, matches no row, and would read as "closed meanwhile"), and reads
 // back the rows an action left unchanged: a row the server closed (the rain skip, an ended window) is
 // closed as the grower asked, since the tap came first; a row still pending means the write never
 // applied, and the action stays; a row already closed as the action asked, at the tap's time, was
 // this action's own write whose reply was lost, and counts as sent; a row the grower closed
-// elsewhere is left out and reported.
+// elsewhere is left out and reported. A set whose read-back fails after its write closed part of it
+// reports that part, keeps the rest for the next round, and remembers that part for an Undo that
+// comes while the rest waits.
 import { en } from "../i18n/en";
 import { fr } from "../i18n/fr";
 import { localIsoDate } from "./dates";
@@ -133,7 +136,20 @@ export function enqueue(action: NewAction): QueuedAction | null {
   return write(QUEUE_KEY, [...readQueue(), entry]) ? entry : null;
 }
 
-/** Takes a waiting action out of the queue (its Undo); false when it was no longer there. */
+/** The ids the rounds so far closed for an action still in the queue, by action id: what its Undo reopens while the rest waits. Per app session, like `sentOutcomes`. */
+const partialOutcomes = new Map<string, string[]>();
+
+/** The ids an action still waiting has closed in the rounds so far (a set written in part); empty once it is sent or taken back. */
+export function closedSoFar(actionId: string): string[] {
+  return partialOutcomes.get(actionId) ?? [];
+}
+
+/** Forgets what an action closed, once its Undo has reopened the rows, or it was sent whole. */
+export function forgetAction(actionId: string): void {
+  partialOutcomes.delete(actionId);
+}
+
+/** Takes a waiting action out of the queue (its Undo); false when it was no longer there. The rows its rounds closed stay in `closedSoFar` for the caller to reopen, then forget. */
 export function removeAction(id: string): boolean {
   const queue = readQueue();
   const next = queue.filter((a) => a.id !== id);
@@ -217,11 +233,23 @@ function closedByThisAction(state: TaskState, action: QueuedAction): boolean {
   return state.status === wanted && state.acted_at !== null && Date.parse(state.acted_at) === Date.parse(action.at);
 }
 
-/** One action sent: the ids closed, the ids the grower had closed elsewhere, and the ids the write never reached. */
-async function sendOne(action: QueuedAction): Promise<{ closed: string[]; leftOut: string[]; pending: string[] }> {
+/** What one send of an action did. */
+interface SendOutcome {
+  /** The ids closed as the grower asked: by this write, recognised as its own earlier one, or closed over the server's skip. */
+  closed: string[];
+  /** The ids the grower had closed elsewhere, left as they were, and the ids the read did not return. */
+  leftOut: string[];
+  /** The ids the action keeps for the next round: still pending after the write, or not read back. */
+  pending: string[];
+  /** The error that cut the round short after the write had gone through, in the read-back or the override; null otherwise. */
+  failure: unknown;
+}
+
+/** One action sent. The write's own failure is thrown; a failure after it, in the read-back or the override, is returned, so what the write closed is never lost. */
+async function sendOne(action: QueuedAction): Promise<SendOutcome> {
   const closed = await writeAction(action);
   const rest = action.ids.filter((id) => !closed.includes(id));
-  if (rest.length === 0) return { closed, leftOut: [], pending: [] };
+  if (rest.length === 0) return { closed, leftOut: [], pending: [], failure: null };
   // Read back what the write did not change: pending means the write never applied (no token yet,
   // a bad moment); a row closed as asked at the tap's time was this action's own write whose reply
   // was lost; the server's own skip is overridden since the tap came first; and the grower's
@@ -230,10 +258,10 @@ async function sendOne(action: QueuedAction): Promise<{ closed: string[]; leftOu
   try {
     states = await readTaskStates(rest, bound());
   } catch (err) {
-    // The rows closed stay closed: the action keeps the rest only, so the next round does not read
-    // them back as closed by someone else.
-    if (closed.length > 0) writeQueue(readQueue().map((a) => (a.id === action.id ? { ...a, ids: rest } : a)));
-    throw err;
+    // The rows the write closed are closed whatever became of the read-back: they are reported, so
+    // the list and the round move by them, and the action keeps the rest for the next round, which
+    // reads them back as this one would have.
+    return { closed, leftOut: [], pending: rest, failure: err };
   }
   const pending = states.filter((s) => s.status === "pending").map((s) => s.id);
   const own = states.filter((s) => closedByThisAction(s, action)).map((s) => s.id);
@@ -246,13 +274,19 @@ async function sendOne(action: QueuedAction): Promise<{ closed: string[]; leftOu
   if (serverClosed.length > 0) {
     const note = (action.kind === "done" ? action.note : action.reason).trim();
     const patch = action.kind === "done" ? { status: "done" as const, note, acted_at: action.at } : { status: "skipped" as const, note, acted_at: action.at };
-    closed.push(...(await overrideServerClose(serverClosed, patch, bound())));
+    try {
+      closed.push(...(await overrideServerClose(serverClosed, patch, bound())));
+    } catch (err) {
+      // The override did not go through, or its reply was lost (the next round then knows the rows
+      // as this action's own): those rows stay with the action, and what was closed is reported.
+      return { closed, leftOut: [...leftOut, ...unknown], pending: [...pending, ...serverClosed], failure: err };
+    }
   }
-  return { closed, leftOut: [...leftOut, ...unknown], pending };
+  return { closed, leftOut: [...leftOut, ...unknown], pending, failure: null };
 }
 
 let inFlight: Promise<SendReport> | null = null;
-/** The outcome of each action sent in this app session, for an Undo that comes after the send. */
+/** The outcome of each action sent in this app session, by action id, for an Undo that comes after the send. */
 const sentOutcomes = new Map<string, string[]>();
 
 /** The ids an action closed once sent, or null while it waits or sends. */
@@ -277,7 +311,7 @@ async function sendAll(): Promise<SendReport> {
       const queue = readQueue();
       const action = queue[0];
       if (!action) break;
-      let outcome: { closed: string[]; leftOut: string[]; pending: string[] };
+      let outcome: SendOutcome;
       try {
         outcome = await sendOne(action);
       } catch (err) {
@@ -291,13 +325,19 @@ async function sendAll(): Promise<SendReport> {
       if (action.kind === "done") report.done.push(...outcome.closed);
       report.leftOut.push(...outcome.leftOut);
       if (outcome.pending.length > 0) {
-        // The write reached the table and changed nothing on rows still pending: the token is not
-        // accepted (the sign-in not refreshed yet). The action keeps those ids and waits.
+        // Rows this round could not settle: the write reached the table and changed nothing on rows
+        // still pending (the token not accepted yet, the sign-in not refreshed), or the read-back
+        // failed, after a partial close or none. The action keeps those ids, with the attempt counted,
+        // and this round ends; what the write closed is reported above and remembered for an Undo.
         writeQueue(readQueue().map((a) => (a.id === action.id ? { ...a, ids: outcome.pending, attempts: a.attempts + 1 } : a)));
+        if (outcome.closed.length > 0) partialOutcomes.set(action.id, [...closedSoFar(action.id), ...outcome.closed]);
+        if (outcome.failure !== null) report.failed = outcome.failure instanceof Error ? outcome.failure.message : String(outcome.failure);
         throw new StopSending();
       }
-      sentOutcomes.set(action.id, outcome.closed);
+      // Sent whole: its outcome is what this round and the rounds before it closed.
+      sentOutcomes.set(action.id, [...closedSoFar(action.id), ...outcome.closed]);
       removeAction(action.id);
+      forgetAction(action.id);
       report.sent += 1;
     }
   } catch (err) {

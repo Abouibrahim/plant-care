@@ -31,7 +31,9 @@ import { isNetworkFailure, phoneOnline } from "../lib/errors";
 import { handoutText } from "../lib/handout";
 import {
   applyQueue,
+  closedSoFar,
   enqueue,
+  forgetAction,
   keepToday,
   readQueue,
   recallToday,
@@ -383,7 +385,9 @@ export function TodayScreen() {
     }
     if (report.leftOut.length > 0) setRefreshNote(t.today.queueNotApplied(report.leftOut.length));
     else if (report.sent > 0) setRefreshNote(t.today.queueSent(report.sent));
-    if (report.sent > 0) setAttempt((n) => n + 1);
+    // A fresh read once something landed: an action sent, rows written by a round that then stopped,
+    // or rows found closed elsewhere.
+    if (report.sent > 0 || report.closed.length > 0 || report.leftOut.length > 0) setAttempt((n) => n + 1);
   }
   const afterSendRef = useRef(afterSend);
   useEffect(() => {
@@ -888,7 +892,9 @@ export function TodayScreen() {
   /**
    * Undo of an action kept on the phone: while it waits, it leaves the queue and the cards come back
    * from the list as read; once sent, or being sent, the ids it closed are reopened as the online
-   * Undo reopens them. A send under way is waited for first, so nothing is reopened or removed half-way.
+   * Undo reopens them; half written (a set whose rounds closed part of it so far), the rows closed
+   * are reopened the same way and the rest leaves the queue. A send under way is waited for first,
+   * so nothing is reopened or removed half-way.
    */
   async function undoKept(kept: NonNullable<ToastState["queued"]>) {
     const round = sendingNow();
@@ -898,11 +904,24 @@ export function TodayScreen() {
       const reopened = closed.length > 0 && (await reopenTasks(closed, kept.status, kept.clearNote)).length > 0;
       if (!reopened) setRefreshNote(t.today.undoNothing);
       reload();
-    } else if (removeAction(kept.id)) {
-      setQueue(readQueue());
-      notifyTasksChanged();
     } else {
-      setRefreshNote(t.today.undoNothing);
+      // Not sent whole: the rest leaves the queue at once, and the rows the rounds so far closed go
+      // back to pending as after a send. A reopen that fails leaves them in closedSoFar, so another
+      // tap on the toast tries again (undo() shows the error and keeps the toast).
+      const written = closedSoFar(kept.id);
+      const removed = removeAction(kept.id);
+      if (removed) {
+        setQueue(readQueue());
+        notifyTasksChanged();
+      }
+      if (written.length > 0) {
+        const reopened = (await reopenTasks(written, kept.status, kept.clearNote)).length > 0;
+        forgetAction(kept.id);
+        if (!reopened) setRefreshNote(t.today.undoNothing);
+        reload();
+      } else if (!removed) {
+        setRefreshNote(t.today.undoNothing);
+      }
     }
     if (kept.leftOut.length > 0) {
       const day = loaded?.today ?? localIsoDate();
