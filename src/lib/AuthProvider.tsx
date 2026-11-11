@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AuthError, Session } from "@supabase/supabase-js";
-import { isNetworkFailure, phoneOnline } from "./errors";
+import { describeError, isNetworkFailure, phoneOnline } from "./errors";
 import { supabase, supabaseConfigured } from "./supabase";
 import { AuthContext, type AuthState } from "./auth-context";
 
@@ -49,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       offline,
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        return error ? error.message : null;
+        // The server's own words for a refused sign-in; the app's for no connection.
+        return error ? describeError(error) : null;
       },
       async signOut() {
         // Local scope clears the stored session without a server round-trip; one user, one device.

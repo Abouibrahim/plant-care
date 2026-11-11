@@ -3,6 +3,7 @@ import { LogIn, Sprout } from "lucide-react";
 import { Banner } from "../components/Banner";
 import { GardenScene } from "../components/GardenScene";
 import { t } from "../i18n";
+import { describeError } from "../lib/errors";
 import { useAuth } from "../lib/auth-context";
 import { dayPhase } from "../lib/today";
 
@@ -26,7 +27,7 @@ export function LoginScreen() {
       const message = await signIn(email.trim(), password);
       if (message) setError(message);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.errors.generic);
+      setError(describeError(err));
     } finally {
       setPending(false);
     }

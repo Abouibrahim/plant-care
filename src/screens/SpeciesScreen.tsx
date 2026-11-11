@@ -6,7 +6,8 @@ import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { GuildUsesSection, NeedsSection, orderPests, orderRules, PestCard, RuleCard } from "../components/profile";
 import { t } from "../i18n";
-import { api, ApiError } from "../lib/api";
+import { api } from "../lib/api";
+import { describeError } from "../lib/errors";
 import { confirmSpecies, deleteSpeciesIfUnused, getSpecies, speciesPlantCounts } from "../lib/db";
 import { isRefusal, type Species } from "../types";
 import { BeforePlantingCard } from "./species/BeforePlantingCard";
@@ -24,13 +25,6 @@ type LoadState =
 
 type Action = "confirm" | "regenerate" | "delete";
 
-function describeError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 401) return t.errors.unauthorized;
-    if (err.status === 0) return t.errors.network;
-  }
-  return err instanceof Error && err.message ? err.message : t.errors.generic;
-}
 
 function enumLabel(labels: Readonly<Record<string, string>>, value: string): string {
   return labels[value] ?? value;

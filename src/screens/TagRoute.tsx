@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { QrCode } from "lucide-react";
 import { t } from "../i18n";
+import { describeError } from "../lib/errors";
 import { findPlantsByTagCode } from "../lib/db";
 import { parseTagCode } from "../lib/map";
 import { Banner } from "../components/Banner";
@@ -31,7 +32,7 @@ export function TagRoute() {
         setError(null);
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : t.errors.generic);
+        if (active) setError(describeError(err));
       });
     return () => {
       active = false;

@@ -4,6 +4,7 @@ import { BookOpen, CircleCheck, ClipboardCheck, Leaf, Sprout, TriangleAlert } fr
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { t } from "../i18n";
+import { describeError } from "../lib/errors";
 import { VERDICT_PILL } from "../lib/check";
 import { latestChecks, listSpecies, speciesPlantCounts } from "../lib/db";
 import type { CheckSummary, Species } from "../types";
@@ -30,7 +31,7 @@ export function SpeciesListScreen() {
         if (active) setState({ kind: "ready", species, counts, checks: latest });
       })
       .catch((err: unknown) => {
-        if (active) setState({ kind: "error", message: err instanceof Error ? err.message : t.errors.generic });
+        if (active) setState({ kind: "error", message: describeError(err) });
       });
     return () => {
       active = false;

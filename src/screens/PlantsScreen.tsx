@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { MapPin, MapPinOff, Printer, Search, Sprout, X } from "lucide-react";
 import { t } from "../i18n";
+import { describeError } from "../lib/errors";
 import { localIsoDate } from "../lib/dates";
 import { latestPhotos, listDueTasks, listPlants } from "../lib/db";
 import { hasPosition } from "../lib/map";
@@ -74,7 +75,7 @@ export function PlantsScreen() {
     }
     load().catch((err: unknown) => {
       if (!active) return;
-      setError(err instanceof Error ? err.message : t.errors.generic);
+      setError(describeError(err));
       setLoading(false);
     });
     return () => {

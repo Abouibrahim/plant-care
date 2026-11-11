@@ -4,7 +4,7 @@
 import { supabase } from "./supabase";
 import { getCheck, getPhoto, getQuestion, notifyTasksChanged } from "./db";
 import { problemResult } from "./diagnosis";
-import { isNetworkFailure } from "./errors";
+import { ApiError, isNetworkFailure, LostReplyError } from "./errors";
 import {
   expansionChanged,
   type AskRequest,
@@ -23,26 +23,6 @@ import {
   type PushSubscriptionJson,
   type WeatherResponse,
 } from "../types";
-
-export class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
-/**
- * A reply lost on the way whose stored row never appeared in time: the call may have been declined
- * (a refusal is not stored) or lost, and asking again is a new call. Status 0, like the loss itself.
- */
-export class LostReplyError extends ApiError {
-  constructor(cause: ApiError) {
-    super(0, cause.message);
-    this.name = "LostReplyError";
-  }
-}
 
 function parseJson(text: string): unknown {
   if (!text) return null;

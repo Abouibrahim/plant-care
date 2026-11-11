@@ -3,6 +3,7 @@ import { Banner } from "../../components/Banner";
 import { ConfidenceBar } from "../../components/ConfidenceBar";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
+import { describeError } from "../../lib/errors";
 import { addDays, localIsoDate, toLocalDate } from "../../lib/dates";
 import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, treatedRuleKey } from "../../lib/db";
 import { isPestScout, rephotoDays, rephotoTask, shortCause, sortedCauses, topCause, URGENCY_PILL } from "../../lib/diagnosis";
@@ -64,7 +65,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
       setMode("idle");
       onChanged();
     } catch (err) {
-      setNotice({ kind: "error", text: `${s.treatFailed}: ${err instanceof Error ? err.message : t.errors.generic}` });
+      setNotice({ kind: "error", text: `${s.treatFailed}: ${describeError(err)}` });
     } finally {
       setBusy(null);
     }
@@ -79,7 +80,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
       await insertRephotoTask({ plant_id: plant.id, photo_id: photoId, due_on: addDays(today, days), title, instruction });
       onChanged();
     } catch (err) {
-      setNotice({ kind: "error", text: `${s.reminderFailed}: ${err instanceof Error ? err.message : t.errors.generic}` });
+      setNotice({ kind: "error", text: `${s.reminderFailed}: ${describeError(err)}` });
     } finally {
       setBusy(null);
     }

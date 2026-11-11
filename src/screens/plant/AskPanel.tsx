@@ -8,7 +8,8 @@ import { Send, X } from "lucide-react";
 import { Banner } from "../../components/Banner";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
-import { api, ApiError, LostReplyError } from "../../lib/api";
+import { api } from "../../lib/api";
+import { describeError } from "../../lib/errors";
 import { historyOf, storedAnswer } from "../../lib/ask";
 import { insertQuestion, listThread, QuestionsUnavailable } from "../../lib/db";
 import { useBackClose } from "../../lib/useBackClose";
@@ -38,16 +39,6 @@ interface Props {
   onClose: () => void;
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof LostReplyError) return t.errors.answerLost;
-  if (err instanceof ApiError) {
-    if (err.status === 401) return t.errors.unauthorized;
-    if (err.status === 0) return t.errors.network;
-    return err.message || t.errors.generic;
-  }
-  if (err instanceof Error && err.message) return err.message;
-  return t.errors.generic;
-}
 
 function usageOf(u: Usage): Usage {
   return {

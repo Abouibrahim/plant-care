@@ -9,9 +9,9 @@ import { emptyRecord, RecordForm, type RecordValues } from "../components/Record
 import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { t } from "../i18n";
-import { api, ApiError } from "../lib/api";
+import { api } from "../lib/api";
 import { deleteSpeciesIfUnused, insertPhoto, insertPlant, newId, photoPath, uploadPhoto, uploadThumbnail } from "../lib/db";
-import { isNetworkFailure } from "../lib/errors";
+import { describeError } from "../lib/errors";
 import { prepareImage, type PreparedImage } from "../lib/image";
 import {
   isRefusal,
@@ -67,17 +67,6 @@ function writeSite(site: Site) {
   }
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 401) return t.errors.unauthorized;
-    if (err.status === 0) return t.errors.network;
-    if (err.status === 413) return t.errors.tooLarge;
-    return err.message || t.errors.generic;
-  }
-  if (isNetworkFailure(err)) return t.errors.network;
-  if (err instanceof Error && err.message) return err.message;
-  return t.errors.generic;
-}
 
 class UploadFailure extends Error {
   constructor(message: string) {

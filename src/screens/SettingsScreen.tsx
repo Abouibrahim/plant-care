@@ -37,6 +37,7 @@ import {
   SettingsUnavailable,
   WeatherUnavailable,
 } from "../lib/db";
+import { describeError } from "../lib/errors";
 import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
 import { syncLangWithServer } from "../lib/langSync";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
@@ -61,9 +62,6 @@ import { APP_VERSION } from "../version";
 /** A write to the settings table that hangs this long is given up, so the screen never waits on it. */
 const SETTING_WRITE_TIMEOUT_MS = 5_000;
 
-function message(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : t.errors.generic;
-}
 
 /** A card heading: the section's icon on a tinted tile, the title, and anything at the right end. */
 function CardHead({ icon: Icon, tone = "", title, children }: { icon: LucideIcon; tone?: string; title: string; children?: ReactNode }) {
@@ -107,7 +105,10 @@ function RemindersCard() {
       setState(state === "on" ? await disablePush() : await enablePush({ denied: s.denied, failed: s.failed }));
     } catch (err) {
       if (err instanceof PushError) setState(err.state);
-      setError(`${state === "on" ? s.stopFailed : s.failed}: ${message(err)}`);
+      // A PushError may carry the card's own line as its reason: then the line is said once.
+      const line = state === "on" ? s.stopFailed : s.failed;
+      const why = describeError(err);
+      setError(why === line ? line : `${line}: ${why}`);
     } finally {
       setBusy(false);
     }
@@ -305,7 +306,7 @@ function WeatherSettingsCard() {
       .catch((err: unknown) => {
         if (!active) return;
         if (err instanceof SettingsUnavailable) setSettingsMissing(true);
-        else setError(message(err));
+        else setError(describeError(err));
       });
     Promise.all([loadDailyRecord(), loadDailyStart()])
       .then(([record, start]) => {
@@ -336,7 +337,7 @@ function WeatherSettingsCard() {
     try {
       setSettings(await saveWeatherSettings(next));
     } catch (err) {
-      setError(`${W.saveFailed}: ${message(err)}`);
+      setError(`${W.saveFailed}: ${describeError(err)}`);
     } finally {
       setSaving(false);
     }
@@ -460,7 +461,7 @@ function UsageCard() {
       .catch((err: unknown) => {
         if (!active) return;
         if (err instanceof SettingsUnavailable) setMissing(true);
-        else setError(`${U.loadFailed}: ${message(err)}`);
+        else setError(`${U.loadFailed}: ${describeError(err)}`);
       });
     return () => {
       active = false;
@@ -528,7 +529,7 @@ function ZonesCard() {
       .catch((err: unknown) => {
         if (!active) return;
         if (err instanceof SettingsUnavailable) setMissing(true);
-        else setError(`${Z.loadFailed}: ${message(err)}`);
+        else setError(`${Z.loadFailed}: ${describeError(err)}`);
       });
     Promise.all(SITES.map((site) => recentZones(site)))
       .then((lists) => {
@@ -552,7 +553,7 @@ function ZonesCard() {
     try {
       setZones(await saveZones({ ...zones, [site]: list }));
     } catch (err) {
-      setError(`${Z.saveFailed}: ${message(err)}`);
+      setError(`${Z.saveFailed}: ${describeError(err)}`);
     } finally {
       setSaving(false);
     }
@@ -664,7 +665,7 @@ function ExportCard() {
       const result: ExportResult = kind === "plants" ? await exportPlantsCsv() : await exportTasksCsv();
       setNote({ kind: "info", text: s.saved(result.rows, result.filename) });
     } catch (err) {
-      setNote({ kind: "error", text: `${s.failed}: ${message(err)}` });
+      setNote({ kind: "error", text: `${s.failed}: ${describeError(err)}` });
     } finally {
       setBusy(null);
     }

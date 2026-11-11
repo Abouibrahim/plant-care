@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { composeDigest, inDigest, loadDigestTasks, type DigestTask } from "../api/_push.js";
-import { runExpansion } from "../api/_tasks.js";
+import { composeDigest, inDigest, loadDigestTasks, longestLead, type DigestTask } from "../api/_push.js";
+import { HORIZON_DAYS, runExpansion } from "../api/_tasks.js";
 import { en } from "../src/i18n/en";
-import type { CareRule } from "../src/types";
-import { fixture, water, window } from "./fixtures";
+import { addDays } from "../src/lib/dates";
+import type { CareRule, Site, TaskType } from "../src/types";
+import { fixture, water, window, type Fixture } from "./fixtures";
+import type { QueryInfo } from "./mockdb";
 
 const harvestRule = window("harvest", [10, 11], { lead_days: 14, title: "Harvest olives" });
 
@@ -257,12 +259,93 @@ describe("composeDigest: window batches (Phase 12)", () => {
   });
 });
 
+/**
+ * The digest's tasks as the read before Phase 15 gave them: every pending task up to the horizon, with
+ * its species' whole calendar, taken from the tables directly.
+ */
+function everyPending(f: Fixture, todayIso: string): DigestTask[] {
+  return f
+    .pending()
+    .filter((t) => (t.due_on as string) <= addDays(todayIso, HORIZON_DAYS))
+    .map((t) => {
+      const plant = f.state.plants.find((p) => p.id === t.plant_id);
+      const species = f.state.species.find((s) => s.id === plant?.species_id);
+      return {
+        id: t.id as string,
+        plant_id: t.plant_id as string,
+        type: t.type as TaskType,
+        rule_key: t.rule_key as string,
+        due_on: t.due_on as string,
+        window_end: (t.window_end as string | null) ?? null,
+        title: t.title as string,
+        plant: plant
+          ? {
+              tag: plant.tag as string,
+              site: plant.site as Site,
+              zone: (plant.zone as string | null) ?? "",
+              quantity: (plant.quantity as number | null) ?? 1,
+              care_calendar: (species?.care_calendar as CareRule[] | undefined) ?? [],
+            }
+          : null,
+      };
+    })
+    .sort((a, b) => a.due_on.localeCompare(b.due_on) || a.id.localeCompare(b.id));
+}
+
+describe("longestLead", () => {
+  it("is the largest whole lead across the calendars, within the horizon, and 0 without one", () => {
+    expect(longestLead([[water([9], 7)], [window("scout", [10], { lead_days: 7 }), window("prune", [1], { lead_days: 21 })]])).toBe(21);
+    expect(longestLead([[window("protect", [12], { lead_days: 400 })]])).toBe(HORIZON_DAYS);
+    expect(longestLead([null, "x", [{ lead_days: 2.5 }, { lead_days: -3 }, null, { lead_days: "9" }]])).toBe(0);
+    expect(longestLead([])).toBe(0);
+  });
+});
+
 describe("loadDigestTasks", () => {
+  it("composes the same notifications as a read of every pending task, morning after morning", async () => {
+    const f = fixture();
+    f.plant([water([9, 10, 11], 7), window("scout", [10], { lead_days: 7, title: "Scout for olive fly" }), window("harvest", [11], { lead_days: 3 })], {
+      tag: "OL-1",
+      zone: "row 2",
+    });
+    f.plant([window("prune", [10, 11], { lead_days: 14 }), water([9, 10], 3, { litres: 20 })], { tag: "FIG-1", site: "backyard" });
+    f.plant([window("feed", [10], { lead_days: 2 })], { tag: "POM-1", zone: "row 2", quantity: 12 });
+    await runExpansion(f.db, "2026-09-17");
+    let notices = 0;
+    for (let i = 0; i < 14; i++) {
+      const day = addDays("2026-09-17", i);
+      const fresh = await loadDigestTasks(f.db, day);
+      expect(composeDigest(fresh, day)).toEqual(composeDigest(everyPending(f, day), day));
+      notices += fresh.filter((t) => t.due_on > day && inDigest(t, day)).length;
+    }
+    // The fortnight holds a notice at every lead: the prune's 14 days on its first morning (17 Sep), the
+    // longest, where a read that stops short would show, then the scout's 7 (24 Sep) and the feed's 2 (29 Sep).
+    expect(notices).toBeGreaterThan(0);
+  });
+
+  it("reads each calendar once and the tasks without one, only as far as the longest notice", async () => {
+    const seen: QueryInfo[] = [];
+    const f = fixture({ onQuery: (q) => seen.push(q) });
+    f.plant([water([9, 10], 1), window("scout", [10], { lead_days: 5 })]);
+    await runExpansion(f.db, "2026-09-02");
+    seen.length = 0;
+    const tasks = await loadDigestTasks(f.db, "2026-09-02");
+    const taskReads = seen.filter((q) => q.table === "tasks");
+    expect(taskReads.length).toBeGreaterThan(0);
+    expect(taskReads.every((q) => !q.columns.includes("care_calendar"))).toBe(true);
+    expect(seen.filter((q) => q.table === "species" && q.columns.includes("care_calendar")).length).toBe(1);
+    expect(tasks.length).toBeGreaterThan(0);
+    expect(tasks.every((t) => t.due_on <= "2026-09-07")).toBe(true);
+    // And it reaches that far: the waterings of the longest notice's day are in it.
+    expect(tasks.some((t) => t.due_on === "2026-09-07")).toBe(true);
+    expect(f.pending().some((t) => (t.due_on as string) > "2026-09-07")).toBe(true);
+  });
+
   it("reads pending tasks with their plant's site and rules", async () => {
     const f = fixture();
     f.plant([water([9], 7)], { tag: "fig", site: "backyard", zone: "courtyard", quantity: 3 });
     await runExpansion(f.db, "2026-09-02");
-    const tasks = await loadDigestTasks(f.db, "2026-09-02");
+    const tasks = await loadDigestTasks(f.db, "2026-09-10");
     expect(tasks.length).toBeGreaterThan(0);
     expect(tasks[0].plant).toMatchObject({ tag: "fig", site: "backyard", zone: "courtyard", quantity: 3 });
     expect(tasks[0].plant_id).toBe(f.state.plants[0].id);
@@ -273,13 +356,14 @@ describe("loadDigestTasks", () => {
     const f = fixture();
     f.plant([water([9], 7)], { quantity: null, zone: null });
     await runExpansion(f.db, "2026-09-02");
-    const [first] = await loadDigestTasks(f.db, "2026-09-02");
+    const [first] = await loadDigestTasks(f.db, "2026-09-10");
     expect(first.plant).toMatchObject({ zone: "", quantity: 1 });
   });
 
   it("reads past the 1,000-row cap", async () => {
     const f = fixture();
-    for (let i = 0; i < 12; i++) f.plant([water([9, 10, 11, 12], 1)]);
+    // A notice that reaches across the horizon makes the read cover every pending task.
+    for (let i = 0; i < 12; i++) f.plant([water([9, 10, 11, 12], 1), window("protect", [12], { lead_days: HORIZON_DAYS })]);
     await runExpansion(f.db, "2026-09-02");
     const tasks = await loadDigestTasks(f.db, "2026-09-02");
     expect(f.pending().length).toBeGreaterThan(1000);

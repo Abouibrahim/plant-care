@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { BookOpen, ChevronLeft, ClipboardPen, ImagePlus, MapPin, MapPinned, MessageCircleQuestionMark, Pencil, QrCode, Stethoscope, Trash2, X } from "lucide-react";
 import { t } from "../i18n";
 import { api } from "../lib/api";
+import { describeError } from "../lib/errors";
 import { storedAnswer } from "../lib/ask";
 import { ageInMonths, localIsoDate, toLocalDate } from "../lib/dates";
 import {
@@ -64,9 +65,6 @@ interface Extras {
   questions: Question[];
 }
 
-function message(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : t.errors.generic;
-}
 
 /** YYYY-MM-DD as a local date string, without a timezone shift. */
 function formatIsoDate(iso: string): string {
@@ -119,7 +117,7 @@ export function PlantScreen() {
         setLoadError(null);
       })
       .catch((err: unknown) => {
-        if (active) setLoadError({ id, message: message(err) });
+        if (active) setLoadError({ id, message: describeError(err) });
       });
     return () => {
       active = false;
@@ -139,7 +137,7 @@ export function PlantScreen() {
         setExtrasError(null);
       })
       .catch((err: unknown) => {
-        if (active) setExtrasError({ id, message: message(err) });
+        if (active) setExtrasError({ id, message: describeError(err) });
       });
     return () => {
       active = false;
@@ -191,7 +189,7 @@ export function PlantScreen() {
         .catch(() => undefined)
         .then(reloadExtras);
     } catch (err) {
-      setActionError(message(err));
+      setActionError(describeError(err));
     } finally {
       setSaving(false);
     }
@@ -214,7 +212,7 @@ export function PlantScreen() {
       else await snoozeTask(task, action.days, localIsoDate());
       reloadExtras();
     } catch (err) {
-      setActionError(`${t.today.actionFailed}: ${message(err)}`);
+      setActionError(`${t.today.actionFailed}: ${describeError(err)}`);
     } finally {
       setBusyTaskId(null);
     }
@@ -230,7 +228,7 @@ export function PlantScreen() {
       await deletePlant(plant.id);
       navigate("/plants", { replace: true });
     } catch (err) {
-      setActionError(`${t.plant.deleteFailed}: ${message(err)}`);
+      setActionError(`${t.plant.deleteFailed}: ${describeError(err)}`);
       setDeleting(false);
     }
   }
@@ -266,7 +264,7 @@ export function PlantScreen() {
       reloadExtras();
       setTab("journal");
     } catch (err) {
-      setActionError(message(err));
+      setActionError(describeError(err));
     } finally {
       setUploading(false);
     }

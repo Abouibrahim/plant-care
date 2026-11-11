@@ -10,7 +10,8 @@ import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
 import { SiteLabel } from "../components/TypeIcon";
 import { lang, t } from "../i18n";
-import { api, ApiError, LostReplyError } from "../lib/api";
+import { api } from "../lib/api";
+import { describeError } from "../lib/errors";
 import { storedCheck } from "../lib/check";
 import { ChecksUnavailable, emptyZones, getCheck, getSpecies, insertCheck, loadZones, newId } from "../lib/db";
 import {
@@ -35,16 +36,6 @@ interface Shown {
   save: SaveState | null;
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof LostReplyError) return t.errors.answerLost;
-  if (err instanceof ApiError) {
-    if (err.status === 401) return t.errors.unauthorized;
-    if (err.status === 0) return t.errors.network;
-    return err.message || t.errors.generic;
-  }
-  if (err instanceof Error && err.message) return err.message;
-  return t.errors.generic;
-}
 
 /** A check whose save failed or is still out gets one more try before it leaves the screen (the id makes it safe). */
 function retryUnsaved(shown: Shown | null) {

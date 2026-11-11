@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Banner } from "../../components/Banner";
 import { t } from "../../i18n";
+import { describeError } from "../../lib/errors";
 import { updateSpeciesField } from "../../lib/db";
 import type { Species, SpeciesProfile } from "../../types";
 import {
@@ -137,7 +138,7 @@ export function FieldEditor({ species, target, onSaved, onCancel }: Props) {
       }
       onSaved(current);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : t.errors.generic);
+      setError(describeError(err));
       setSaving(false);
     }
   }

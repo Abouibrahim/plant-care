@@ -15,7 +15,8 @@ vi.mock("../src/lib/supabase", async () => {
   };
 });
 
-const { api, ApiError, callApi, LostReplyError } = await import("../src/lib/api");
+const { api, callApi } = await import("../src/lib/api");
+const { ApiError, LostReplyError } = await import("../src/lib/errors");
 const { resetState, sharedState } = await import("./mockdb");
 
 type Reply = { status: number; body: string } | Error;

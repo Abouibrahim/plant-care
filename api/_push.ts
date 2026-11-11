@@ -1,5 +1,5 @@
 // The push digest: step 5 of the reminder engine in CLAUDE.md. `composeDigest` is pure (tasks in,
-// messages out); `loadDigestTasks` reads the pending tasks with their plant and species rules;
+// messages out); `loadDigestTasks` reads the pending tasks it can use with their plant and species rules;
 // `sendDigest` delivers one push per subscription per site with web-push and drops subscriptions
 // the push service no longer knows. /api/daily calls the three after the expansion.
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -39,23 +39,49 @@ interface TaskRow {
   due_on: string;
   window_end: string | null;
   title: string;
-  plant: { tag: string; site: Site; zone: string | null; quantity: number | null; species: { care_calendar: unknown } | null } | null;
+  plant: { tag: string; site: Site; zone: string | null; quantity: number | null; species_id: string | null } | null;
 }
 
-/** Pending tasks up to the horizon with the plant's site, zone, tag and size and its species' rules, read in pages. */
+/**
+ * The longest early notice any calendar asks for, in days: a task further ahead than this cannot be in
+ * today's digest. Whole leads of 1 or more count, as `leadDays` reads them; at most the 90-day horizon.
+ */
+export function longestLead(calendars: Iterable<unknown>): number {
+  let longest = 0;
+  for (const calendar of calendars) {
+    if (!Array.isArray(calendar)) continue;
+    for (const item of calendar) {
+      const lead = (item as { lead_days?: unknown } | null)?.lead_days;
+      if (typeof lead === "number" && Number.isInteger(lead) && lead > longest) longest = lead;
+    }
+  }
+  return Math.min(longest, HORIZON_DAYS);
+}
+
+/**
+ * The pending tasks today's digest can use, with the plant's site, zone, tag and size and its species'
+ * rules (Phase 15, review 4.1): each species' calendar is read once, not copied onto every task row, and
+ * the tasks only up to the longest early notice, since a task is in the digest when it is due by today
+ * or, for a window, exactly its lead ahead. Both reads page past the 1,000-row cap.
+ */
 export async function loadDigestTasks(db: SupabaseClient, todayIso: string): Promise<DigestTask[]> {
+  const species = await readAll<{ id: string; care_calendar: unknown }>((from, to) =>
+    db.from("species").select("id, care_calendar").order("id", { ascending: true }).range(from, to),
+  );
+  const calendars = new Map(species.map((s) => [s.id, Array.isArray(s.care_calendar) ? (s.care_calendar as CareRule[]) : []]));
+  const until = addDays(todayIso, longestLead(species.map((s) => s.care_calendar)));
   const rows = await readAll<TaskRow>((from, to) =>
     db
       .from("tasks")
-      .select("id, plant_id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, zone, quantity, species(care_calendar))")
+      .select("id, plant_id, type, rule_key, due_on, window_end, title, plant:plants(tag, site, zone, quantity, species_id)")
       .eq("status", "pending")
-      .lte("due_on", addDays(todayIso, HORIZON_DAYS))
+      .lte("due_on", until)
       .order("due_on", { ascending: true })
       .order("id", { ascending: true })
       .range(from, to),
   );
   return rows.map((row) => {
-    const calendar = row.plant?.species?.care_calendar;
+    const speciesId = row.plant?.species_id;
     return {
       id: row.id,
       plant_id: row.plant_id,
@@ -70,7 +96,7 @@ export async function loadDigestTasks(db: SupabaseClient, todayIso: string): Pro
             site: row.plant.site,
             zone: row.plant.zone ?? "",
             quantity: row.plant.quantity ?? 1,
-            care_calendar: Array.isArray(calendar) ? (calendar as CareRule[]) : [],
+            care_calendar: (speciesId ? calendars.get(speciesId) : undefined) ?? [],
           }
         : null,
     };

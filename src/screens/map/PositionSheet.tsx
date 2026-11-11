@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Layers, LocateFixed, X } from "lucide-react";
 import { t } from "../../i18n";
+import { describeError } from "../../lib/errors";
 import { listPlantSpots } from "../../lib/db";
 import { neighboursOf, roundPosition, startView, TREE_ZOOM, type LatLng } from "../../lib/map";
 import { COARSE_M, LocateError, locate, type Fix } from "../../lib/location";
@@ -146,7 +147,7 @@ export default function PositionSheet({ title, plantId, site, initial, onSave, o
       await onSave(roundPosition({ lat: centre.lat, lng: centre.lng }));
       onClose();
     } catch (err) {
-      setError(`${t.position.saveFailed}: ${err instanceof Error ? err.message : t.errors.generic}`);
+      setError(`${t.position.saveFailed}: ${describeError(err)}`);
       setBusy(false);
     }
   }
@@ -159,7 +160,7 @@ export default function PositionSheet({ title, plantId, site, initial, onSave, o
       await onClear();
       onClose();
     } catch (err) {
-      setError(`${t.position.saveFailed}: ${err instanceof Error ? err.message : t.errors.generic}`);
+      setError(`${t.position.saveFailed}: ${describeError(err)}`);
       setBusy(false);
     }
   }

@@ -7,11 +7,11 @@ import { Banner } from "../../components/Banner";
 import { PhotoImg } from "../../components/PhotoImg";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
-import { api, ApiError, LostReplyError } from "../../lib/api";
+import { api } from "../../lib/api";
 import { addDays, localIsoDate } from "../../lib/dates";
 import { insertPhoto, insertRephotoTask, listDiagnosisTasks, newId, photoPath, removePhotoObject, uploadPhoto, uploadThumbnail } from "../../lib/db";
 import { problemResult, rephotoDays, rephotoTask } from "../../lib/diagnosis";
-import { isNetworkFailure } from "../../lib/errors";
+import { ApiError, describeError, LostReplyError } from "../../lib/errors";
 import { prepareImage, type PreparedImage } from "../../lib/image";
 import { useBackClose } from "../../lib/useBackClose";
 import {
@@ -55,18 +55,6 @@ interface Props {
   onClose: () => void;
 }
 
-function describeError(err: unknown): string {
-  if (err instanceof LostReplyError) return t.errors.answerLost;
-  if (err instanceof ApiError) {
-    if (err.status === 401) return t.errors.unauthorized;
-    if (err.status === 0) return t.errors.network;
-    if (err.status === 413) return t.errors.tooLarge;
-    return err.message || t.errors.generic;
-  }
-  if (isNetworkFailure(err)) return t.errors.network;
-  if (err instanceof Error && err.message) return err.message;
-  return t.errors.generic;
-}
 
 export function DiagnosePanel({ plant, photos, existing = null, onChanged, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>(existing ? "result" : "idle");

@@ -5,6 +5,7 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { Banner } from "../../components/Banner";
 import { t } from "../../i18n";
+import { describeError } from "../../lib/errors";
 import { updateSpeciesField } from "../../lib/db";
 import type { Species, SpeciesProfile } from "../../types";
 
@@ -81,7 +82,7 @@ export function ListCard<K extends ListKey>(p: Props<K>) {
     try {
       saved = await updateSpeciesField(p.species, p.listKey, next as unknown as SpeciesProfile[K]);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : t.errors.generic);
+      setError(describeError(err));
       setSaving(false);
       return;
     }

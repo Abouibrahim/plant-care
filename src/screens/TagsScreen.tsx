@@ -8,6 +8,7 @@ import { ChevronLeft, Printer } from "lucide-react";
 import { correction, generate } from "lean-qr";
 import { toSvgPath } from "lean-qr/extras/svg";
 import { lang, t } from "../i18n";
+import { describeError } from "../lib/errors";
 import { listPlants } from "../lib/db";
 import { formatTagCode, tagCode, tagUrl } from "../lib/map";
 import { matchesQuery } from "../lib/plantSearch";
@@ -50,7 +51,7 @@ export default function TagsScreen() {
         if (active) setPlants(rows);
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : t.errors.generic);
+        if (active) setError(describeError(err));
       });
     return () => {
       active = false;

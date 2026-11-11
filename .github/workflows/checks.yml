@@ -1,0 +1,33 @@
+# The four checks of CLAUDE.md's working agreements, on every push and on demand (Phase 15, review 7.1):
+# a clean install from the lockfile on Linux and UTC, then typecheck, lint, the tests and the build.
+# Vercel deploys a push to main whatever this says: the workflow reports a red push, it does not stop it.
+name: Checks
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # engines.node in package.json: Vercel builds and runs the functions with it too (it overrides the
+          # project setting), so the checks and production cannot drift apart.
+          node-version-file: package.json
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

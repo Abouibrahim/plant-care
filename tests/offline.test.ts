@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { en } from "../src/i18n/en";
 import { fr } from "../src/i18n/fr";
 import { localIsoDate } from "../src/lib/dates";
-import { isNetworkFailure } from "../src/lib/errors";
 import type { TaskWithPlant } from "../src/types";
 import { resetState, sharedState, type QueryInfo, type Row } from "./mockdb";
 
@@ -304,18 +303,3 @@ describe("sending the queue", () => {
   });
 });
 
-describe("isNetworkFailure", () => {
-  it("knows the browser's wording for a request without an answer, a bound that ran out and an abort, and nothing else", () => {
-    expect(isNetworkFailure(new Error("TypeError: Failed to fetch"))).toBe(true);
-    expect(isNetworkFailure(new TypeError("NetworkError when attempting to fetch resource."))).toBe(true);
-    expect(isNetworkFailure(new Error("Load failed"))).toBe(true);
-    // The 8 s bound on a task write (AbortSignal.timeout), as supabase-js reports it.
-    expect(isNetworkFailure(new Error("TimeoutError: signal timed out"))).toBe(true);
-    expect(isNetworkFailure(new Error("AbortError: The user aborted a request."))).toBe(true);
-    expect(isNetworkFailure(new DOMException("signal timed out", "TimeoutError"))).toBe(true);
-    // A programming error is not a lost connection, whatever its class.
-    expect(isNetworkFailure(new TypeError("x is not a function"))).toBe(false);
-    expect(isNetworkFailure(new Error("duplicate key value violates unique constraint"))).toBe(false);
-    expect(isNetworkFailure("Failed to fetch")).toBe(false);
-  });
-});

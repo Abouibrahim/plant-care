@@ -27,7 +27,7 @@ import {
   skipTasks,
   snoozeTask,
 } from "../lib/db";
-import { isNetworkFailure, phoneOnline } from "../lib/errors";
+import { describeError, isNetworkFailure, phoneOnline } from "../lib/errors";
 import { handoutText } from "../lib/handout";
 import {
   applyQueue,
@@ -205,10 +205,6 @@ interface ToastState {
   queued?: { id: string; status: "done" | "skipped"; clearNote: boolean; leftOut: string[] };
 }
 
-function message(err: unknown): string {
-  if (isNetworkFailure(err)) return t.errors.network;
-  return err instanceof Error && err.message ? err.message : t.errors.generic;
-}
 
 /** Thrown before a write when the phone says it is offline: the action goes to the queue without a try. */
 class OfflineNow extends Error {
@@ -428,7 +424,7 @@ export function TodayScreen() {
       })
       .catch((err: unknown) => {
         if (!active) return;
-        setError(message(err));
+        setError(describeError(err));
         // The list on screen, fresh or kept, stays, and says when it was read; after midnight it is
         // re-dated to the new day, as a copy recalled at mount is.
         setLoaded((prev) => {
@@ -620,7 +616,7 @@ export function TodayScreen() {
       setRefreshNote(t.today.refreshed(r.created, r.removed, r.expired, r.superseded));
       reload();
     } catch (err) {
-      setError(`${t.today.refreshFailed}: ${message(err)}`);
+      setError(`${t.today.refreshFailed}: ${describeError(err)}`);
     } finally {
       setRefreshing(false);
     }
@@ -735,7 +731,7 @@ export function TodayScreen() {
       } else if (action.kind === "snooze" && noConnection(err)) {
         setError(t.today.snoozeOffline);
       } else {
-        setError(`${t.today.actionFailed}: ${message(err)}`);
+        setError(`${t.today.actionFailed}: ${describeError(err)}`);
       }
     } finally {
       setLeaving((prev) => without(prev, task.id));
@@ -827,7 +823,7 @@ export function TodayScreen() {
           lastOfDay,
         );
       } else {
-        setError(`${t.today.actionFailed}: ${message(err)}`);
+        setError(`${t.today.actionFailed}: ${describeError(err)}`);
       }
     } finally {
       setLeaving((prev) => {
@@ -953,7 +949,7 @@ export function TodayScreen() {
       setToast(null);
       reload();
     } catch (err) {
-      setError(`${t.today.undoFailed}: ${message(err)}`);
+      setError(`${t.today.undoFailed}: ${describeError(err)}`);
     } finally {
       setUndoing(false);
     }
@@ -975,7 +971,7 @@ export function TodayScreen() {
     phoneOnline() ? "" : t.today.offline,
     loaded?.kept ? t.today.shownAsOf(keptTime(loaded.kept, today)) : "",
     queue.length > 0 ? t.today.queued(queue.length) : "",
-    sendReport?.failed && queue.length > 0 && phoneOnline() ? t.today.queueFailed(isNetworkFailure(new Error(sendReport.failed)) ? t.errors.network : sendReport.failed) : "",
+    sendReport?.failed && queue.length > 0 && phoneOnline() ? t.today.queueFailed(describeError(new Error(sendReport.failed))) : "",
   ].filter(Boolean);
 
   const siteTasks = site === "all" ? tasks : tasks.filter((x) => x.plant?.site === site);

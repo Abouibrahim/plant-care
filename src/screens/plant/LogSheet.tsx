@@ -8,6 +8,7 @@ import { Bell, Check, X } from "lucide-react";
 import { Banner } from "../../components/Banner";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
+import { describeError } from "../../lib/errors";
 import { addDays, localIsoDate } from "../../lib/dates";
 import { insertManualTask } from "../../lib/db";
 import { TASK_ICONS } from "../../lib/icons";
@@ -23,9 +24,6 @@ interface Props {
   onClose: () => void;
 }
 
-function describeError(err: unknown): string {
-  return err instanceof Error && err.message ? err.message : t.errors.generic;
-}
 
 export function LogSheet({ plant, onSaved, onClose }: Props) {
   const [type, setType] = useState<TaskType | null>(null);

@@ -2,7 +2,7 @@
 
 Phone-first PWA for one grower with two sites in Cap Bon, the backyard at home and the farm at borgdanet. Photograph a plant, let Claude identify it and write a species profile for Cap Bon conditions, and the app turns the profile into a task calendar, a daily round on Today and a push digest every morning.
 
-How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE14.md` and `UI-REFRESH.md`, the review behind Phases 10 and 14 in `docs/REVIEW-2026-10-30.md`.
+How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE15.md` and `UI-REFRESH.md`, the review behind Phases 10, 14 and 15 in `docs/REVIEW-2026-10-30.md`.
 
 ## What it does
 
@@ -26,7 +26,7 @@ React + Vite + TypeScript PWA on Vercel, serverless functions under `api/`, Clau
 
 1. **Supabase**: create a project and note its URL, its anon key and its service-role key from the project's settings. In the SQL editor run `supabase/schema.sql` once, on a new project only (it creates the tables, the `owners` table and the `is_owner()` function every policy reads, the private bucket `photos` and its storage policy). If the run ends with a notice about the "owner photos" policy, add that policy from Storage → Policies: bucket `photos`, all operations for authenticated users, both expressions `bucket_id = 'photos' and is_owner()`. In Authentication create one user with email and password, then run `insert into owners (user_id) select id from auth.users where email = '<your email>';` in the SQL editor, and check that `select count(*) as owners from owners;` says 1: the policies accept that account only (the `/api` routes accept the one named by `OWNER_USER_ID`, see step 3; the two must be the same user). Under Sign In / Providers turn off "Allow new users to sign up".
 2. **Claude**: create an API key at platform.claude.com. Keep the organisation on the default 30-day data retention: under zero data retention every call answers 400. What each call costs is in `docs/USER-GUIDE.md`, chapter 13.
-3. **Vercel**: create a project from this repository. Add the environment variables named in `.env.example` (Production and Preview): `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID` (the UUID of your user under Supabase → Authentication → Users: the `/api` routes accept that account only), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `CRON_SECRET` (any long random string). Redeploy after adding them, since every `VITE_` value is built into the app. Check that Settings → Cron Jobs lists `/api/daily` at `0 5 * * *`. `vercel.json` asks for 300 s functions, which Vercel allows on Hobby with Fluid compute, the default for new projects. If the plan refuses it anyway, lower `maxDuration` in `vercel.json` and `FUNCTION_BUDGET_MS` in `api/_claude.ts` together, keeping the budget about 20 s under the limit; a short limit makes new species profiles fail with "Request timed out.", since one takes Claude a minute or more.
+3. **Vercel**: create a project from this repository. Add the environment variables named in `.env.example` (Production and Preview): `ANTHROPIC_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OWNER_USER_ID` (the UUID of your user under Supabase → Authentication → Users: the `/api` routes accept that account only), `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `CRON_SECRET` (any long random string). Redeploy after adding them, since every `VITE_` value is built into the app. Check that Settings → Cron Jobs lists `/api/daily` at `0 5 * * *`. `vercel.json` runs the functions in `dub1` (Dublin), beside a Supabase project in West EU (Ireland); for a project in another region, set `regions` to the Vercel region nearest it (Hobby allows one). `vercel.json` asks for 300 s functions, which Vercel allows on Hobby with Fluid compute, the default for new projects. If the plan refuses it anyway, lower `maxDuration` in `vercel.json` and `FUNCTION_BUDGET_MS` in `api/_claude.ts` together, keeping the budget about 20 s under the limit; a short limit makes new species profiles fail with "Request timed out.", since one takes Claude a minute or more.
 4. **Web Push**: generate a VAPID pair once with `npx web-push generate-vapid-keys` and add `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:` plus your address) and `VITE_VAPID_PUBLIC_KEY` (the public key again) to Vercel, then redeploy: the `VITE_` copy is baked into the app at build time.
 5. **Locally**: copy `.env.example` to `.env.local` and fill the same names. `.env.local` is git-ignored.
 6. **Phone**: open the Vercel URL in Chrome, menu → Add to Home screen; then Settings → Reminders → Turn on. After each deploy, tap Reload on the "A new version is ready." banner: the app never reloads by itself.
@@ -52,7 +52,7 @@ The logs, rotating a key and changing the owner are covered in `docs/USER-GUIDE.
 
 ## Commands
 
-Node 22.12 or newer.
+Node 24: `engines` in `package.json`, which Vercel and the checks on GitHub follow.
 
 ```bash
 npm install
@@ -80,7 +80,9 @@ npm test
 npm run build
 ```
 
-`npm test` runs the vitest suite under `tests/`: the dates, the task expansion, the digest, the Today reading, the zone batches, the kinds of work and their folds, the shared list and its share, the token verdict, the app's task writes, the planting check, the weather, the map and tags, the photos and their cache, the owner check, the keep-alive and the app's calls to the functions. The app's task writes, the photos and the saved checks, and parts of the expansion, digest, weather and planting-check tests, run against an in-memory copy of the tables (`tests/mockdb.ts`); the rest test pure functions or stub the client. `npm run preview` serves the built app, and `npm run icons` regenerates the PWA icons under `public/icons`.
+`npm test` runs the vitest suite under `tests/`: the dates, the error reader, the task expansion, the digest, the Today reading, the zone batches, the kinds of work and their folds, the shared list and its share, the token verdict, the app's task writes, the planting check, the weather, the map and tags, the photos and their cache, the owner check, the keep-alive and the app's calls to the functions. The app's task writes, the photos and the saved checks, and parts of the expansion, digest, weather and planting-check tests, run against an in-memory copy of the tables (`tests/mockdb.ts`); the rest test pure functions or stub the client. `npm run preview` serves the built app, and `npm run icons` regenerates the PWA icons under `public/icons`.
+
+GitHub runs a clean install and the same four checks on every push (`.github/workflows/checks.yml`, the Actions tab). Vercel deploys a push to `main` whatever they say, so a red run is fixed first.
 
 ## Layout
 
@@ -94,5 +96,6 @@ src/            the PWA: screens, components, lib (data and API calls, photos, p
 supabase/       schema.sql
 tests/          the vitest suite, with mockdb.ts (an in-memory copy of the tables) and data/
 docs/           SPEC.md, DECISIONS.md, REVIEW-2026-10-30.md, USER-GUIDE.md
-vercel.json     the cron, the function limits and the rewrite to the app; .env.example names every variable
+vercel.json     the cron, the function limits and region, and the rewrite to the app; .env.example names every variable
+.github/        workflows/checks.yml: the four checks on every push
 ```
