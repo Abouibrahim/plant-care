@@ -113,6 +113,28 @@ export interface Correction {
   at: string;
 }
 
+/** Claude's first word for a term, app-wide (Phase 17): the term in normal form, the word never empty, the ISO time it was added. */
+export interface AppWord {
+  term: string;
+  word: string;
+  at: string;
+}
+
+/** A species' fetched derja word list: the settings row `derja:species:<id>`. asked_at is the time the app sent the request, by which a lost reply is found. */
+export interface SpeciesWords {
+  terms: DerjaTerm[];
+  at: string;
+  asked_at: string;
+}
+
+/** POST /api/derja: the species whose profile's words are asked, and the time the app asked, by which a lost reply is found. */
+export interface DerjaRequest {
+  species_id: string;
+  asked_at: string;
+}
+
+export type DerjaResponse = (SpeciesWords & Usage) | ({ refusal: string } & Usage);
+
 export interface DiagnoseRequest {
   plant_id: string;
   images: ImagePayload[]; // 1 or 2
@@ -617,8 +639,8 @@ export function usageKey(month: string): string {
 }
 
 /** The routes that call Claude. */
-export type UsageRoute = "identify" | "profile" | "diagnose" | "ask" | "check";
-export const USAGE_ROUTES: UsageRoute[] = ["identify", "profile", "diagnose", "ask", "check"];
+export type UsageRoute = "identify" | "profile" | "diagnose" | "ask" | "check" | "derja";
+export const USAGE_ROUTES: UsageRoute[] = ["identify", "profile", "diagnose", "ask", "check", "derja"];
 
 /** How a Claude call ended, for the ledger: answered, declined, or failed after tokens were spent. */
 export type CallOutcome = "answered" | "refused" | "failed";

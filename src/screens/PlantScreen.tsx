@@ -31,6 +31,7 @@ import { PhotoImg } from "../components/PhotoImg";
 import { RecordForm, type RecordValues } from "../components/RecordForm";
 import { TaskCard, type TaskAction } from "../components/TaskCard";
 import { SiteLabel, TypePill } from "../components/TypeIcon";
+import { ProfileDerja } from "../components/derja";
 import { CalendarSection, GuildUsesSection, HealthSection, NeedsSection } from "../components/profile";
 import { AskPanel } from "./plant/AskPanel";
 import { DiagnosePanel } from "./plant/DiagnosePanel";
@@ -447,7 +448,18 @@ export function PlantScreen() {
         ))}
       </div>
 
-      {tab === "needs" && <NeedsSection species={species} />}
+      {/* The four profile tabs carry the derja word beside their key terms (Phase 17); each ends
+          with its own "Derja words" card. The task cards and the past diagnoses stay plain. */}
+      {tab !== "journal" && (
+        <ProfileDerja speciesId={species.id} species={species} disabled={busy}>
+          {({ card }) => (
+            <>
+      {tab === "needs" && (
+        <>
+          <NeedsSection species={species} />
+          {card("needs")}
+        </>
+      )}
       {tab === "calendar" && (
         <>
           <section className="section">
@@ -467,15 +479,26 @@ export function PlantScreen() {
             {tasks !== null && tasks.length > 0 && <p className="muted small">{t.plant.moreTasksHint}</p>}
           </section>
           <CalendarSection species={species} plantedOn={plant.planted_on} />
+          {card("calendar")}
         </>
       )}
       {tab === "health" && (
         <>
           <HealthSection species={species} />
+          {card("health")}
           <PastDiagnoses photos={photos} onOpen={(photo) => setDiagnose({ kind: "open", photo })} />
         </>
       )}
-      {tab === "guild" && <GuildUsesSection species={species} />}
+      {tab === "guild" && (
+        <>
+          <GuildUsesSection species={species} />
+          {card("guild")}
+        </>
+      )}
+            </>
+          )}
+        </ProfileDerja>
+      )}
       {tab === "journal" && (
         <>
           {extrasMessage && <Banner kind="error">{extrasMessage}</Banner>}

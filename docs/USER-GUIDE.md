@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.16.0, as of 11 November 2026.
+For version 0.17.0, as of 12 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -32,7 +32,7 @@ In this guide, **bold** words are things you tap, named as the English screens n
 - **Identification.** Capture sends a photo to Claude, which names up to three candidates. Each comes with its confidence, the visible evidence and the names in English, French and Tunisian Arabic.
 - **Species profiles.** Claude writes one profile per species for Cap Bon: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests and diseases, companions, uses and toxicity. You confirm it and can correct any part by hand, and your edits survive a rewrite.
 - **Tasks from the calendar.** The care calendar becomes dated tasks 90 days ahead, matched to each plant's age. Waterings come every few days with their litres. Pruning, feeding, mulching, harvest, scouting, propagation and protection come as windows that stay open over their months.
-- **Health.** Diagnose sends a photo of a problem with your note. Claude answers with likely causes, checks to do on site, an organic treatment, prevention, an urgency and a date for a follow-up photo, which becomes a reminder. Treatments are logged from the diagnosis. Each key term carries the word said in Tunisian (derja), in Arabic letters, for you to say to a worker or a supplier; you correct a word once and the app keeps yours.
+- **Health.** Diagnose sends a photo of a problem with your note. Claude answers with likely causes, checks to do on site, an organic treatment, prevention, an urgency and a date for a follow-up photo, which becomes a reminder. Treatments are logged from the diagnosis. Each key term carries the word said in Tunisian (derja), in Arabic letters, for you to say to a worker or a supplier; you correct a word once and the app keeps yours. The same words show on a plant's Needs, Calendar, Health and Guild tabs and on the species page.
 - **Questions.** Ask Claude holds a conversation about one plant, drawing on its profile, tasks, diagnoses, zone neighbours and the weather. Each answer is kept in the plant's journal.
 - **Check before planting.** Before you buy a plant, Claude weighs it against the saline well, the lime soil, the climate, the animals, the space and the pests. It gives a verdict, where and when to plant, what to look for at the nursery and better choices.
 - **Weather.** The local forecast (Open-Meteo) shows on Today, with alerts for heat, sirocco, frost, gales and heavy rain. The morning run skips waterings after rain, and Today shows the hours that suit spraying when a task or a diagnosis calls for a spray.
@@ -399,8 +399,22 @@ Below the treatment, the **Derja words** card lists the terms with their words. 
 
 - type your word in Arabic letters and tap **Save**: the line says "your word", the text changes at once, every diagnosis made since 0.16.0 that mentions the term shows your word, and Claude is given your words for the next diagnoses. A word in Latin letters is refused ("Write the word in Arabic letters");
 - "add your word" marks a term Claude knew no local word for: it gives none rather than guess. Type yours the same way;
-- save the field empty to show no word for the term ("no word"). On a diagnosis whose own list has the term the line stays, so you can put one back; on a diagnosis that only mentions a term you corrected elsewhere, the line goes, and you put a word back from a diagnosis that lists the term;
-- **Use Claude's word**, on a term the diagnosis listed itself, drops your correction.
+- save the field empty to show no word for the term ("no word"). The line stays wherever Claude has a word for the term or the page's own list has it, so you can put one back;
+- **Use Claude's word** drops your correction, and Claude's word shows again.
+
+**Which word shows.** For any term the app takes, in this order: your own word; else the first word Claude ever gave for that term, anywhere in the app; else the word Claude gave on this page. So a term carries one word on every diagnosis and every species, and a diagnosis you already had may change a word to the one Claude gave first elsewhere, until you correct it. A word you typed is never taken for Claude's.
+
+### Derja words on the profile
+
+The Needs, Calendar, Health and Guild tabs of a plant's page, and the species page in the library, show the same words: beside the pests and diseases, the products, the operations (pruning, mulching), the tools and the companion plants named in the text. Ratings and pills carry none, and neither do the task cards on the Calendar tab, the Past diagnoses list, Today, the notifications or the shared lists.
+
+- **Words that are already known show at once**, on any species, at no cost: your own, and those Claude gave on a diagnosis or on another species.
+- **Get derja words**, at the bottom of each tab's "Derja words" card (one card for the whole profile on the species page), asks Claude for this species' own list: up to 40 terms. It costs one call ("Asking Claude…", some seconds). The profile itself is not rewritten and stays confirmed.
+- Each tab's card lists the terms that stand on that tab, with the same editing as on a diagnosis: tap a line to type your word, clear it, or go back to Claude's.
+- **Refresh words**, with the date of the last fetch, runs the call again. Nothing runs by itself: after you edit or regenerate a profile the words stay, and a term that left the text simply stops showing.
+- While Claude is asked, the species page holds Regenerate, Delete and its editors; while an editor is open or a regeneration runs, the button waits.
+- "No derja words for this species yet." means nothing is known for this page and the list was never fetched; "No key term on this page." means the fetched list has nothing for it.
+- "The derja words could not be read. They will show when the connection is back." replaces the button when the words could not be read, so that a list already paid for is never asked twice; the card reads again by itself when the signal returns.
 
 Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on the opened diagnosis only: task titles, notifications, shared lists and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
 
@@ -752,6 +766,7 @@ Every call runs on Claude Fable 5.1. When Fable declines, Anthropic's fallback m
 | Identification | Each photo sent from Capture, each Retry and each second photo | 5 cents |
 | New species profile | A species new to the library, a typed name that is not an exact match, a rewrite | 15 cents |
 | Diagnosis | Each Send to Claude | 5 to 10 cents |
+| Derja words | Each Get derja words or Refresh words on a species | 5 to 10 cents (an estimate, not yet measured) |
 | Question | Each Ask | 9 to 18 cents |
 | Planting check | Each Check | 10 to 18 cents, plus about 15 cents for a new profile when the name is not an exact match of a stored one |
 
@@ -769,6 +784,9 @@ Each answer shows "Usage: N in / M out tokens". "In" leaves out the cached part 
 | "Sign-in failed: Invalid login credentials" | The email or the password is wrong. | Type them again. |
 | "Signed out. Sign in again." | The server no longer accepts the sign-in, or, offline, the phone could not renew it. | Sign in again, or retry once there is signal. |
 | "Network error. Check the connection and try again." | A Claude call got no complete answer, or a list could not be read or a change could not be sent, usually for lack of a connection: Save plant, the diagnosis photo, Today's list, Settings, a species page, the sign-in; or Refresh, or Turn on or off, waited 30 seconds without an answer. | Find signal and try again; **Save plant** and **Save again** write into the same plant and photo. A new profile, a question, a check and a diagnosis are looked for by themselves, and a Refresh may have finished on the server anyway. Where there is no **Retry**, as in Settings or on a species page, leave the screen and open it again. |
+| "The derja words could not be read. They will show when the connection is back." | A profile's words could not be read, for lack of a connection. The button is hidden so a list is not paid for twice. | Nothing; the card reads again when the signal returns. |
+| "Your own words could not be read; showing Claude's" | On a diagnosis, your corrections could not be read. | Nothing; reopen the diagnosis once there is signal. |
+| "The words could not be fetched: …" | Get derja words or Refresh words did not complete. If the server finished, the list is found when you open the species again. | Open the species again; tap the button only if the list is still missing. |
 | "Offline · Shown as of 19:12, not updated · 2 actions waiting" | Today shows the list kept on the phone, and holds actions made without a connection (chapter 4). | Nothing: the list is read and the actions sent when the signal returns, or tap **Retry** and **Send now**. |
 | "Done: … · saved on the phone" | The Done or Skip is kept on the phone until the connection returns. | Nothing; **Undo** takes it back while it waits. |
 | "1 saved action was not applied: the task had been closed meanwhile." | A task done offline had been closed from another screen before the action was sent. | Check the plant's journal; log the care with **Log something done** if it is missing. |

@@ -231,3 +231,30 @@ describe("a lost reply looked for in the tables (Phase 14)", () => {
     expect(err).not.toBeInstanceOf(LostReplyError);
   });
 });
+
+describe("a lost derja word list (Phase 17)", () => {
+  const SPECIES = "5b1e9a20-1c2d-4e3f-8a9b-0c1d2e3f4a5b";
+  const ASKED = "2026-11-12T08:00:00.000Z";
+  const terms = [{ term: "Olive fly", derja: "ذبانة الزيتون" }];
+
+  it("is found in its settings row by the time the app asked", async () => {
+    const { fetchMock } = mockFetch([lost()]);
+    const settled = api.derja({ species_id: SPECIES, asked_at: ASKED }).then(
+      (r) => r,
+      (e: unknown) => e,
+    );
+    await vi.advanceTimersByTimeAsync(5_000);
+    sharedState.settings.push({ key: `derja:species:${SPECIES}`, value: { terms, at: "2026-11-12T08:00:20.000Z", asked_at: ASKED } });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await settled).toMatchObject({ terms, asked_at: ASKED, input_tokens: 0, output_tokens: 0 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not take an older list for the answer of a refresh", async () => {
+    mockFetch([lost()]);
+    sharedState.settings.push({ key: `derja:species:${SPECIES}`, value: { terms, at: "2026-11-01T08:00:20.000Z", asked_at: "2026-11-01T08:00:00.000Z" } });
+    const settled = api.derja({ species_id: SPECIES, asked_at: ASKED }).catch((e: unknown) => e);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(await settled).toBeInstanceOf(LostReplyError);
+  });
+});

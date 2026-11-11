@@ -1,5 +1,6 @@
 import { t } from "../../i18n";
 import type { SpeciesProfile, ToxicityLevel } from "../../types";
+import { DerjaText } from "../derja";
 
 const PILL: Record<ToxicityLevel, string> = { none: "ok", mild: "accent", moderate: "warn", severe: "danger" };
 const SUBJECTS = ["humans", "chickens", "goats", "dogs_cats"] as const;
@@ -17,7 +18,7 @@ export function ToxicityBadges({ toxicity }: { toxicity: SpeciesProfile["toxicit
       </div>
       {toxicity.note && (
         <p className="small muted" style={{ marginTop: 6 }}>
-          {toxicity.note}
+          <DerjaText text={toxicity.note} />
         </p>
       )}
     </div>

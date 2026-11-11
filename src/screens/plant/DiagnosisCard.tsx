@@ -1,16 +1,16 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Banner } from "../../components/Banner";
 import { ConfidenceBar } from "../../components/ConfidenceBar";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { describeError } from "../../lib/errors";
-import { cardRows, cleanTerms, stripArabic, wordSources } from "../../lib/derja";
+import { cardRows, cleanTerms, narrowSources, stripArabic, wordSources } from "../../lib/derja";
+import { useDerja } from "../../lib/useDerja";
 import { addDays, localIsoDate, toLocalDate } from "../../lib/dates";
-import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, loadCorrections, treatedRuleKey } from "../../lib/db";
+import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, treatedRuleKey } from "../../lib/db";
 import { isPestScout, rephotoDays, rephotoTask, shortCause, sortedCauses, topCause, URGENCY_PILL } from "../../lib/diagnosis";
-import type { Correction, Diagnosis, Task, Usage } from "../../types";
-import { DerjaText } from "./DerjaText";
-import { DerjaWords } from "./DerjaWords";
+import type { Diagnosis, Task, Usage } from "../../types";
+import { DerjaText, DerjaWords } from "../../components/derja";
 
 const MAX_APPLIED = 200;
 
@@ -39,27 +39,21 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
   const [notice, setNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
   const s = t.diagnose;
 
-  // The derja words (Phase 16). A diagnosis from before 0.16.0 has no list: it is drawn as it always
-  // was and reads no settings row. A failed read leaves Claude's own words.
-  const [corrections, setCorrections] = useState<Correction[]>([]);
-  const savedHere = useRef(false);
+  // The derja words (Phase 16, 17). A diagnosis from before 0.16.0 has no list: it is drawn as it
+  // always was and reads no settings row. The words come from the grower's corrections, then the
+  // app-wide list, then this diagnosis's own; a failed read leaves the diagnosis's own and says so.
   const hasTerms = Array.isArray(diagnosis.terms);
-  useEffect(() => {
-    if (!hasTerms) return;
-    let live = true;
-    // A save on this card reads the row again itself, so its list is the newer one: a first read
-    // that comes back after it must not put the older list back.
-    loadCorrections().then(
-      (list) => live && !savedHere.current && setCorrections(list),
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, [hasTerms]);
-  const sources = useMemo(() => (hasTerms ? wordSources(cleanTerms(diagnosis.terms), corrections) : []), [hasTerms, diagnosis.terms, corrections]);
-
+  const derja = useDerja({ enabled: hasTerms });
   const causes = sortedCauses(diagnosis);
+  const texts = useMemo(
+    () => [diagnosis.summary, ...sortedCauses(diagnosis).flatMap((c) => [c.cause, c.evidence]), ...diagnosis.checks_to_do, diagnosis.organic_treatment, diagnosis.prevention],
+    [diagnosis],
+  );
+  const sources = useMemo(
+    () => (hasTerms ? narrowSources(texts, wordSources(cleanTerms(diagnosis.terms), derja.corrections, derja.words)) : []),
+    [hasTerms, texts, diagnosis.terms, derja.corrections, derja.words],
+  );
+
   const top = topCause(diagnosis);
   const days = rephotoDays(diagnosis);
   const today = localIsoDate();
@@ -169,13 +163,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
       </section>
 
       {hasTerms && (
-        <DerjaWords
-          rows={cardRows([diagnosis.summary, ...causes.flatMap((c) => [c.cause, c.evidence]), ...diagnosis.checks_to_do, diagnosis.organic_treatment, diagnosis.prevention], sources)}
-          onSaved={(list) => {
-            savedHere.current = true;
-            setCorrections(list);
-          }}
-        />
+        <DerjaWords rows={cardRows(texts, sources)} onSaved={derja.saved} note={derja.status === "failed" ? s.derjaUnread : null} />
       )}
 
       <section className="card">

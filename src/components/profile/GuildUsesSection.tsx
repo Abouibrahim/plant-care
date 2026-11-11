@@ -1,5 +1,6 @@
 import { t } from "../../i18n";
 import type { SpeciesProfile } from "../../types";
+import { DerjaText } from "../derja";
 import { ToxicityBadges } from "./ToxicityBadges";
 
 function Items({ items }: { items: string[] }) {
@@ -7,7 +8,9 @@ function Items({ items }: { items: string[] }) {
   return (
     <ul className="list-plain">
       {items.map((item, i) => (
-        <li key={`${item}:${i}`}>{item}</li>
+        <li key={`${item}:${i}`}>
+          <DerjaText text={item} />
+        </li>
       ))}
     </ul>
   );
@@ -40,13 +43,13 @@ export function GuildUsesSection({ species }: { species: SpeciesProfile }) {
         <h2>{t.species.sections.uses}</h2>
         <dl className="kv">
           <dt>{t.species.fields.edible_parts}</dt>
-          <dd>{uses.edible_parts || t.common.none}</dd>
+          <dd>{uses.edible_parts ? <DerjaText text={uses.edible_parts} /> : t.common.none}</dd>
           <dt>{t.species.fields.preparation}</dt>
-          <dd>{uses.preparation || t.common.none}</dd>
+          <dd>{uses.preparation ? <DerjaText text={uses.preparation} /> : t.common.none}</dd>
           <dt>{t.species.fields.storage}</dt>
-          <dd>{uses.storage || t.common.none}</dd>
+          <dd>{uses.storage ? <DerjaText text={uses.storage} /> : t.common.none}</dd>
           <dt>{t.species.fields.harvest_cues}</dt>
-          <dd>{uses.harvest_cues || t.common.none}</dd>
+          <dd>{uses.harvest_cues ? <DerjaText text={uses.harvest_cues} /> : t.common.none}</dd>
         </dl>
       </section>
 

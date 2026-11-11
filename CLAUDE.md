@@ -2,7 +2,7 @@
 
 Single-user plant-care app for Mohamed: photograph a plant at the backyard (walled garden at home) or at the farm (borgdanet, Menzel Bouzelfa, Cap Bon, Tunisia), identify it with the Claude API, store a species profile written for Cap Bon conditions, and get reminders for water, pruning, feeding, mulching, harvest, pest scouting, propagation and protection.
 
-`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 16 are built (0.16.0). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE16.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, Phase 14 its items 2.1, 2.3, 3.5, 4.2 and 5.3, Phase 15 its items 2.5, 4.1 and 7.1 and the error-text part of 7.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
+`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 17 are built (0.17.0). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE17.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, Phase 14 its items 2.1, 2.3, 3.5, 4.2 and 5.3, Phase 15 its items 2.5, 4.1 and 7.1 and the error-text part of 7.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
 
 ## Decisions already made (do not reopen)
 
@@ -31,26 +31,28 @@ api/                 Vercel functions (one file per route)
   _record.ts         the morning run's start marker and record (`daily:started`, `daily:last` settings rows) (Phase 14)
   _rows.ts           the rows ask, check and diagnose write once Claude has answered, under the id the app made (Phase 14)
   _usage.ts          the usage ledger: each Claude call added to the month's `usage:YYYY-MM` settings row (Phase 14)
+  _derja.ts          the derja words on the server: the corrections as a glossary, the app-wide list `derja:words` (first word wins, guarded write), a bounded settings upsert (Phase 17)
   identify.ts        POST → candidates
   profile.ts         POST → the species profile: looked up first, written by Claude when the lookup finds nothing; regenerate keeping user_edits; lookup_only after a lost reply
   diagnose.ts        POST → diagnosis, with the derja word of each key term (Phase 16; the grower's corrections, the `derja` settings row, go in the user message); with the planned photo row, writes the photos row itself before replying
+  derja.ts           POST → the derja words of a species profile, up to 40 terms, stored in the settings row `derja:species:<id>` before replying (Phase 17); never writes the species
   ask.ts             POST → answer to a free question about one plant (Phase 6); with the row's ids, writes the questions row itself before replying
   check.ts           POST → planting check of a species against the sites and their plants (Phase 7); with the row's ids, writes the planting_checks row itself before replying
   weather.ts         POST → fetch and store the forecast now, bearer-checked (Phase 8)
   expand.ts          POST → runExpansion now (one plant, or all), bearer-checked
   daily.ts           cron: fetch the weather, expand tasks, skip waterings after rain, write the record, send the weather push and the digest; ?dry=1 composes without sending and leaves no record
   push-subscribe.ts  POST → store or remove a push subscription (DELETE removes too)
-prompts/             system-context.md, identify.md, profile.md, diagnose.md, ask.md, check.md, *.schema.json
+prompts/             system-context.md, identify.md, profile.md, diagnose.md, derja.md, ask.md, check.md, *.schema.json
 public/              icons/, and push-sw.js (the push and notification-tap handlers the service worker imports; each push also tells the open app, which reads Today again)
 scripts/             make-icons.mjs (npm run icons)
 src/                 the PWA (screens: Login, Today, Capture, Check, Plant, Plants with its map, the species library, Species, Settings, Tags, and the tag link /t/:code; map/ holds the Leaflet screens, loaded lazily)
                      Today shows each site's work due now by kind of task (a heading per kind that folds for the day and shares the kind's list), the coming days below
-  components/        Layout (the tab bar and the banners), TaskCard, RecordForm, the profile sections
+  components/        Layout (the tab bar and the banners), TaskCard, RecordForm, the profile sections, derja/ (DerjaText, the "Derja words" cards, ProfileDerja)
   lib/               the data and API layer (db, api, supabase), photos (image, photoCache), push, the exports (export, csv),
                      the list a kind of work is handed out with (handout) and its share or copy (share),
                      what Today keeps on the phone (offline: the kept list, the weather rows, the queue of Done and Skip and its sending),
                      the sign-in state (AuthProvider, with its offline state), errors (describeError, the one reading of a failure every screen shows, isNetworkFailure, phoneOnline, and ApiError and LostReplyError), langSync,
-                     and the pure rules: dates, batches, activities, weather, usage and record, which api/ imports or could, and today, map, location, check, ask, diagnosis, derja (the Tunisian word beside a diagnosis's key terms: cleaning, matching, placing, the corrections list)
+                     and the pure rules: dates, batches, activities, weather, usage and record, which api/ imports or could, and today, map, location, check, ask, diagnosis, derja (the Tunisian word beside key terms: cleaning, matching, placing, the three sources of a word, the corrections and the app-wide list), profileTexts (the prose of each profile tab), and the hook useDerja (one reading of the words for a screen)
   i18n/              en.ts, fr.ts, and index.ts, which picks one
   types.ts           shared types, mirrored by prompts/*.schema.json and supabase/schema.sql; the diagnosis: and manual: rule-key prefixes
   version.ts         the version Settings shows
@@ -58,13 +60,13 @@ supabase/schema.sql  tables, enums, the journal view, owners and is_owner(), RLS
 tests/               vitest over the dates, the error reader, the task expansion, the digest, the Today reading, the zone batches, the kinds of work and their
                      folds, the shared list and its share, the token verdict, the owner check, the app's task writes, the planting check, the
                      weather, the map and tags, the photos and their cache, the keep-alive, the app's calls to the functions and their lost-reply
-                     recovery, the rows the routes write, the run record, the usage ledger, the server's language, the derja words and Today's offline copy and
+                     recovery, the rows the routes write, the run record, the usage ledger, the server's language, the derja words (rules, server helpers, the route) and Today's offline copy and
                      queue (mockdb.ts imitates the query builder; fixtures.ts builds rules, plants and tasks; data/ holds a real Open-Meteo answer
                      and the spray texts)
 docs/                SPEC.md (the design), DECISIONS.md (the deviations), REVIEW-2026-10-30.md (the review of 0.9.0 behind Phase 10;
                      Phase 11 is item 1 of the feature review of 2026-10-25, Phases 12 and 13 Mohamed's requests of 2026-11-01 and
                      2026-11-03), USER-GUIDE.md (the app as built)
-PHASE1.md … PHASE16.md, UI-REFRESH.md   milestones with their ★ setup steps and acceptance tests
+PHASE1.md … PHASE17.md, UI-REFRESH.md   milestones with their ★ setup steps and acceptance tests
 .github/workflows/checks.yml            the four checks on every push (Phase 15)
 vercel.json, vite.config.ts, .env.example   the cron and the function limits; the manifest and the service worker; the variable names
 ```
@@ -83,8 +85,9 @@ vercel.json, vite.config.ts, .env.example   the cron and the function limits; th
 - `system` is an array: first the site context from `prompts/system-context.md` with `cache_control: { type: "ephemeral" }`, then the call-specific instructions from `prompts/<call>.md`. Check the prompt-caching page before changing this: https://platform.claude.com/docs/en/build-with-claude/prompt-caching
 - Images go before text in the user message, each preceded by a short label (`Image 1:`), as the vision page recommends: https://platform.claude.com/docs/en/build-with-claude/vision
 - `output_config.format = { type: "json_schema", schema }` with the matching `prompts/*.schema.json`. Every property is required and every object has `additionalProperties: false`; keep it that way, the API limits optional fields and reorders them. Reference: https://platform.claude.com/docs/en/build-with-claude/structured-outputs
-- `max_tokens` and `output_config.effort`: identify 2048 at low effort; profile 6000, diagnose 2048, ask 3072 and check 4096 at medium. `callJson` retries once with double `max_tokens` when `stop_reason` is `max_tokens`, and once after a rate limit, a 5xx or a connection error (honouring `retry-after`), but only while the 280 s budget leaves room. Otherwise a cut output throws "Claude output was cut at N tokens; try again", and a transient error is rethrown as the SDK's own error, which `handleError` answers 502 (rate limit, 5xx) or 500 (connection error); the "Not enough time left for the Claude call; try again" guard does not fire in practice, since every retry first needs 60 s left. On `refusal` it returns `{ ok: false, refusal, usage }` and the route surfaces the text; otherwise it parses the text blocks, joined.
+- `max_tokens` and `output_config.effort`: identify 2048 at low effort; profile 6000, diagnose 2048, derja 3072, ask 3072 and check 4096 at medium. `callJson` retries once with double `max_tokens` when `stop_reason` is `max_tokens`, and once after a rate limit, a 5xx or a connection error (honouring `retry-after`), but only while the 280 s budget leaves room. Otherwise a cut output throws "Claude output was cut at N tokens; try again", and a transient error is rethrown as the SDK's own error, which `handleError` answers 502 (rate limit, 5xx) or 500 (connection error); the "Not enough time left for the Claude call; try again" guard does not fire in practice, since every retry first needs 60 s left. On `refusal` it returns `{ ok: false, refusal, usage }` and the route surfaces the text; otherwise it parses the text blocks, joined.
 - Diagnose returns `terms`, at most eight `{ term, derja }` (Phase 16): `term` copied from a text field, `derja` the word said in Cap Bon in Arabic letters, or empty rather than a guess. `prompts/diagnose.md` keeps every other field in English with no Arabic letters, overriding the site context's rule on names for this call. The app places the words when it draws the card (`src/lib/derja.ts`); `problemResult` carries `terms` through every read of a stored diagnosis, and `shortCause` strips Arabic, so no title, note or notification carries any.
+- Derja words on a profile (Phase 17): `/api/derja` lists up to 40 key terms of a stored profile with their word, on the grower's tap only, into the settings row `derja:species:<id>` (written by the route, and again by the app from the reply). A word is taken, in order, from the grower's correction (`derja`), the app-wide list (`derja:words`: Claude's first word for a term, extended by the server after each diagnose and derja call, never with a term the grower corrected), then the page's own list. `ProfileDerja` reads them once for a screen and the profile components draw their prose through `DerjaText`; task cards, editors, Today, pushes and shared lists carry none. While the species' list cannot be read, the card shows no Get or Refresh button, so a list is never paid for twice.
 - The `care_calendar` array in the profile is the single source of schedules, watering included (`every_days` and `litres` on the item); the `water` object holds needs, tolerance, signs and a summary only. This supersedes the `establishment_schedule` / `mature_schedule` fields named in the spec.
 - Profile regeneration merges: the top-level blocks listed in `species.user_edits` are kept (read again after the Claude call, so a field saved during the wait survives), the scientific name and cultivar always stay, everything else is replaced, and the profile goes back to unconfirmed. Calendar items that share a rule key are folded into one when Claude writes a profile, new or regenerated (a calendar kept from `user_edits` stays as saved), and again each time the expansion reads a calendar; the rule editor refuses a new duplicate rather than folding, so a pair written before the fold can stay in the table.
 

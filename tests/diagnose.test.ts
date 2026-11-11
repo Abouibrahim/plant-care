@@ -59,7 +59,9 @@ function fakeDb(answer: { data: unknown; error: unknown } | Error): SupabaseClie
     if (answer instanceof Error) throw answer;
     return answer;
   };
-  return { from: () => ({ select: () => ({ eq: () => ({ maybeSingle }) }) }) } as unknown as SupabaseClient;
+  // The read is bounded since Phase 17, so the chain carries abortSignal too.
+  const query = { maybeSingle, abortSignal: () => query };
+  return { from: () => ({ select: () => ({ eq: () => query }) }) } as unknown as SupabaseClient;
 }
 
 describe("loadCorrections (route)", () => {

@@ -2,14 +2,14 @@
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
 import { forgetCachedPhotos, readCachedPhoto, storeCachedPhoto, thumbPath } from "./photoCache";
-import { DERJA_KEY, readCorrections, withCorrection, withoutCorrection } from "./derja";
+import { DERJA_KEY, readCorrections, readSpeciesWords, readWords, speciesWordsKey, withCorrection, withoutCorrection, WORDS_KEY } from "./derja";
 import { problemResult, topCause } from "./diagnosis";
 import { tagIdRange } from "./map";
 import { parseDailyRecord, parseDailyStart } from "./record";
 import { parseLedger } from "./usage";
 import { weatherSettings, type SprayTreatment } from "./weather";
 import { t, type Lang } from "../i18n";
-import type { Correction } from "../types";
+import type { AppWord, Correction, SpeciesWords } from "../types";
 import {
   DAILY_RECORD_KEY,
   DAILY_STARTED_KEY,
@@ -417,6 +417,8 @@ export async function deleteSpeciesIfUnused(id: string): Promise<boolean> {
     if (delErr.code === "23503") return false;
     throw new Error(delErr.message);
   }
+  // Its derja word list goes with it (Phase 17). Best effort: a failure leaves an orphan row.
+  await deleteSetting(speciesWordsKey(id)).catch(() => undefined);
   return true;
 }
 
@@ -1140,6 +1142,48 @@ export async function removeCorrection(term: string): Promise<Correction[]> {
   const next = withoutCorrection(await loadCorrections(signal), term);
   await setSetting(DERJA_KEY, next, signal);
   return next;
+}
+
+/** The derja rows a screen draws from (Phase 17). */
+export interface DerjaData {
+  corrections: Correction[];
+  /** Claude's first word for each term, app-wide. */
+  words: AppWord[];
+  /** The species' fetched list; null when it has none, or when no species was asked. */
+  species: SpeciesWords | null;
+}
+
+/**
+ * One read of the derja rows a screen needs: the grower's corrections, the app-wide words and,
+ * with a species, its fetched list. Missing or unexpected rows read as nothing.
+ */
+export async function loadDerja(speciesId: string | null, signal?: AbortSignal): Promise<DerjaData> {
+  const speciesKey = speciesId ? speciesWordsKey(speciesId) : null;
+  let q = supabase
+    .from("settings")
+    .select("key, value")
+    .in("key", [DERJA_KEY, WORDS_KEY, ...(speciesKey ? [speciesKey] : [])]);
+  if (signal) q = q.abortSignal(signal);
+  const r = await q;
+  if (r.error) throw settingsError(r.error);
+  const rows = (r.data ?? []) as Array<{ key: string; value: unknown }>;
+  const value = (key: string | null) => (key ? rows.find((row) => row.key === key)?.value : undefined);
+  return { corrections: readCorrections(value(DERJA_KEY)), words: readWords(value(WORDS_KEY)), species: readSpeciesWords(value(speciesKey)) };
+}
+
+/** A species' fetched derja word list; null when it has none. */
+export async function getSpeciesWords(speciesId: string, signal?: AbortSignal): Promise<SpeciesWords | null> {
+  return readSpeciesWords(await getSetting<unknown>(speciesWordsKey(speciesId), signal));
+}
+
+/** Writes a species' list as the app received it, so a list the server could not store is not lost. */
+export async function saveSpeciesWords(speciesId: string, words: SpeciesWords, signal?: AbortSignal): Promise<void> {
+  await setSetting(speciesWordsKey(speciesId), words, signal);
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const { error } = await supabase.from("settings").delete().eq("key", key);
+  if (error) throw settingsError(error);
 }
 
 export const ZONES_KEY = "zones";

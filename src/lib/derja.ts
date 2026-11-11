@@ -3,10 +3,20 @@
 // /api/diagnose: cleaning a word, the normal form of a term, reading Claude's list and the grower's
 // corrections, and placing the words in a text. No word lives here: they come from Claude and
 // from the grower.
-import type { Correction, DerjaTerm } from "../types.js";
+import type { AppWord, Correction, DerjaTerm, SpeciesWords } from "../types.js";
 
 /** The settings row the grower's corrections live in. */
 export const DERJA_KEY = "derja";
+/** The settings row of Claude's first word for each term, app-wide (Phase 17). */
+export const WORDS_KEY = "derja:words";
+/** App-wide words kept; past it the oldest go. */
+export const MAX_WORDS = 600;
+/** Terms a species' fetched list may carry. */
+export const MAX_SPECIES_TERMS = 40;
+/** The settings row of a species' fetched word list. */
+export function speciesWordsKey(speciesId: string): string {
+  return `derja:species:${speciesId}`;
+}
 /** Terms a diagnosis may carry. */
 export const MAX_TERMS = 8;
 /** Corrections kept in the settings row; past it the oldest go. */
@@ -40,13 +50,13 @@ export function sameTerm(a: string, b: string): boolean {
   return a === b || a === `${b}s` || a === `${b}es` || b === `${a}s` || b === `${a}es`;
 }
 
-/** Claude's list as stored or received: well-formed entries, the word cleaned, one per term, at most eight. */
-export function cleanTerms(v: unknown): DerjaTerm[] {
+/** Claude's list as stored or received: well-formed entries, the word cleaned, one per term, at most `cap` (eight for a diagnosis). */
+export function cleanTerms(v: unknown, cap: number = MAX_TERMS): DerjaTerm[] {
   if (!Array.isArray(v)) return [];
   const out: DerjaTerm[] = [];
   const keys: string[] = [];
   for (const raw of v) {
-    if (out.length >= MAX_TERMS) break;
+    if (out.length >= cap) break;
     const e = raw as Partial<DerjaTerm> | null;
     if (!e || typeof e !== "object" || typeof e.term !== "string") continue;
     const term = e.term.replace(/\s+/g, " ").trim();
@@ -75,13 +85,81 @@ export function readCorrections(v: unknown): Correction[] {
   return all.filter((c) => (seen.has(c.term) ? false : (seen.add(c.term), true)));
 }
 
-/** A text without its Arabic: for the titles and notes built from a cause's name. */
+const cp = (code: number) => String.fromCharCode(code);
+/** The invisible direction marks and isolates, built from their code points so none sits in this file. */
+const DIRECTION_MARKS = new RegExp(`[${cp(0x200e)}${cp(0x200f)}${cp(0x202a)}-${cp(0x202e)}${cp(0x2066)}-${cp(0x2069)}]`, "g");
+
+/**
+ * A text without its Arabic: for the titles and notes built from a cause's name. The marks, the
+ * separators and the parentheses an Arabic run leaves behind go with it, so "Scale (… / …)" is
+ * "Scale" and "Sooty mould (…, el-fahma)" is "Sooty mould (el-fahma)".
+ */
 export function stripArabic(text: string): string {
-  return text
-    .replace(ARABIC_RUN, "")
-    .replace(/\(\s*[·\s]*\)/g, "")
+  const bare = text.replace(DIRECTION_MARKS, "").replace(ARABIC_RUN, "");
+  // Nothing was removed: the text is the grower's or Claude's English as written, and a minus
+  // sign or a slash inside its parentheses is content, not a leftover.
+  if (bare === text) return text.replace(/\s+/g, " ").trim();
+  return bare
+    .replace(/\(\s*(?:[,،;·/|–—-]\s*)+/g, "(")
+    .replace(/(?:\s*[,،;·/|–—-])+\s*\)/g, ")")
+    .replace(/\(\s*\)/g, "")
+    .replace(/[\s,،;·/|–—-]+$/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const newestFirst = (a: { at: string }, b: { at: string }) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+
+/**
+ * A call's terms as they are stored: the word of a term the grower corrected is dropped. Claude
+ * was told to use his word for it, so what came back is his word, and kept in the page's list it
+ * would pass for Claude's once he takes his correction away. With the corrections unknown (null)
+ * the terms stay as they came.
+ */
+export function withoutCorrected(terms: DerjaTerm[], corrections: Correction[] | null): DerjaTerm[] {
+  if (!corrections || corrections.length === 0) return terms;
+  return terms.map((t) => (corrections.some((c) => sameTerm(c.term, normalTerm(t.term))) ? { ...t, derja: "" } : t));
+}
+
+/** The `derja:words` row as a list, in its stored order: the word cleaned and never empty, the first entry of a term kept. */
+export function readWords(v: unknown): AppWord[] {
+  if (!Array.isArray(v)) return [];
+  const out: AppWord[] = [];
+  for (const raw of v) {
+    const e = raw as Partial<AppWord> | null;
+    if (!e || typeof e !== "object" || typeof e.term !== "string" || typeof e.word !== "string" || typeof e.at !== "string") continue;
+    const term = normalTerm(e.term);
+    const word = cleanWord(e.word);
+    if (term === "" || word === "" || out.some((w) => sameTerm(w.term, term))) continue;
+    out.push({ term, word, at: e.at });
+  }
+  return out;
+}
+
+/** A species' fetched list from its settings row; null when the row holds none (an empty list is a list). */
+export function readSpeciesWords(v: unknown): SpeciesWords | null {
+  const e = v as Partial<SpeciesWords> | null;
+  if (!e || typeof e !== "object" || !Array.isArray(e.terms) || typeof e.at !== "string" || typeof e.asked_at !== "string") return null;
+  return { terms: cleanTerms(e.terms, MAX_SPECIES_TERMS), at: e.at, asked_at: e.asked_at };
+}
+
+/**
+ * The app-wide list after a call: each term that came with a word joins it, unless the term is
+ * there already (the first word wins) or the grower corrected it (the word is then his, which
+ * Claude was told to use). Past the cap the oldest go.
+ */
+export function withWords(list: AppWord[], terms: DerjaTerm[], corrections: Correction[], at: string): AppWord[] {
+  const next = [...list];
+  for (const t of terms) {
+    const term = normalTerm(t.term);
+    const word = cleanWord(t.derja);
+    if (term === "" || word === "") continue;
+    if (corrections.some((c) => sameTerm(c.term, term)) || next.some((w) => sameTerm(w.term, term))) continue;
+    next.push({ term, word, at });
+  }
+  if (next.length <= MAX_WORDS) return next;
+  const dropped = new Set([...next].sort(newestFirst).slice(MAX_WORDS));
+  return next.filter((w) => !dropped.has(w));
 }
 
 /** The list with the term's word set ("" for no word), newest first, cut to the cap. */
@@ -115,19 +193,37 @@ export interface WordSource {
   listed: boolean;
 }
 
-/** Listed terms first, in their order, each with its correction applied; then the other corrections, newest first. */
-export function wordSources(terms: DerjaTerm[], corrections: Correction[]): WordSource[] {
-  const used = new Set<Correction>();
+/**
+ * The words of a page, from three sources in this order: the grower's correction, the app-wide
+ * word (Claude's first word for the term, Phase 17), the word of the call that listed the term.
+ * Listed terms come first, in their order; then the app-wide words no listed term used, then the
+ * corrections still unused, each of which marks its term wherever it stands.
+ */
+export function wordSources(terms: DerjaTerm[], corrections: Correction[], words: AppWord[] = []): WordSource[] {
+  const usedCorrections = new Set<Correction>();
+  const usedWords = new Set<AppWord>();
+  const pick = (key: string) => {
+    const paired = corrections.filter((c) => sameTerm(c.term, key));
+    for (const c of paired) usedCorrections.add(c);
+    return paired[0];
+  };
   const out: WordSource[] = terms.map((t) => {
     const own = normalTerm(t.term);
-    const paired = corrections.filter((c) => sameTerm(c.term, own));
-    for (const c of paired) used.add(c);
-    const applied = paired[0];
-    if (!applied) return { key: own, label: t.term, word: t.derja, state: t.derja ? "claude" : "missing", claudeWord: t.derja, listed: true };
-    return { key: applied.term, label: t.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord: t.derja, listed: true };
+    const applied = pick(own);
+    const app = words.filter((w) => sameTerm(w.term, own));
+    for (const w of app) usedWords.add(w);
+    const claudeWord = app[0]?.word || t.derja;
+    if (!applied) return { key: own, label: t.term, word: claudeWord, state: claudeWord ? "claude" : "missing", claudeWord, listed: true };
+    return { key: applied.term, label: t.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord, listed: true };
   });
+  for (const w of words) {
+    if (usedWords.has(w)) continue;
+    const applied = pick(w.term);
+    if (!applied) out.push({ key: w.term, label: w.term, word: w.word, state: "claude", claudeWord: w.word, listed: false });
+    else out.push({ key: applied.term, label: w.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord: w.word, listed: false });
+  }
   for (const c of corrections) {
-    if (used.has(c)) continue;
+    if (usedCorrections.has(c)) continue;
     out.push({ key: c.term, label: c.term, word: c.word, state: c.word ? "yours" : "none", claudeWord: "", listed: false });
   }
   return out;
@@ -209,7 +305,23 @@ export function annotate(text: string, sources: WordSource[]): Piece[] {
   return pieces;
 }
 
-/** The rows of the card: every listed source, then the unlisted ones with a word that stand in one of the texts. */
-export function cardRows(texts: string[], sources: WordSource[]): WordSource[] {
-  return sources.filter((s) => s.listed || (s.word !== "" && texts.some((text) => occurs(text, s.key))));
+/**
+ * The sources a page needs: the listed ones, and the unlisted ones whose term stands in one of its
+ * texts. Done once per page, so that hundreds of app-wide words are not tried on every text drawn.
+ */
+export function narrowSources(texts: string[], sources: WordSource[]): WordSource[] {
+  const all = texts.join("\n");
+  return sources.filter((s) => s.listed || occurs(all, s.key));
+}
+
+/**
+ * The rows of a card. A term with a word, or with a Claude word behind a cleared one, has a row
+ * where it stands. "listed" (a diagnosis) also keeps every term of the page's own list;
+ * "standing" (a profile tab) keeps a listed term only where it stands in the tab's texts.
+ */
+export function cardRows(texts: string[], sources: WordSource[], mode: "listed" | "standing" = "listed"): WordSource[] {
+  const stands = (s: WordSource) => texts.some((text) => occurs(text, s.key));
+  const worded = (s: WordSource) => s.word !== "" || s.claudeWord !== "";
+  if (mode === "listed") return sources.filter((s) => s.listed || (worded(s) && stands(s)));
+  return sources.filter((s) => (s.listed || worded(s)) && stands(s));
 }

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { t } from "../../i18n";
 import type { Pest, SpeciesProfile } from "../../types";
+import { DerjaText } from "../derja";
 import { MonthGrid } from "./MonthGrid";
 import { orderPests } from "./order";
 
@@ -8,16 +9,18 @@ import { orderPests } from "./order";
 export function PestCard({ pest, actions }: { pest: Pest; actions?: ReactNode }) {
   return (
     <div className="card">
-      <h3 style={{ marginBottom: 0 }}>{pest.name_en}</h3>
+      <h3 style={{ marginBottom: 0 }}>
+        <DerjaText text={pest.name_en} />
+      </h3>
       {pest.name_fr && <div className="muted small">{pest.name_fr}</div>}
       <MonthGrid months={pest.months} />
       <dl className="kv">
         <dt>{t.species.fields.symptoms}</dt>
-        <dd>{pest.symptoms}</dd>
+        <dd><DerjaText text={pest.symptoms} /></dd>
         <dt>{t.species.fields.organic_treatment}</dt>
-        <dd>{pest.organic_treatment}</dd>
+        <dd><DerjaText text={pest.organic_treatment} /></dd>
         <dt>{t.species.fields.prevention}</dt>
-        <dd>{pest.prevention}</dd>
+        <dd><DerjaText text={pest.prevention} /></dd>
       </dl>
       {actions && <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>{actions}</div>}
     </div>

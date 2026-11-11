@@ -3,6 +3,7 @@ import { t } from "../../i18n";
 import { ageInMonths, localIsoDate, ruleApplies } from "../../lib/dates";
 import type { CareRule, SpeciesProfile } from "../../types";
 import { TypePill } from "../TypeIcon";
+import { DerjaText } from "../derja";
 import { MonthGrid } from "./MonthGrid";
 import { orderRules } from "./order";
 
@@ -11,7 +12,9 @@ export function RuleCard({ rule, applies = true, actions }: { rule: CareRule; ap
   return (
     <div className="card" style={applies ? undefined : { opacity: 0.5 }}>
       <div className="row between" style={{ alignItems: "flex-start" }}>
-        <strong className="grow">{rule.title}</strong>
+        <strong className="grow">
+          <DerjaText text={rule.title} />
+        </strong>
         <TypePill type={rule.type} />
       </div>
       <MonthGrid months={rule.months} />
@@ -27,7 +30,7 @@ export function RuleCard({ rule, applies = true, actions }: { rule: CareRule; ap
       </div>
       {rule.instruction && (
         <p className="muted small" style={{ marginTop: 6, marginBottom: 0 }}>
-          {rule.instruction}
+          <DerjaText text={rule.instruction} />
         </p>
       )}
       {!applies && (

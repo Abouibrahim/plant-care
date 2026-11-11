@@ -2,7 +2,7 @@
 
 Phone-first PWA for one grower with two sites in Cap Bon, the backyard at home and the farm at borgdanet. Photograph a plant, let Claude identify it and write a species profile for Cap Bon conditions, and the app turns the profile into a task calendar, a daily round on Today and a push digest every morning.
 
-How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE16.md` and `UI-REFRESH.md`, the review behind Phases 10, 14 and 15 in `docs/REVIEW-2026-10-30.md`.
+How to use it: [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md). Design in `docs/SPEC.md`, working rules in `CLAUDE.md`, deviations from the design in `docs/DECISIONS.md`, milestones in `PHASE1.md` to `PHASE17.md` and `UI-REFRESH.md`, the review behind Phases 10, 14 and 15 in `docs/REVIEW-2026-10-30.md`.
 
 ## What it does
 

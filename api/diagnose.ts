@@ -27,7 +27,10 @@ import { recordUsage } from "./_usage.js";
 import { loadWeather } from "./_weather.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
-import { DERJA_KEY, readCorrections } from "../src/lib/derja.js";
+import { correctionsBlock, extendWords, loadCorrectionsOrNull } from "./_derja.js";
+import { cleanTerms, withoutCorrected } from "../src/lib/derja.js";
+
+export { correctionsBlock };
 import type { Correction, DiagnoseRequest, Diagnosis, ImagePayload, PlantWithSpecies, ProblemAiResult, WeatherDay } from "../src/types.js";
 
 const MAX_TASKS = 30;
@@ -100,13 +103,6 @@ export function describeContext({ plant, tasks, weather, note, today, correction
   return parts.join("\n\n");
 }
 
-/** The block of the grower's own derja words for the user message (Phase 16); null when there are none. */
-export function correctionsBlock(corrections: Correction[]): string | null {
-  if (corrections.length === 0) return null;
-  const lines = corrections.map((c) => `- ${c.term}: ${c.word || "no local word (if you list this term, give it an empty derja)"}`);
-  return ["The grower's own derja words, a glossary for the terms that belong in this diagnosis; use these exactly:", ...lines].join("\n");
-}
-
 /** The end of the user message: the note, the grower's own words when there are some, the instruction. */
 export function closingLines(note: string, corrections: Correction[]): string[] {
   const block = correctionsBlock(corrections);
@@ -118,13 +114,7 @@ export function closingLines(note: string, corrections: Correction[]): string[] 
  * the diagnosis goes ahead with Claude's own words.
  */
 export async function loadCorrections(db: SupabaseClient): Promise<Correction[]> {
-  try {
-    const { data, error } = await db.from("settings").select("value").eq("key", DERJA_KEY).maybeSingle();
-    if (error) return [];
-    return readCorrections((data as { value?: unknown } | null)?.value);
-  } catch {
-    return [];
-  }
+  return (await loadCorrectionsOrNull(db)) ?? [];
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -167,8 +157,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (taskErr) throw taskErr;
 
     const weather = await loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS));
-    const corrections = await loadCorrections(db);
-    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today, corrections });
+    // null when the row could not be read: the diagnosis goes ahead with Claude's own words, and
+    // nothing is added to the app-wide list, since a word of his could not be told from Claude's.
+    const corrections = await loadCorrectionsOrNull(db);
+    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today, corrections: corrections ?? [] });
     keepAlive(res);
     const result = await callJson<Diagnosis>({
       rules: readPrompt("diagnose.md"),
@@ -186,10 +178,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       return;
     }
     // The paid diagnosis goes to the table before the reply, so a reply lost on the way is not lost at all.
-    const row = photoRow(input, { ...result.data, ...result.usage, note });
+    // The terms as stored and answered: cleaned, and a term the grower corrected without the word
+    // Claude echoed for it, which is his own.
+    const data: Diagnosis = { ...result.data, terms: withoutCorrected(cleanTerms(result.data.terms), corrections) };
+    const row = photoRow(input, { ...data, ...result.usage, note });
     if (row) await storeRow(db, "photos", row);
+    // Claude's first word for each term is the word the whole app shows for it (Phase 17).
+    await extendWords(db, data.terms ?? [], corrections);
     await result.recorded;
-    reply(res, 200, { ...result.data, ...result.usage });
+    reply(res, 200, { ...data, ...result.usage });
   } catch (err) {
     handleError(res, err);
   }

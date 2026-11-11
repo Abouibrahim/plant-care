@@ -483,3 +483,48 @@ describe("the grower's derja words (Phase 16)", () => {
     expect(await loadCorrections()).toEqual([]);
   });
 });
+
+describe("the derja rows of a screen (Phase 17)", () => {
+  const AT = "2026-11-12T08:00:00Z";
+  const correction = { term: "aphid", word: "ڨمل", at: AT };
+  const word = { term: "pruning", word: "زبيرة", at: AT };
+  const list = { terms: [{ term: "Olive fly", derja: "ذبانة الزيتون" }], at: AT, asked_at: AT };
+
+  beforeEach(() => {
+    resetState(sharedState);
+  });
+
+  it("reads the corrections, the app-wide words and the species' list in one go", async () => {
+    const { loadDerja } = await import("../src/lib/db");
+    sharedState.settings.push({ key: "derja", value: [correction] }, { key: "derja:words", value: [word] }, { key: "derja:species:s1", value: list }, { key: "zones", value: {} });
+    expect(await loadDerja("s1")).toEqual({ corrections: [correction], words: [word], species: list });
+    expect(await loadDerja("s2")).toEqual({ corrections: [correction], words: [word], species: null });
+    expect((await loadDerja(null)).species).toBeNull();
+  });
+
+  it("reads missing or unexpected rows as nothing", async () => {
+    const { loadDerja } = await import("../src/lib/db");
+    expect(await loadDerja("s1")).toEqual({ corrections: [], words: [], species: null });
+    sharedState.settings.push({ key: "derja", value: { a: 1 } }, { key: "derja:words", value: "x" }, { key: "derja:species:s1", value: [1, 2] });
+    expect(await loadDerja("s1")).toEqual({ corrections: [], words: [], species: null });
+  });
+
+  it("stores a species' list and reads it back, one row per species", async () => {
+    const { getSpeciesWords, saveSpeciesWords } = await import("../src/lib/db");
+    expect(await getSpeciesWords("s1")).toBeNull();
+    await saveSpeciesWords("s1", list);
+    await saveSpeciesWords("s1", { ...list, terms: [] });
+    expect(sharedState.settings.filter((r) => r.key === "derja:species:s1")).toHaveLength(1);
+    expect(await getSpeciesWords("s1")).toEqual({ ...list, terms: [] });
+  });
+
+  it("removes a species' list with the species, and leaves it when a plant still uses the species", async () => {
+    const { deleteSpeciesIfUnused } = await import("../src/lib/db");
+    sharedState.species.push({ id: "s1" }, { id: "s2" });
+    sharedState.plants.push({ id: "p1", species_id: "s2" });
+    sharedState.settings.push({ key: "derja:species:s1", value: list }, { key: "derja:species:s2", value: list });
+    expect(await deleteSpeciesIfUnused("s1")).toBe(true);
+    expect(await deleteSpeciesIfUnused("s2")).toBe(false);
+    expect(sharedState.settings.map((r) => r.key)).toEqual(["derja:species:s2"]);
+  });
+});

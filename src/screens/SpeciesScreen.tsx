@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Banner } from "../components/Banner";
 import { Spinner } from "../components/Spinner";
+import { ProfileDerja } from "../components/derja";
 import { GuildUsesSection, NeedsSection, orderPests, orderRules, PestCard, RuleCard } from "../components/profile";
 import { t } from "../i18n";
 import { api } from "../lib/api";
@@ -259,11 +260,17 @@ function SpeciesView({ id }: { id: string }) {
 
       <BeforePlantingCard speciesId={s.id} />
 
-      <SectionCard title={t.species.sections.identity} targets={IDENTITY_TARGETS} {...cardProps}>
+      {/* The derja word beside the profile's key terms, and one "Derja words" card below the
+          profile (Phase 17). While Claude is asked for the species' words, nothing else may
+          change the profile: the editors, Regenerate and Delete wait. */}
+      <ProfileDerja speciesId={id} species={s} disabled={busy !== null || editing !== null}>
+        {({ card, fetching }) => (
+          <>
+      <SectionCard title={t.species.sections.identity} targets={IDENTITY_TARGETS} {...cardProps} disabled={cardProps.disabled || fetching}>
         <IdentityBlock species={s} />
       </SectionCard>
 
-      <SectionCard title={t.plant.tabs.needs} targets={NEEDS_TARGETS} {...cardProps}>
+      <SectionCard title={t.plant.tabs.needs} targets={NEEDS_TARGETS} {...cardProps} disabled={cardProps.disabled || fetching}>
         <NeedsSection species={s} />
       </SectionCard>
 
@@ -292,7 +299,7 @@ function SpeciesView({ id }: { id: string }) {
         onEdit={setEditing}
         onSaved={saved}
         onCancel={() => setEditing(null)}
-        disabled={busy !== null}
+        disabled={busy !== null || fetching}
         followUp={calendarFollowUp}
       />
 
@@ -310,15 +317,17 @@ function SpeciesView({ id }: { id: string }) {
         onEdit={setEditing}
         onSaved={saved}
         onCancel={() => setEditing(null)}
-        disabled={busy !== null}
+        disabled={busy !== null || fetching}
       />
 
-      <SectionCard title={t.plant.tabs.guild} targets={GUILD_TARGETS} {...cardProps}>
+      <SectionCard title={t.plant.tabs.guild} targets={GUILD_TARGETS} {...cardProps} disabled={cardProps.disabled || fetching}>
         <GuildUsesSection species={s} />
       </SectionCard>
 
+      {card("all")}
+
       <div className="card stack">
-        <button type="button" className="block" disabled={busy !== null || editing !== null} onClick={regenerate}>
+        <button type="button" className="block" disabled={busy !== null || editing !== null || fetching} onClick={regenerate}>
           {busy === "regenerate" ? t.species.regenerating : t.species.regenerate}
         </button>
         <span className="small muted">{t.species.regenerateNote}</span>
@@ -329,13 +338,16 @@ function SpeciesView({ id }: { id: string }) {
 
       {plantCount === 0 && (
         <div className="card stack">
-          <button type="button" className="danger block" disabled={busy !== null || editing !== null} onClick={remove}>
+          <button type="button" className="danger block" disabled={busy !== null || editing !== null || fetching} onClick={remove}>
             {t.species.delete}
           </button>
           <span className="small muted">{t.species.deleteNote}</span>
           {actionError?.action === "delete" && <Banner kind="error">{actionError.message}</Banner>}
         </div>
       )}
+          </>
+        )}
+      </ProfileDerja>
 
       {doneLink}
     </div>

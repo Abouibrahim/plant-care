@@ -2,7 +2,7 @@
 // reply is lost on the way is not a failed call: the routes store their row before they reply (Phase
 // 14, and /api/profile since 0.8.2), so the app looks for the stored row instead of paying twice.
 import { supabase } from "./supabase";
-import { getCheck, getPhoto, getQuestion, notifyTasksChanged } from "./db";
+import { getCheck, getPhoto, getQuestion, getSpeciesWords, notifyTasksChanged } from "./db";
 import { problemResult } from "./diagnosis";
 import { ApiError, isNetworkFailure, LostReplyError } from "./errors";
 import {
@@ -11,6 +11,8 @@ import {
   type AskResponse,
   type CheckRequest,
   type CheckResponse,
+  type DerjaRequest,
+  type DerjaResponse,
   type DiagnoseRequest,
   type DiagnoseResponse,
   type ExpandRequest,
@@ -200,6 +202,22 @@ export const api = {
       opts,
     );
   },
+  /**
+   * The derja words of a species profile (Phase 17). A lost reply is looked for in the species'
+   * settings row, taken only when it carries the time this request was sent: an older list still
+   * stored there is not the answer of a refresh. The row holds no usage, so a found list has none.
+   */
+  derja: (req: DerjaRequest, opts?: RecoverOptions) =>
+    withRecovery<DerjaResponse>(
+      () => callApi<DerjaResponse>("derja", req),
+      () =>
+        getSpeciesWords(req.species_id, lookupBound()).then((row) =>
+          row && row.asked_at === req.asked_at
+            ? { ...row, model: null, input_tokens: 0, output_tokens: 0, thinking_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+            : null,
+        ),
+      opts,
+    ),
   /** Expands the care rules into tasks now (one plant, or all) instead of waiting for the 06:00 cron. */
   expand: async (req: ExpandRequest = {}) => {
     const r = await callApi<ExpandResponse>("expand", req, EXPAND_TIMEOUT_MS);

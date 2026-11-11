@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "term": { "type": "string" },
+          "derja": { "type": "string" }
+        },
+        "required": ["term", "derja"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["terms"],
+  "additionalProperties": false
+}

@@ -71,6 +71,11 @@ describe("the ledger's arithmetic", () => {
 });
 
 describe("recordUsage", () => {
+  it("counts a derja word list as its own kind (Phase 17)", async () => {
+    const state = makeState();
+    expect(await recordUsage(makeClient(state), "derja", { model: "m", input_tokens: 10, output_tokens: 5, thinking_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 })).toBe(true);
+    expect(parseLedger(state.settings[0].value).by_route.derja?.calls).toBe(1);
+  });
   it("starts the month's row on the first call and adds the next ones to it, in Tunis time", async () => {
     const state = makeState();
     const db = makeClient(state);
