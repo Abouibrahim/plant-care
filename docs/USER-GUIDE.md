@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.15.0, as of 11 November 2026.
+For version 0.16.0, as of 11 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -32,7 +32,7 @@ In this guide, **bold** words are things you tap, named as the English screens n
 - **Identification.** Capture sends a photo to Claude, which names up to three candidates. Each comes with its confidence, the visible evidence and the names in English, French and Tunisian Arabic.
 - **Species profiles.** Claude writes one profile per species for Cap Bon: site fit, water, sun and heat, salinity, frost and chill, a care calendar, pests and diseases, companions, uses and toxicity. You confirm it and can correct any part by hand, and your edits survive a rewrite.
 - **Tasks from the calendar.** The care calendar becomes dated tasks 90 days ahead, matched to each plant's age. Waterings come every few days with their litres. Pruning, feeding, mulching, harvest, scouting, propagation and protection come as windows that stay open over their months.
-- **Health.** Diagnose sends a photo of a problem with your note. Claude answers with likely causes, checks to do on site, an organic treatment, prevention, an urgency and a date for a follow-up photo, which becomes a reminder. Treatments are logged from the diagnosis.
+- **Health.** Diagnose sends a photo of a problem with your note. Claude answers with likely causes, checks to do on site, an organic treatment, prevention, an urgency and a date for a follow-up photo, which becomes a reminder. Treatments are logged from the diagnosis. Each key term carries the word said in Tunisian (derja), in Arabic letters, for you to say to a worker or a supplier; you correct a word once and the app keeps yours.
 - **Questions.** Ask Claude holds a conversation about one plant, drawing on its profile, tasks, diagnoses, zone neighbours and the weather. Each answer is kept in the plant's journal.
 - **Check before planting.** Before you buy a plant, Claude weighs it against the saline well, the lime soil, the climate, the animals, the space and the pests. It gives a verdict, where and when to plant, what to look for at the nursery and better choices.
 - **Weather.** The local forecast (Open-Meteo) shows on Today, with alerts for heat, sirocco, frost, gales and heavy rain. The morning run skips waterings after rain, and Today shows the hours that suit spraying when a task or a diagnosis calls for a spray.
@@ -393,6 +393,17 @@ The photo and the diagnosis are saved in the journal as a problem photo: the pho
 
 **Mark treated** opens a field: type what you applied ("savon noir 2%, evening spray") and tap **Log it**. It is logged as a protect task done today, shown in the journal as "Treated: …"; left empty, the field logs the leading cause. One treatment per diagnosis per day ("Already logged today.").
 
+**Derja words.** A diagnosis made since version 0.16.0 shows, after each key term, the word people say for it in Tunisian, in Arabic letters and in parentheses: the name of the pest or disease, the product, the action. The English stays as it is; the word is there for you to say aloud to the worker who will treat the tree or to the supplier. A term is marked once in each text, at its first mention. Where the term is already followed by parentheses, the word goes inside them, before a " · ".
+
+Below the treatment, the **Derja words** card lists the terms with their words. Tap a line to change it:
+
+- type your word in Arabic letters and tap **Save**: the line says "your word", the text changes at once, every diagnosis made since 0.16.0 that mentions the term shows your word, and Claude is given your words for the next diagnoses. A word in Latin letters is refused ("Write the word in Arabic letters");
+- "add your word" marks a term Claude knew no local word for: it gives none rather than guess. Type yours the same way;
+- save the field empty to show no word for the term ("no word"). On a diagnosis whose own list has the term the line stays, so you can put one back; on a diagnosis that only mentions a term you corrected elsewhere, the line goes, and you put a word back from a diagnosis that lists the term;
+- **Use Claude's word**, on a term the diagnosis listed itself, drops your correction.
+
+Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on the opened diagnosis only: task titles, notifications, shared lists and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
+
 Reopen a diagnosis with **Open** on its journal entry, or from Past diagnoses on the Health tab. On a reopened diagnosis the "Re-photograph in … days" date counts from today; the reminder's real day is the "Reminder set for" line. **Set the reminder** appears when no follow-up exists. It also appears when the follow-up could not be read, for example on a weak signal: in that case reopen the diagnosis before tapping it, or you get a second reminder. The sheet takes one diagnosis per opening: close it and tap Diagnose again for the next.
 
 ### Ask Claude about this plant
@@ -604,7 +615,7 @@ The next line is the morning run's record: "Last morning run: Tue 4 Nov, 06:41 �
 
 **English** or **Français**, for this phone; the app reloads. Some text keeps its language:
 
-- what Claude writes in Capture (evidence, advice), every profile and every diagnosis are in English, whatever the app's language, and so are the task titles and instructions copied from a profile's calendar;
+- what Claude writes in Capture (evidence, advice), every profile and every diagnosis are in English, whatever the app's language (a diagnosis adds the derja word beside its key terms, chapter 6), and so are the task titles and instructions copied from a profile's calendar;
 - the morning notifications, the notes the morning run writes on tasks ("Window ended", the rain note) and their dates follow the language chosen here, once chosen; the card reads "Notifications: Français" when the choice has reached the server, or says it has not yet, in which case it is sent again when the app opens with a connection. Until a language is chosen here, they are in English, as the server's error messages always are; on a phone with no choice of its own the card still reads the language another phone chose;
 - a check before planting keeps the language it was written in, and Ask Claude answers in the language of the question;
 - dates follow the phone's own regional format.
@@ -866,6 +877,10 @@ On the Hobby plan the runtime logs reach back about an hour. The app logs a noti
 - **Missing push keys.** If the server's keys are missing, Turn on still works and nothing is sent. A real run's answer says so, as `digest_error`, and so does its record on the Settings → Weather line, on a morning with something to send to a phone that is turned on. The logs show nothing.
 - **Any other key.** Replace it in Vercel and in `.env.local`, then redeploy. A new `CRON_SECRET` is the one Vercel sends from then on.
 - **The owner.** Create the new user and add its row to `owners`, then remove the old row (or the old user). Set `OWNER_USER_ID` to the new UUID and redeploy. Sign out and sign in with the new account; the reminders belong to the phone and keep working.
+
+### An Arabic keyboard for the derja words
+
+Correcting a derja word on a diagnosis (chapter 6) needs Arabic letters, and nothing in the app can switch the phone's keyboard. In Gboard: Settings → Languages → Add keyboard → Arabic. The globe key then switches between the keyboards; ڨ, ڥ and پ are under a long press on ق, ف and ب. Your corrections are kept in the `settings` row `derja`; no SQL is needed.
 
 ### The satellite map (optional)
 

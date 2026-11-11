@@ -2,6 +2,19 @@
 
 Deviations from `docs/SPEC.md` or `CLAUDE.md`, with the alternative taken. Newest first.
 
+## 2026-11-11 — Phase 16: derja words on a diagnosis (0.16.0)
+
+Mohamed asked on 2026-11-11 how the app's content could show in Tunisian Arabic. What he needs is narrower than a third language: he reads the app himself, in English, and lacks the derja words to tell a worker or a supplier the name of a disease and its treatment. The design (`docs/superpowers/specs/2026-11-11-derja-words-design.md`, approved the same day, checked by three reviewers) and its plan (`docs/superpowers/plans/2026-11-11-derja-words.md`) are the record; `PHASE16.md` is the milestone.
+
+- **Not a third language.** No Arabic interface, no right-to-left layout, no `ar` strings file. The words show on the opened diagnosis only.
+- **Claude lists the words; the app places them.** The diagnose schema gains a required `terms` array of `{ term, derja }` (at most eight are kept). Claude does not write the parentheses into the text: the app adds them when it draws the card (`src/lib/derja.ts`), so the stored English stays clean, the cause's name keeps feeding task titles untouched, and a correction changes what shows without rewriting stored diagnoses. `derja` is empty when Claude knows no word people really use; the term is still listed so the grower can give his.
+- **The site context's name rule is overridden for this call.** `prompts/system-context.md` asks for names in Arabic script with a Latin transliteration, and stays byte for byte for its cache. `prompts/diagnose.md` now says: every text field in English, no Arabic letters and no transliteration outside `terms[].derja`. As a second guard, `shortCause` and the treatment note strip any Arabic before a title or a note is built.
+- **Corrections in a settings row.** The row `derja` holds an array of `{ term, word, at }` (the term in its normal form, an empty word for "no word"), at most 200, written by the browser under RLS and read by `/api/diagnose` with the service role, which adds them to the user message. No SQL step. The editor reads the row again just before writing and gives up after 8 s; two phones saving in the same moment can still lose one of the two, accepted for one user. A correction wins over Claude's word on every diagnosis that has a `terms` field; diagnoses from before 0.16.0 have none and are drawn as before.
+- **Matching.** Terms are compared in a normal form (case, apostrophes, hyphens and spaces unified) and across a trailing "s" or "es"; spelling variants are separate terms. A match never touches a letter or digit (Unicode lookarounds, since `\b` is ASCII-only), and the head of a compound or a possessive is skipped. A word that would double parentheses goes inside the existing ones with " · ".
+- **Deviations from the plan**, all small: the tail of the user message is an exported `closingLines` so it can be tested without a full species fixture; `DERJA_KEY` lives in `src/lib/derja.ts`, shared by the route and `db.ts`; an unlisted correction that was cleared gets no line in the card; "Use Claude's word" shows on listed terms only.
+- **Cost.** About 100 to 250 more output tokens a diagnosis, and the corrections as input once there are some. `max_tokens` stays 2,048 with the retry at double.
+- **What only Mohamed can judge.** Whether the words are the ones said around Menzel Bouzelfa. No test covers it; the corrections are the remedy.
+
 ## 2026-11-11 — Phase 15: housekeeping (0.15.0)
 
 Mohamed chose it on 2026-11-11 ("Housekeeping phase") from the list given the day before: the three items of the review of 2026-10-30's suggested first phase that Phase 10 left out (7.1, 4.1, 2.5) and the first candidate of the architecture review of 2026-11-09 (one `describeError`, part of the review's 7.2). The items are small and were argued in those reviews, so there was no design critique; `PHASE15.md` has the plan and the tests.

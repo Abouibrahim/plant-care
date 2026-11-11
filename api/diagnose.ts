@@ -25,8 +25,10 @@ import { parseImages } from "./_images.js";
 import { handleError, sendError, serviceClient, verifyUser } from "./_supabase.js";
 import { recordUsage } from "./_usage.js";
 import { loadWeather } from "./_weather.js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays, isoDateIn, SITE_TIME_ZONE } from "../src/lib/dates.js";
-import type { DiagnoseRequest, Diagnosis, ImagePayload, PlantWithSpecies, ProblemAiResult, WeatherDay } from "../src/types.js";
+import { DERJA_KEY, readCorrections } from "../src/lib/derja.js";
+import type { Correction, DiagnoseRequest, Diagnosis, ImagePayload, PlantWithSpecies, ProblemAiResult, WeatherDay } from "../src/types.js";
 
 const MAX_TASKS = 30;
 const MAX_NOTE_CHARS = 500;
@@ -73,10 +75,12 @@ export interface DiagnoseContext {
   note: string;
   /** The Tunis date, YYYY-MM-DD. */
   today: string;
+  /** The grower's own derja words, newest first (Phase 16). */
+  corrections: Correction[];
 }
 
 /** The text after the images: today, the species profile, the plant, its recent tasks and the note. */
-export function describeContext({ plant, tasks, weather, note, today }: DiagnoseContext): string {
+export function describeContext({ plant, tasks, weather, note, today, corrections }: DiagnoseContext): string {
   const s = plant.species;
   const parts: string[] = [];
 
@@ -92,9 +96,35 @@ export function describeContext({ plant, tasks, weather, note, today }: Diagnose
       : `No task was recorded for this plant in the last ${RECENT_DAYS} days.`,
   );
 
-  parts.push(note ? `Grower's note: "${note}"` : "The grower left no note.");
-  parts.push("Diagnose what the photo shows on this plant.");
+  parts.push(...closingLines(note, corrections));
   return parts.join("\n\n");
+}
+
+/** The block of the grower's own derja words for the user message (Phase 16); null when there are none. */
+export function correctionsBlock(corrections: Correction[]): string | null {
+  if (corrections.length === 0) return null;
+  const lines = corrections.map((c) => `- ${c.term}: ${c.word || "no local word (if you list this term, give it an empty derja)"}`);
+  return ["The grower's own derja words, a glossary for the terms that belong in this diagnosis; use these exactly:", ...lines].join("\n");
+}
+
+/** The end of the user message: the note, the grower's own words when there are some, the instruction. */
+export function closingLines(note: string, corrections: Correction[]): string[] {
+  const block = correctionsBlock(corrections);
+  return [note ? `Grower's note: "${note}"` : "The grower left no note.", ...(block ? [block] : []), "Diagnose what the photo shows on this plant."];
+}
+
+/**
+ * The grower's corrections, from the settings row `derja`, newest first. Any failure gives none:
+ * the diagnosis goes ahead with Claude's own words.
+ */
+export async function loadCorrections(db: SupabaseClient): Promise<Correction[]> {
+  try {
+    const { data, error } = await db.from("settings").select("value").eq("key", DERJA_KEY).maybeSingle();
+    if (error) return [];
+    return readCorrections((data as { value?: unknown } | null)?.value);
+  } catch {
+    return [];
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -137,7 +167,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     if (taskErr) throw taskErr;
 
     const weather = await loadWeather(db, addDays(today, -WEATHER_PAST_DAYS), addDays(today, WEATHER_COMING_DAYS));
-    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today });
+    const corrections = await loadCorrections(db);
+    const text = describeContext({ plant, tasks: (taskRows ?? []) as RecentTask[], weather, note, today, corrections });
     keepAlive(res);
     const result = await callJson<Diagnosis>({
       rules: readPrompt("diagnose.md"),

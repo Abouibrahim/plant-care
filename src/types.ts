@@ -96,6 +96,21 @@ export interface Diagnosis {
   prevention: string;
   urgency: Urgency;
   rephotograph_in_days: number;
+  /** The key terms with the word said in Tunisian (Phase 16); absent on diagnoses saved before 0.16.0. */
+  terms?: DerjaTerm[];
+}
+
+/** One key term of a diagnosis with the word said in Tunisian; derja is "" when Claude knows none. */
+export interface DerjaTerm {
+  term: string;
+  derja: string;
+}
+
+/** The grower's word for a term: the term in normal form, the word ("" for "no word"), the ISO time it was saved. */
+export interface Correction {
+  term: string;
+  word: string;
+  at: string;
 }
 
 export interface DiagnoseRequest {

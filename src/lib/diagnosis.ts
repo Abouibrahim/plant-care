@@ -1,6 +1,7 @@
 // What the app derives from a diagnosis: the stored shape read back from photos.ai_result, the
 // leading cause, and the wording of the follow-up task (a scout for the pest when one leads).
 import { t } from "../i18n";
+import { cleanTerms, stripArabic } from "./derja";
 import type { Diagnosis, LikelyCause, ProblemAiResult, Urgency } from "../types";
 
 /** A pest named with at least this likelihood turns the follow-up into a scouting task for it. */
@@ -40,6 +41,9 @@ export function problemResult(ai: unknown): ProblemAiResult | null {
     checks_to_do: Array.isArray(r.checks_to_do) ? r.checks_to_do.filter((c): c is string => typeof c === "string") : [],
     organic_treatment: typeof r.organic_treatment === "string" ? r.organic_treatment : "",
     ...(typeof r.spray === "boolean" ? { spray: r.spray } : {}),
+    // The derja words (Phase 16): kept through every read, or the app's own save after a recovered
+    // lost reply would write the row back without them.
+    ...(Array.isArray(r.terms) ? { terms: cleanTerms(r.terms) } : {}),
     prevention: typeof r.prevention === "string" ? r.prevention : "",
     urgency: URGENCIES.has(r.urgency ?? "") ? (r.urgency as Urgency) : "watch",
     rephotograph_in_days: num(r.rephotograph_in_days),
@@ -77,7 +81,9 @@ export function rephotoDays(d: Diagnosis): number {
  * A cause cut to a title-sized phrase: Claude writes "Natural early autumn leaf yellowing (deciduous
  * senescence), made earlier by fruit load"; a task title and a digest line want the head of it.
  */
-export function shortCause(cause: string): string {
+export function shortCause(raw: string): string {
+  // A title, a note and a notification carry no Arabic, even if Claude wrote some into the name.
+  const cause = stripArabic(raw);
   const head = cause.split(/[,:;([]/)[0].trim() || cause.trim();
   return head.length > MAX_TITLE_CAUSE ? `${head.slice(0, MAX_TITLE_CAUSE - 1).trimEnd()}…` : head;
 }

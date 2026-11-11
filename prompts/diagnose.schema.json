@@ -21,8 +21,20 @@
     "spray": { "type": "boolean" },
     "prevention": { "type": "string" },
     "urgency": { "type": "string", "enum": ["watch", "this_week", "today"] },
-    "rephotograph_in_days": { "type": "integer" }
+    "rephotograph_in_days": { "type": "integer" },
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "term": { "type": "string" },
+          "derja": { "type": "string" }
+        },
+        "required": ["term", "derja"],
+        "additionalProperties": false
+      }
+    }
   },
-  "required": ["summary", "likely_causes", "checks_to_do", "organic_treatment", "spray", "prevention", "urgency", "rephotograph_in_days"],
+  "required": ["summary", "likely_causes", "checks_to_do", "organic_treatment", "spray", "prevention", "urgency", "rephotograph_in_days", "terms"],
   "additionalProperties": false
 }

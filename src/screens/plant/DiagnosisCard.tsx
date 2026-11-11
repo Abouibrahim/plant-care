@@ -1,13 +1,16 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Banner } from "../../components/Banner";
 import { ConfidenceBar } from "../../components/ConfidenceBar";
 import { Spinner } from "../../components/Spinner";
 import { t } from "../../i18n";
 import { describeError } from "../../lib/errors";
+import { cardRows, cleanTerms, stripArabic, wordSources } from "../../lib/derja";
 import { addDays, localIsoDate, toLocalDate } from "../../lib/dates";
-import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, treatedRuleKey } from "../../lib/db";
+import { diagnosisRuleKey, insertRephotoTask, insertTreatedTask, loadCorrections, treatedRuleKey } from "../../lib/db";
 import { isPestScout, rephotoDays, rephotoTask, shortCause, sortedCauses, topCause, URGENCY_PILL } from "../../lib/diagnosis";
-import type { Diagnosis, Task, Usage } from "../../types";
+import type { Correction, Diagnosis, Task, Usage } from "../../types";
+import { DerjaText } from "./DerjaText";
+import { DerjaWords } from "./DerjaWords";
 
 const MAX_APPLIED = 200;
 
@@ -36,6 +39,26 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
   const [notice, setNotice] = useState<{ kind: "info" | "error"; text: string } | null>(null);
   const s = t.diagnose;
 
+  // The derja words (Phase 16). A diagnosis from before 0.16.0 has no list: it is drawn as it always
+  // was and reads no settings row. A failed read leaves Claude's own words.
+  const [corrections, setCorrections] = useState<Correction[]>([]);
+  const savedHere = useRef(false);
+  const hasTerms = Array.isArray(diagnosis.terms);
+  useEffect(() => {
+    if (!hasTerms) return;
+    let live = true;
+    // A save on this card reads the row again itself, so its list is the newer one: a first read
+    // that comes back after it must not put the older list back.
+    loadCorrections().then(
+      (list) => live && !savedHere.current && setCorrections(list),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [hasTerms]);
+  const sources = useMemo(() => (hasTerms ? wordSources(cleanTerms(diagnosis.terms), corrections) : []), [hasTerms, diagnosis.terms, corrections]);
+
   const causes = sortedCauses(diagnosis);
   const top = topCause(diagnosis);
   const days = rephotoDays(diagnosis);
@@ -52,7 +75,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
     setBusy("treat");
     setNotice(null);
     try {
-      const what = applied.trim().slice(0, MAX_APPLIED) || top?.cause || t.plant.photoKinds.problem;
+      const what = applied.trim().slice(0, MAX_APPLIED) || stripArabic(top?.cause ?? "") || t.plant.photoKinds.problem;
       const row = await insertTreatedTask({
         plant_id: plant.id,
         photo_id: photoId,
@@ -96,7 +119,7 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
       <div className="card">
         <div className="row between" style={{ alignItems: "flex-start" }}>
           <p className="grow" style={{ fontWeight: 600, margin: 0 }}>
-            {diagnosis.summary}
+            <DerjaText text={diagnosis.summary} sources={sources} />
           </p>
           <span className={URGENCY_PILL[diagnosis.urgency]} style={{ flexShrink: 0 }}>
             {s.urgency[diagnosis.urgency]}
@@ -110,13 +133,15 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
         {causes.map((c, i) => (
           <div key={`${c.cause}:${i}`} className="cause">
             <div className="row between" style={{ alignItems: "flex-start" }}>
-              <strong className="grow">{c.cause}</strong>
+              <strong className="grow">
+                <DerjaText text={c.cause} sources={sources} />
+              </strong>
               <span className={c.kind === "pest" && isPestScout(c) ? "pill warn" : "pill"}>{s.kinds[c.kind]}</span>
             </div>
             <ConfidenceBar value={c.likelihood} />
             {c.evidence && (
               <p className="muted small" style={{ margin: "4px 0 0" }}>
-                {c.evidence}
+                <DerjaText text={c.evidence} sources={sources} />
               </p>
             )}
           </div>
@@ -128,7 +153,9 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
           <h3>{s.checks}</h3>
           <ol className="list-plain">
             {diagnosis.checks_to_do.map((check, i) => (
-              <li key={i}>{check}</li>
+              <li key={i}>
+                <DerjaText text={check} sources={sources} />
+              </li>
             ))}
           </ol>
         </section>
@@ -136,12 +163,26 @@ export function DiagnosisCard({ plant, diagnosis, usage, photoId, tasks, onChang
 
       <section className="card">
         <h3>{s.treatment}</h3>
-        <p style={{ margin: 0 }}>{diagnosis.organic_treatment}</p>
+        <p style={{ margin: 0 }}>
+          <DerjaText text={diagnosis.organic_treatment} sources={sources} />
+        </p>
       </section>
+
+      {hasTerms && (
+        <DerjaWords
+          rows={cardRows([diagnosis.summary, ...causes.flatMap((c) => [c.cause, c.evidence]), ...diagnosis.checks_to_do, diagnosis.organic_treatment, diagnosis.prevention], sources)}
+          onSaved={(list) => {
+            savedHere.current = true;
+            setCorrections(list);
+          }}
+        />
+      )}
 
       <section className="card">
         <h3>{s.prevention}</h3>
-        <p style={{ margin: 0 }}>{diagnosis.prevention}</p>
+        <p style={{ margin: 0 }}>
+          <DerjaText text={diagnosis.prevention} sources={sources} />
+        </p>
       </section>
 
       <section className="card">

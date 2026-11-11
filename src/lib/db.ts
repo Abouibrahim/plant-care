@@ -2,12 +2,14 @@
 import { PHOTOS_BUCKET, supabase } from "./supabase";
 import { addDays, toLocalDate } from "./dates";
 import { forgetCachedPhotos, readCachedPhoto, storeCachedPhoto, thumbPath } from "./photoCache";
+import { DERJA_KEY, readCorrections, withCorrection, withoutCorrection } from "./derja";
 import { problemResult, topCause } from "./diagnosis";
 import { tagIdRange } from "./map";
 import { parseDailyRecord, parseDailyStart } from "./record";
 import { parseLedger } from "./usage";
 import { weatherSettings, type SprayTreatment } from "./weather";
 import { t, type Lang } from "../i18n";
+import type { Correction } from "../types";
 import {
   DAILY_RECORD_KEY,
   DAILY_STARTED_KEY,
@@ -1098,15 +1100,46 @@ function settingsError(error: { code?: string; message: string }): Error {
   return missingTable(error, "settings") ? new SettingsUnavailable(error.message) : new Error(error.message);
 }
 
-export async function getSetting<T>(key: string): Promise<T | null> {
-  const r = await supabase.from("settings").select("value").eq("key", key).maybeSingle();
+export async function getSetting<T>(key: string, signal?: AbortSignal): Promise<T | null> {
+  let q = supabase.from("settings").select("value").eq("key", key);
+  if (signal) q = q.abortSignal(signal);
+  const r = await q.maybeSingle();
   if (r.error) throw settingsError(r.error);
   return r.data ? (r.data.value as T) : null;
 }
 
-export async function setSetting<T>(key: string, value: T): Promise<void> {
-  const { error } = await supabase.from("settings").upsert({ key, value }, { onConflict: "key" });
+export async function setSetting<T>(key: string, value: T, signal?: AbortSignal): Promise<void> {
+  let q = supabase.from("settings").upsert({ key, value }, { onConflict: "key" });
+  if (signal) q = q.abortSignal(signal);
+  const { error } = await q;
   if (error) throw settingsError(error);
+}
+
+/** A correction's read and write together give up after this long, like a task write (Phase 16). */
+export const DERJA_WRITE_MS = 8000;
+
+/** The grower's own derja words, newest first; [] when the row is missing or holds something else. */
+export async function loadCorrections(signal?: AbortSignal): Promise<Correction[]> {
+  return readCorrections(await getSetting<unknown>(DERJA_KEY, signal));
+}
+
+/**
+ * Sets the term's word ("" for "no word"). The row is read again just before it is written, so a
+ * correction saved from another card since this one opened is kept; returns the list as stored.
+ */
+export async function saveCorrection(term: string, word: string, at: string = new Date().toISOString()): Promise<Correction[]> {
+  const signal = AbortSignal.timeout(DERJA_WRITE_MS);
+  const next = withCorrection(await loadCorrections(signal), term, word, at);
+  await setSetting(DERJA_KEY, next, signal);
+  return next;
+}
+
+/** Drops the term's correction, so Claude's own word shows again; returns the list as stored. */
+export async function removeCorrection(term: string): Promise<Correction[]> {
+  const signal = AbortSignal.timeout(DERJA_WRITE_MS);
+  const next = withoutCorrection(await loadCorrections(signal), term);
+  await setSetting(DERJA_KEY, next, signal);
+  return next;
 }
 
 export const ZONES_KEY = "zones";

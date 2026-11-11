@@ -435,3 +435,51 @@ describe("the write options of Phase 14", () => {
     expect(byId(theirs.id)).toMatchObject({ status: "done", acted_at: "2026-11-08T07:00:00.000Z" });
   });
 });
+
+describe("the grower's derja words (Phase 16)", () => {
+  const AT = "2026-11-11T10:00:00Z";
+  const aphid = { term: "aphid", word: "ڨمل", at: "2026-11-01T00:00:00Z" };
+  const stored = () => sharedState.settings.find((r) => r.key === "derja")?.value;
+
+  beforeEach(() => {
+    resetState(sharedState);
+    sharedState.settings.push({ key: "derja", value: [aphid] });
+  });
+
+  it("adds a correction in front and stores the list", async () => {
+    const { saveCorrection } = await import("../src/lib/db");
+    const list = await saveCorrection("Sooty mould", "الفحمة", AT);
+    expect(list).toEqual([{ term: "sooty mould", word: "الفحمة", at: AT }, aphid]);
+    expect(stored()).toEqual(list);
+  });
+
+  it("reads the row again before writing, so a correction saved elsewhere meanwhile survives", async () => {
+    const { loadCorrections, saveCorrection } = await import("../src/lib/db");
+    await loadCorrections();
+    const copper = { term: "copper", word: "النحاس", at: "2026-11-10T00:00:00Z" };
+    sharedState.settings[0].value = [copper, aphid];
+    await saveCorrection("x", "", AT);
+    expect(stored()).toEqual([{ term: "x", word: "", at: AT }, copper, aphid]);
+  });
+
+  it("creates the row when there is none", async () => {
+    const { saveCorrection } = await import("../src/lib/db");
+    sharedState.settings.length = 0;
+    await saveCorrection("aphid", "ڨمل", AT);
+    expect(stored()).toEqual([{ term: "aphid", word: "ڨمل", at: AT }]);
+  });
+
+  it("removes one term's correction and leaves the others", async () => {
+    const { removeCorrection } = await import("../src/lib/db");
+    expect(await removeCorrection("copper")).toEqual([aphid]);
+    expect(stored()).toEqual([aphid]);
+    expect(await removeCorrection("Aphid")).toEqual([]);
+    expect(stored()).toEqual([]);
+  });
+
+  it("reads an unexpected row as no corrections", async () => {
+    const { loadCorrections } = await import("../src/lib/db");
+    sharedState.settings[0].value = { a: 1 };
+    expect(await loadCorrections()).toEqual([]);
+  });
+});
