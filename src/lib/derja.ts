@@ -94,8 +94,11 @@ const cp = (code: number) => String.fromCharCode(code);
 /** The invisible direction marks and isolates, built from their code points so none sits in this file. */
 const DIRECTION_MARKS = new RegExp(`[${cp(0x200e)}${cp(0x200f)}${cp(0x202a)}-${cp(0x202e)}${cp(0x2066)}-${cp(0x2069)}]`, "g");
 
-/** The marks that set a word apart in a name: comma, semicolon, colon, middle dot, slash, bar, dashes. */
-const SET_APART = "[,،;:·/|–—-]";
+/**
+ * The marks that set a word apart in a name: comma, semicolon, colon, middle dot, slash, bar,
+ * dashes. A hyphen before a digit is a minus sign ("-2 °C"), not a mark.
+ */
+const SET_APART = "(?:[,،;:·/|–—]|-(?!\\d))";
 /**
  * An Arabic run, or runs with only marks between them ("النمرة / الفحمة"), with the marks on either
  * side (1: before, 2: after), so what stays is decided where it stood.
@@ -107,15 +110,18 @@ const ARABIC_SEGMENT = new RegExp(
 
 /**
  * What stays of an Arabic run and the marks around it. At the start or the end of the text, nothing.
- * Between two words, a mark that only opened the run goes with it, and so does a pair around it
- * ("– … –", ", … ,"); a mark of its own after the run belongs to the words after it and stays.
+ * Between two words, a mark that only opened the run goes with it, and so does a pair of dashes
+ * around it, which set it apart as an aside ("– … –"). Otherwise one mark stays, so two names of a
+ * list never run together: a colon that opened the list ("Turn 10 leaves: …, honeydew"), else the
+ * mark after the run (", … ," keeps one comma, "/ …," keeps the comma).
  */
 function leftOf(segment: string, before: string, after: string, at: number, text: string): string {
   if (text.slice(0, at).trim() === "" || text.slice(at + segment.length).trim() === "") return "";
   const opening = before.replace(/\s/g, "").slice(-1);
   const closing = after.replace(/\s/g, "").slice(0, 1);
-  if (closing === "" || closing === opening) return " ";
-  const mark = closing === "،" ? "," : closing;
+  if (closing === "" || (closing === opening && /[–—-]/.test(closing))) return " ";
+  const kept = opening === ":" ? ":" : closing;
+  const mark = kept === "،" ? "," : kept;
   return /[,;:]/.test(mark) ? `${mark} ` : ` ${mark} `;
 }
 
@@ -130,8 +136,8 @@ export function stripArabic(text: string): string {
   // Nothing was removed: the text is the grower's or Claude's English as written, and a minus
   // sign or a slash inside its parentheses is content, not a leftover.
   if (bare === text) return text.replace(/\s+/g, " ").trim();
-  return bare
-    .replace(/\(\s*(?:[,،;·/|–—-]\s*)+/g, "(")
+  const left = bare
+    .replace(/\(\s*(?:(?:[,،;·/|–—]|-(?!\d))\s*)+/g, "(")
     .replace(/(?:\s*[,،;·/|–—-])+\s*\)/g, ")")
     .replace(/\(\s*\)/g, "")
     .replace(/\(\s+/g, "(")
@@ -140,6 +146,8 @@ export function stripArabic(text: string): string {
     .replace(/\s+([.,])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+  // A text all in Arabic leaves its punctuation ("تحقق من الأغصان." gives "."), which is no text.
+  return /\p{L}/u.test(left) ? left : "";
 }
 
 const newestFirst = (a: { at: string }, b: { at: string }) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
@@ -342,34 +350,47 @@ export function annotate(text: string, sources: WordSource[]): Piece[] {
   return pieces;
 }
 
-/** Lower-cased the long way round, so the letters the matcher's case folding pairs (ſ and s, ς and σ) are equal here too. */
+/**
+ * Lower-cased the long way round, a final sigma written as a medial one, so the letters the
+ * matcher's case folding pairs (ſ and s, ς and σ) are equal here too. The sigma needs its own step:
+ * lower-casing writes "Σ" as "ς" or "σ" by the letters around it, which differ on the page and in a
+ * term's piece.
+ */
 function fold(text: string): string {
-  return text.toLowerCase().toUpperCase().toLowerCase();
+  return text.toLowerCase().toUpperCase().toLowerCase().replace(/ς/g, "σ");
+}
+
+/** The words of a text as the matcher bounds them: runs of letters and digits, folded. */
+function wordsOf(text: string): string[] {
+  return fold(text).split(/[^\p{L}\p{N}]+/u);
 }
 
 /**
- * Pieces of text every match of a term holds, folded: each word but the last as it is, and the
- * last word's shortest form, cut at their apostrophes (the matcher takes any of four there).
+ * Whether every word of a term is among a page's words as the matcher could find it: each word but
+ * the last as it is, the last at one of its forms with an "s" or "es" more or less. A term that
+ * fails cannot stand in the page, and its matcher is never built.
  */
-function piecesOf(key: string): string[] {
+function mayStand(key: string, page: Set<string>): boolean {
   const words = normalTerm(key).split(" ");
-  const shortest = stemsOf(words.pop() ?? "").reduce((a, b) => (b.length < a.length ? b : a));
-  return [...words, shortest]
-    .flatMap((w) => w.split("'"))
-    .filter((p) => p !== "")
-    .map(fold);
+  const last = words.pop() ?? "";
+  if (!words.every((w) => wordsOf(w).every((p) => p === "" || page.has(p)))) return false;
+  return stemsOf(last).some((stem) => {
+    const parts = wordsOf(stem);
+    const end = parts.pop() ?? "";
+    return parts.every((p) => p === "" || page.has(p)) && (end === "" || page.has(end) || page.has(`${end}s`) || page.has(`${end}es`));
+  });
 }
 
 /**
  * The sources a page needs: the listed ones, and the unlisted ones whose term stands in one of its
  * texts. Done once per page, so that hundreds of app-wide words are not tried on every text drawn.
- * A plain search for the term's pieces comes first: building a matcher for each of 800 words took
- * about half a second on the first page drawn, and most of them are not on the page at all.
+ * The page's words are looked up first: building a matcher for each of 800 terms took about half a
+ * second on the first page drawn, and most of them are not on the page at all.
  */
 export function narrowSources(texts: string[], sources: WordSource[]): WordSource[] {
   const all = texts.join("\n");
-  const folded = fold(all);
-  return sources.filter((s) => s.listed || (piecesOf(s.key).every((p) => folded.includes(p)) && occurs(all, s.key)));
+  const page = new Set(wordsOf(all));
+  return sources.filter((s) => s.listed || (mayStand(s.key, page) && occurs(all, s.key)));
 }
 
 /**

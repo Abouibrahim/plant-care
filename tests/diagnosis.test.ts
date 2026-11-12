@@ -37,6 +37,10 @@ describe("titles carry no Arabic", () => {
     expect(shortCause("Sooty mould الفحمة, on leaves")).toBe("Sooty mould");
     expect(shortCause("Black scale (النمرة) on twigs")).toBe("Black scale on twigs");
   });
+  it("a cause written all in Arabic gives the follow-up the plain word, not its full stop (0.17.1)", () => {
+    const d = problemResult({ ...base, likely_causes: [{ cause: "النمرة.", kind: "disease", likelihood: 0.7, evidence: "" }] })!;
+    expect(rephotoTask(d, "OLV-1").title).toBe("Re-photograph OLV-1: problem");
+  });
   it("the follow-up task's title and instruction carry none", () => {
     const { title, instruction } = rephotoTask(problemResult(base)!, "OLV-1");
     expect(/\p{Script=Arabic}/u.test(title + instruction)).toBe(false);
@@ -46,6 +50,14 @@ describe("titles carry no Arabic", () => {
       ...base,
       likely_causes: [{ cause: "Leaf scorch", kind: "salinity", likelihood: 0.7, evidence: "" }],
       checks_to_do: ["تحقق", "Check the twigs for scale (النمرة)."],
+    })!;
+    expect(rephotoTask(d, "OLV-1").instruction).toBe("Check the twigs for scale. Take a new photo of the same part from the plant's screen (Diagnose) to judge the treatment.");
+  });
+  it("passes over a check with no word left once its Arabic is gone, as an Arabic sentence leaves its full stop", () => {
+    const d = problemResult({
+      ...base,
+      likely_causes: [{ cause: "Leaf scorch", kind: "salinity", likelihood: 0.7, evidence: "" }],
+      checks_to_do: ["تحقق من الأغصان.", "1. تحقق من الأغصان!", "Check the twigs for scale."],
     })!;
     expect(rephotoTask(d, "OLV-1").instruction).toBe("Check the twigs for scale. Take a new photo of the same part from the plant's screen (Diagnose) to judge the treatment.");
   });

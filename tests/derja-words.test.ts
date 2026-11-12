@@ -18,14 +18,30 @@ describe("stripArabic, tidy (Phase 17)", () => {
 });
 
 describe("stripArabic, Arabic in the middle of a name (0.17.1)", () => {
-  it("takes the marks that set the Arabic apart with it", () => {
+  it("takes the dashes that set the Arabic apart with it", () => {
     expect(stripArabic("Black scale – النمرة – on twigs")).toBe("Black scale on twigs");
-    expect(stripArabic("Sooty mould, الفحمة, on leaves")).toBe("Sooty mould on leaves");
     expect(stripArabic("Black scale – النمرة on twigs")).toBe("Black scale on twigs");
+  });
+  it("keeps one mark of a list the Arabic was an item of, so two names never run together", () => {
+    expect(stripArabic("Sooty mould, الفحمة, on leaves")).toBe("Sooty mould, on leaves");
+    expect(stripArabic("Black scale, النمرة, cochenille noire")).toBe("Black scale, cochenille noire");
+    expect(stripArabic("Black scale / النمرة / Saissetia oleae")).toBe("Black scale / Saissetia oleae");
+    expect(stripArabic("Look for aphids, النمرة, sooty mould and ants.")).toBe("Look for aphids, sooty mould and ants.");
+    expect(stripArabic("Turn 10 leaves: النمرة, honeydew and ants.")).toBe("Turn 10 leaves: honeydew and ants.");
   });
   it("takes runs with only marks between them as one", () => {
     expect(stripArabic("Sooty mould – الفحمة / النمرة – on leaves")).toBe("Sooty mould on leaves");
-    expect(stripArabic("Black scale, النمرة; ڨمل, on twigs")).toBe("Black scale on twigs");
+    expect(stripArabic("Black scale, النمرة; ڨمل, on twigs")).toBe("Black scale, on twigs");
+  });
+  it("is empty when the Arabic leaves no word behind, only its punctuation", () => {
+    expect(stripArabic("تحقق من الأغصان.")).toBe("");
+    expect(stripArabic("1. تحقق من الأغصان!")).toBe("");
+    expect(stripArabic("«النمرة»")).toBe("");
+  });
+  it("keeps a minus sign before a number", () => {
+    expect(stripArabic("Frost damage الصقيع -2 °C nights")).toBe("Frost damage -2 °C nights");
+    expect(stripArabic("Frost damage – الصقيع – -2 °C nights")).toBe("Frost damage -2 °C nights");
+    expect(stripArabic("After nights below (-2 °C), check the shoots for frost damage (الصقيع).")).toBe("After nights below (-2 °C), check the shoots for frost damage.");
   });
   it("keeps the mark that belongs to the words after it", () => {
     expect(stripArabic("Olive fly / ذبابة الزيتون, larvae in fruit")).toBe("Olive fly, larvae in fruit");
@@ -177,6 +193,10 @@ describe("narrowSources at the caps (0.17.1)", () => {
     const page = ["Spray NEEM-OIL at dusk on the Aphid colonies.", "Peacock’s eye spots the leaves; ſooty mould follows the scale.", "Mangos ripen in August."];
     const words = ["neem oil", "aphids", "peacock's eye", "sooty mould", "mangoes", "black scale", "bushes"].map((term) => ({ term, word: "كلمة", at }));
     expect(narrowSources(page, wordSources([], [], words)).map((s) => s.label)).toEqual(["neem oil", "aphids", "peacock's eye", "sooty mould", "mangoes"]);
+  });
+  it("finds a term whatever form its letters take on the page, a Greek final sigma included", () => {
+    const words = [{ term: "δάκος", word: "كلمة", at }];
+    expect(narrowSources(["Δάκος.Ελιά"], wordSources([], [], words)).map((s) => s.label)).toEqual(["δάκος"]);
   });
   it("tries 800 words on a page in milliseconds, without a matcher for each", () => {
     const words = Array.from({ length: 600 }, (_, i) => ({ term: i % 2 ? `leaf${i} curl` : `rot${i}`, word: "كلمة", at }));

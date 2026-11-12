@@ -1,7 +1,8 @@
 // POST /api/derja end to end (0.17.1): the handler over the in-memory tables, with Claude and the
 // token check stood in for. The outcomes the Phase 17 design promised tests for: the list stored
-// and the app-wide words extended, a refusal that stores nothing, a failed write that does not fail
-// the paid call, and a species deleted during the call, which gets no row.
+// and the app-wide words extended before the reply, a refusal that stores nothing, a failed write
+// that does not fail the paid call, a species deleted during the call, which gets no row, and the
+// grower's own words given to Claude and kept out of what Claude echoed.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { VercelRequest } from "../api/_http.js";
 import type { Usage } from "../src/types";
@@ -57,11 +58,18 @@ const olive = {
   toxicity: { humans: "none", chickens: "none", goats: "none", dogs_cats: "none", note: "Safe." },
 };
 
-/** Claude answers with these terms, the ledger told as callJson tells it; `during` runs while Claude works. */
+const setting = (key: string) => sharedState.settings.find((r) => r.key === key)?.value;
+const ledgerCalls = () => (sharedState.settings.find((r) => String(r.key).startsWith("usage:"))?.value as { by_route?: { derja?: { calls: number } } } | undefined)?.by_route?.derja?.calls;
+
+/**
+ * Claude answers with these terms, the ledger told as callJson tells it; `during` runs while Claude
+ * works. The ledger's write crosses the network in production; here it starts a macrotask later, so
+ * a route that replied without awaiting `recorded` would reply before the ledger holds the call.
+ */
 function answers(terms: unknown, during?: () => void) {
   vi.mocked(callJson).mockImplementation((async (opts: { onUsage?: (u: Usage, o: "answered") => unknown }) => {
     during?.();
-    const recorded = Promise.resolve(opts.onUsage?.(USAGE, "answered")).then(() => undefined);
+    const recorded = new Promise((r) => setTimeout(r, 0)).then(() => opts.onUsage?.(USAGE, "answered")).then(() => undefined);
     return { ok: true, data: { terms }, usage: USAGE, recorded };
   }) as never);
 }
@@ -73,15 +81,25 @@ function refuses(refusal: string) {
   }) as never);
 }
 
-async function post(body: unknown) {
-  const { res, raw } = fake();
-  const req = { method: "POST", headers: { authorization: "Bearer token" }, query: {}, cookies: {}, body } as unknown as VercelRequest;
-  await handler(req, res);
-  return { status: raw.statusCode, body: JSON.parse(raw.body.trim()) as Record<string, unknown> };
+/** What the tables held when the reply was written: a lost reply is found by its row, so the row comes first. */
+interface AtReply {
+  row: unknown;
+  words: unknown;
+  ledgerCalls: number | undefined;
 }
 
-const setting = (key: string) => sharedState.settings.find((r) => r.key === key)?.value;
-const ledgerRow = () => sharedState.settings.find((r) => String(r.key).startsWith("usage:"))?.value as { by_route?: { derja?: { calls: number } } } | undefined;
+async function post(body: unknown) {
+  const { res, raw } = fake();
+  let atReply: AtReply | null = null;
+  const end = raw.end.bind(raw);
+  raw.end = (chunk?: string) => {
+    atReply ??= { row: setting(`derja:species:${ID}`), words: setting("derja:words"), ledgerCalls: ledgerCalls() };
+    return end(chunk);
+  };
+  const req = { method: "POST", headers: { authorization: "Bearer token" }, query: {}, cookies: {}, body } as unknown as VercelRequest;
+  await handler(req, res);
+  return { status: raw.statusCode, body: JSON.parse(raw.body.trim()) as Record<string, unknown>, atReply: atReply as AtReply | null };
+}
 
 beforeEach(() => {
   resetState(sharedState);
@@ -91,16 +109,16 @@ beforeEach(() => {
 });
 
 describe("POST /api/derja", () => {
-  it("stores the species' list and Claude's first words, then answers with the list and the usage", async () => {
+  it("stores the species' list, Claude's first words and the ledger before it answers with the list and the usage", async () => {
     answers(TERMS);
-    const { status, body } = await post({ species_id: ID, asked_at: ASKED });
+    const { status, body, atReply } = await post({ species_id: ID, asked_at: ASKED });
     expect(status).toBe(200);
     expect(body.terms).toEqual(TERMS);
     expect(body.asked_at).toBe(ASKED);
     expect(body.output_tokens).toBe(2600);
-    expect(setting(`derja:species:${ID}`)).toMatchObject({ terms: TERMS, asked_at: ASKED });
-    expect((setting("derja:words") as Array<{ term: string }>).map((w) => w.term)).toEqual(["kaolin", "pruning"]);
-    expect(ledgerRow()?.by_route?.derja?.calls).toBe(1);
+    expect(atReply?.row).toMatchObject({ terms: TERMS, asked_at: ASKED });
+    expect((atReply?.words as Array<{ term: string }>).map((w) => w.term)).toEqual(["kaolin", "pruning"]);
+    expect(atReply?.ledgerCalls).toBe(1);
   });
 
   it("stores nothing on a refusal, and answers it with the usage", async () => {
@@ -111,7 +129,7 @@ describe("POST /api/derja", () => {
     expect(body.terms).toBeUndefined();
     expect(setting(`derja:species:${ID}`)).toBeUndefined();
     expect(setting("derja:words")).toBeUndefined();
-    expect(ledgerRow()?.by_route?.derja?.calls).toBe(1);
+    expect(ledgerCalls()).toBe(1);
   });
 
   it("still answers with the paid list when its writes fail", async () => {
@@ -122,18 +140,36 @@ describe("POST /api/derja", () => {
     const { status, body } = await post({ species_id: ID, asked_at: ASKED });
     expect(status).toBe(200);
     expect(body.terms).toEqual(TERMS);
-    expect(setting(`derja:species:${ID}`)).toBeUndefined();
   });
 
-  it("writes no row for a species deleted while Claude was answering", async () => {
+  it("writes no row for a species deleted while Claude was answering, and counts the call before the 404", async () => {
     answers(TERMS, () => {
       sharedState.species.length = 0;
     });
-    const { status, body } = await post({ species_id: ID, asked_at: ASKED });
+    const { status, body, atReply } = await post({ species_id: ID, asked_at: ASKED });
     expect(status).toBe(404);
     expect(body.error).toBe("Species not found");
     expect(setting(`derja:species:${ID}`)).toBeUndefined();
     expect(setting("derja:words")).toBeUndefined();
-    expect(ledgerRow()?.by_route?.derja?.calls).toBe(1);
+    expect(atReply?.ledgerCalls).toBe(1);
+  });
+
+  it("gives Claude the grower's words, and stores a term he corrected without the word Claude echoed", async () => {
+    sharedState.settings.push({ key: "derja", value: [{ term: "pruning", word: "تقليم", at: ASKED }] });
+    answers([
+      { term: "Kaolin", derja: "كاولان" },
+      { term: "pruning", derja: "تقليم" },
+    ]);
+    const { status, body } = await post({ species_id: ID, asked_at: ASKED });
+    expect(status).toBe(200);
+    const sent = vi.mocked(callJson).mock.calls[0][0].content[0] as { text: string };
+    expect(sent.text).toContain("- pruning: تقليم");
+    const stored = [
+      { term: "Kaolin", derja: "كاولان" },
+      { term: "pruning", derja: "" },
+    ];
+    expect(body.terms).toEqual(stored);
+    expect(setting(`derja:species:${ID}`)).toMatchObject({ terms: stored });
+    expect((setting("derja:words") as Array<{ term: string }>).map((w) => w.term)).toEqual(["kaolin"]);
   });
 });
