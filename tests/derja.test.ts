@@ -236,6 +236,11 @@ describe("annotate", () => {
     ).toBe(`Black scale (${W.scale} · Saissetia oleae) with sooty mould (${W.mould})`);
     expect(draw(annotate("Use copper (Bordeaux mixture) now.", src([["Bordeaux mixture", W.bord]])))).toBe(`Use copper (Bordeaux mixture · ${W.bord}) now.`);
   });
+  it("keeps a quantity's parentheses to itself (Phase 18)", () => {
+    expect(draw(annotate("Spray savon noir (30 g per litre) at dusk.", src([["savon noir", W.oil]])))).toBe(`Spray savon noir (${W.oil}) (30 g per litre) at dusk.`);
+    expect(draw(annotate("Water the olive (up to 40 L).", src([["olive", W.oil]])))).toBe(`Water the olive (${W.oil}) (up to 40 L).`);
+    expect(draw(annotate("Black scale (Saissetia oleae) on twigs", src([["Black scale", W.scale]])))).toBe(`Black scale (${W.scale} · Saissetia oleae) on twigs`);
+  });
   it("finds terms with regex characters and non-letter ends", () => {
     expect(draw(annotate("Spray Bt (Bacillus thuringiensis) at dusk.", src([["Bt (Bacillus thuringiensis)", W.oil]])))).toBe(`Spray Bt (Bacillus thuringiensis) (${W.oil}) at dusk.`);
     expect(draw(annotate("Mix copper 0.5% in water.", src([["copper 0.5%", W.copper]])))).toBe(`Mix copper 0.5% (${W.copper}) in water.`);

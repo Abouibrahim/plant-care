@@ -14,7 +14,9 @@ import { Check, ChevronRight, ListChecks, MapPin, NotebookPen, X } from "lucide-
 import { t } from "../../i18n";
 import { DUE_NOW, summarize, type Batch, type BatchPlant } from "../../lib/batches";
 import { batchDonePrimary, dueLabel, roundDueLabel, scopedNote, scopedNoteRoom, sharedInstruction, shortDate, weekdayDate, type BatchAction } from "../../lib/today";
+import { DerjaText } from "../../components/derja";
 import { Burst, DueIcon, type TaskAction } from "../../components/TaskCard";
+import type { WordSource } from "../../lib/derja";
 import { TypeTile } from "../../components/TypeIcon";
 import { TASK_MAX_NOTE_CHARS, type TaskWithPlant } from "../../types";
 
@@ -28,7 +30,11 @@ interface Props {
   /** Unticks (`out`) or ticks again the given tasks: one plant's, or the whole batch's. */
   onLeaveOut: (ids: string[], out: boolean) => void;
   onAct: (ids: string[], action: BatchAction) => void;
+  /** The derja words for the shared job title and instruction (Phase 18): named things only. None by default. */
+  sources?: WordSource[];
 }
+
+const PLAIN: WordSource[] = [];
 
 /** Tags shown per amount (or for a window job) while Choose is closed; the rest read "+N". */
 const TAGS_SHOWN = 8;
@@ -54,7 +60,7 @@ function Tags({ plants, isOut }: { plants: BatchPlant[]; isOut: (plant: BatchPla
   );
 }
 
-export function BatchCard({ batch, today, leaving, left, onLeaveOut, onAct }: Props) {
+export function BatchCard({ batch, today, leaving, left, onLeaveOut, onAct, sources }: Props) {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"idle" | "skip" | "note">("idle");
@@ -139,7 +145,11 @@ export function BatchCard({ batch, today, leaving, left, onLeaveOut, onAct }: Pr
               </span>
               <div className="grow">
                 <div className={`task-type t-${batch.type}`}>{t.enums.task_type[batch.type]}</div>
-                <div className="task-title">{title}</div>
+                <div className="task-title">
+                  {coming ? `${weekdayDate(batch.day)} · ` : ""}
+                  {/* A round's line is a count; a window job's is the stored title, which carries the words. */}
+                  {round ? job : <DerjaText text={job} sources={sources ?? PLAIN} />}
+                </div>
                 {(batch.zone || !round || summary.total !== null) && (
                   <div className="task-meta">
                     {batch.zone && (
@@ -157,7 +167,11 @@ export function BatchCard({ batch, today, leaving, left, onLeaveOut, onAct }: Pr
               <DueIcon state={due.state} />
               {due.text}
             </div>
-            {instruction && <p className="task-instruction">{instruction}</p>}
+            {instruction && (
+              <p className="task-instruction">
+                <DerjaText text={instruction} sources={sources ?? PLAIN} />
+              </p>
+            )}
             {!open &&
               (round ? (
                 <div className="batch-groups">

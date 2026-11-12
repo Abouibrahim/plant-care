@@ -19,7 +19,8 @@ import { completeTask, completeTasks, overrideServerClose, readTaskStates, skipT
 import { isNetworkFailure, phoneOnline } from "./errors";
 import { supabase } from "./supabase";
 import { dueNow } from "./today";
-import type { TaskWithPlant, WeatherDay } from "../types";
+import { readCorrections, readWords } from "./derja";
+import type { AppWord, Correction, TaskWithPlant, WeatherDay } from "../types";
 
 export const TODAY_KEY = "plantcare.today";
 export const WEATHER_KEY = "plantcare.weather";
@@ -93,6 +94,27 @@ export function recallToday(today: string): RecalledToday | null {
 
 export function keepWeather(rows: WeatherDay[]): void {
   write(WEATHER_KEY, rows);
+}
+
+export const DERJA_COPY_KEY = "plantcare.derja";
+
+/** The derja words as last read (Phase 18): the grower's corrections and the app-wide words, with the time of the read. */
+export interface DerjaCopy {
+  corrections: Correction[];
+  words: AppWord[];
+  at: number;
+}
+
+/** Kept after every good read of the words, on any screen, so Today's cards have them without a connection. */
+export function keepDerja(copy: DerjaCopy): void {
+  write(DERJA_COPY_KEY, copy);
+}
+
+/** The words as last read; null when none were kept or what is there is not a copy. */
+export function recallDerja(): DerjaCopy | null {
+  const raw = read(DERJA_COPY_KEY) as Partial<DerjaCopy> | null;
+  if (!raw || typeof raw !== "object" || !Array.isArray(raw.corrections) || !Array.isArray(raw.words)) return null;
+  return { corrections: readCorrections(raw.corrections), words: readWords(raw.words), at: typeof raw.at === "number" && Number.isFinite(raw.at) ? raw.at : 0 };
 }
 
 /** The weather rows as last read, for the card when its read fails. */

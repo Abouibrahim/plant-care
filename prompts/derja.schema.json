@@ -7,9 +7,10 @@
         "type": "object",
         "properties": {
           "term": { "type": "string" },
-          "derja": { "type": "string" }
+          "derja": { "type": "string" },
+          "kind": { "type": "string", "enum": ["plant", "pest", "product", "tool", "operation", "other"] }
         },
-        "required": ["term", "derja"],
+        "required": ["term", "derja", "kind"],
         "additionalProperties": false
       }
     }

@@ -9,7 +9,7 @@ import { parseDailyRecord, parseDailyStart } from "./record";
 import { parseLedger } from "./usage";
 import { weatherSettings, type SprayTreatment } from "./weather";
 import { t, type Lang } from "../i18n";
-import type { AppWord, Correction, SpeciesWords } from "../types";
+import type { AppWord, Correction, DerjaKind, SpeciesWords } from "../types";
 import {
   DAILY_RECORD_KEY,
   DAILY_STARTED_KEY,
@@ -471,11 +471,14 @@ export async function countDueTasks(untilIso: string): Promise<number> {
 
 const TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone, quantity)";
 
+/** Today's rows also bring each plant's species names, which the task cards mark the plant's name with (Phase 18). */
+const DUE_TASK_WITH_PLANT = "*, plant:plants(id, tag, site, zone, quantity, species:species(id, common_names))";
+
 /** Pending tasks due on or before a day (YYYY-MM-DD), earliest first, each with its plant. */
 export async function listDueTasks(untilIso: string): Promise<TaskWithPlant[]> {
   const r = await supabase
     .from("tasks")
-    .select(TASK_WITH_PLANT)
+    .select(DUE_TASK_WITH_PLANT)
     .eq("status", "pending")
     .lte("due_on", untilIso)
     .order("due_on", { ascending: true })
@@ -1129,9 +1132,10 @@ export async function loadCorrections(signal?: AbortSignal): Promise<Correction[
  * Sets the term's word ("" for "no word"). The row is read again just before it is written, so a
  * correction saved from another card since this one opened is kept; returns the list as stored.
  */
-export async function saveCorrection(term: string, word: string, at: string = new Date().toISOString()): Promise<Correction[]> {
+export async function saveCorrection(term: string, word: string, at: string = new Date().toISOString(), kind?: DerjaKind): Promise<Correction[]> {
   const signal = AbortSignal.timeout(DERJA_WRITE_MS);
-  const next = withCorrection(await loadCorrections(signal), term, word, at);
+  // The kind of the line it is saved from goes with it, so the task cards know what the term is.
+  const next = withCorrection(await loadCorrections(signal), term, word, at, kind);
   await setSetting(DERJA_KEY, next, signal);
   return next;
 }

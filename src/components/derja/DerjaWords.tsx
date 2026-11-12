@@ -60,7 +60,7 @@ export function DerjaWords({ rows, onSaved, note, footer }: Props) {
       setError(s.derjaNotArabic);
       return;
     }
-    void run(() => saveCorrection(row.key, draft));
+    void run(() => saveCorrection(row.key, draft, undefined, row.kind ?? undefined));
   }
 
   return (

@@ -40,6 +40,7 @@ import {
 import { describeError } from "../lib/errors";
 import { exportPlantsCsv, exportTasksCsv, type ExportResult } from "../lib/export";
 import { syncLangWithServer } from "../lib/langSync";
+import { storeTaskDerja, taskDerjaOn } from "../lib/taskDerja";
 import { disablePush, enablePush, getPushState, PushError, type PushState } from "../lib/push";
 import { runState } from "../lib/record";
 import { estimateCost, formatDollars, monthOf, previousMonth, PRICES_PER_MILLION } from "../lib/usage";
@@ -441,6 +442,43 @@ function monthLabel(month: string): string {
 }
 
 /**
+ * Whether task cards show the derja word beside the things they name (Phase 18). Kept on this
+ * phone like the language; Today reads it when it opens, so nothing reloads here. The profile
+ * tabs and the diagnoses keep their words either way.
+ */
+function TaskDerjaCard() {
+  const s = t.settings.taskDerja;
+  const [on, setOn] = useState(taskDerjaOn);
+  const [error, setError] = useState<string | null>(null);
+
+  function choose(next: boolean) {
+    if (next === on) return;
+    if (!storeTaskDerja(next)) {
+      setError(s.saveFailed);
+      return;
+    }
+    setError(null);
+    setOn(next);
+  }
+
+  return (
+    <div className="card">
+      <CardHead icon={Languages} tone="water" title={s.title} />
+      <p className="small">{s.body}</p>
+      <div className="segmented" role="radiogroup" aria-label={s.title}>
+        <button type="button" role="radio" aria-checked={on} className={on ? "active" : ""} onClick={() => choose(true)}>
+          {s.on}
+        </button>
+        <button type="button" role="radio" aria-checked={!on} className={!on ? "active" : ""} onClick={() => choose(false)}>
+          {s.off}
+        </button>
+      </div>
+      {error && <Banner kind="error">{error}</Banner>}
+    </div>
+  );
+}
+
+/**
  * The usage ledger (Phase 14, review 5.3): this month's Claude calls and last month's, with an
  * estimate at list prices (src/lib/usage.ts), read from the rows the functions keep.
  */
@@ -723,6 +761,7 @@ export function SettingsScreen() {
       <RemindersCard />
       <WeatherSettingsCard />
       <LanguageCard />
+      <TaskDerjaCard />
       <ZonesCard />
       <ExportCard />
       <UsageCard />

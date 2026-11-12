@@ -73,7 +73,7 @@ describe("the derja schema and prompt", () => {
   const schema = JSON.parse(readFileSync("prompts/derja.schema.json", "utf8")) as { required: string[]; additionalProperties: boolean; properties: { terms: { items: unknown } } };
   const diagnose = JSON.parse(readFileSync("prompts/diagnose.schema.json", "utf8")) as { properties: { terms: { items: unknown } } };
   const prompt = readFileSync("prompts/derja.md", "utf8");
-  it("returns terms of { term, derja } and nothing else", () => {
+  it("returns terms of { term, derja, kind } and nothing else", () => {
     expect(schema.required).toEqual(["terms"]);
     expect(schema.additionalProperties).toBe(false);
     expect(schema.properties.terms.items).toEqual(diagnose.properties.terms.items);
@@ -84,5 +84,22 @@ describe("the derja schema and prompt", () => {
     expect(prompt).toMatch(/no Arabic letters/i);
     expect(prompt).toMatch(/never list .* only because it is in the grower's list/i);
     expect(/\p{Script=Arabic}/u.test(prompt)).toBe(false);
+  });
+});
+
+describe("the kind in the stored row (Phase 18)", () => {
+  it("keeps a valid kind with its term and drops an invalid one", () => {
+    const row = speciesWordsRow(
+      { species_id: ID, asked_at: AT },
+      [
+        { term: "Kaolin", derja: "كاولان", kind: "product" },
+        { term: "pruning saw", derja: "", kind: "weapon" },
+      ],
+      AT,
+    );
+    expect(row.value.terms).toEqual([
+      { term: "Kaolin", derja: "كاولان", kind: "product" },
+      { term: "pruning saw", derja: "" },
+    ]);
   });
 });

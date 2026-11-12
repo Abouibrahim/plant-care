@@ -9,6 +9,7 @@ import { useAuth } from "./auth-context";
 import { DERJA_WRITE_MS, loadDerja, saveSpeciesWords } from "./db";
 import { cleanTerms, MAX_SPECIES_TERMS } from "./derja";
 import { describeError } from "./errors";
+import { keepDerja, recallDerja } from "./offline";
 
 export interface DerjaView {
   /**
@@ -72,7 +73,21 @@ function runFetch(speciesId: string): Promise<Outcome> {
 /** Told to every copy of the hook when the stored words changed: a correction saved, a list fetched. */
 const CHANGED = "plantcare:derja";
 
-export function useDerja({ speciesId = null, enabled = true }: { speciesId?: string | null; enabled?: boolean }): DerjaView {
+/**
+ * `kept` (Today, Phase 18): start from the words kept on the phone and fall back to them, without
+ * a session too, so the task cards have their words at the farm. `reloadKey`: a change reads again.
+ */
+export function useDerja({
+  speciesId = null,
+  enabled = true,
+  kept = false,
+  reloadKey = 0,
+}: {
+  speciesId?: string | null;
+  enabled?: boolean;
+  kept?: boolean;
+  reloadKey?: number;
+}): DerjaView {
   const { session } = useAuth();
   // Without a session a read would go out under the anon key and come back empty: none is made.
   const key = enabled && session ? (speciesId ?? "") : null;
@@ -87,8 +102,14 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
   // Set while this copy tells the others of a change, so it does not answer its own news.
   const telling = useRef(false);
 
+  // The words as last read on this phone, by any screen; read once, when the screen opens.
+  const [copy] = useState(() => (kept ? recallDerja() : null));
+  const fallback = kept && enabled ? copy : null;
+
   const current = read && read.key === key ? read : null;
-  const status: DerjaView["status"] = key === null ? "off" : !current ? "loading" : current.ok ? "ready" : "failed";
+  const live: DerjaView["status"] = key === null ? "off" : !current ? "loading" : current.ok ? "ready" : "failed";
+  // With a kept copy the words are there whatever the read does: no line about a failure, no wait.
+  const status: DerjaView["status"] = fallback && live !== "ready" ? "ready" : live;
   const fetching = speciesId !== null && waitingFor === speciesId;
 
   useEffect(() => {
@@ -100,6 +121,8 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
         if (!live) return;
         const corrections = savedHere.current !== startedWith && savedHere.current ? savedHere.current : data.corrections;
         setRead({ key, ok: true, corrections, words: data.words, species: data.species });
+        // Every good read, on any screen, is kept for Today's cards (Phase 18).
+        keepDerja({ corrections, words: data.words, at: Date.now() });
       },
       () => {
         if (!live) return;
@@ -110,11 +133,12 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
     return () => {
       live = false;
     };
-  }, [key, attempt]);
+  }, [key, attempt, reloadKey]);
 
   // After a failed read, try again when the signal or the app comes back.
   useEffect(() => {
-    if (status !== "failed") return;
+    // On the read itself, not on the status: with a kept copy a failed read still shows as ready.
+    if (live !== "failed") return;
     const again = () => setAttempt((n) => n + 1);
     const onVisible = () => {
       if (document.visibilityState === "visible") again();
@@ -125,7 +149,7 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
       window.removeEventListener("online", again);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [status]);
+  }, [live]);
 
   // Another copy of the hook changed the stored words (the diagnosis sheet over a plant's tabs,
   // or the other way round): read them again.
@@ -150,7 +174,10 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
   const saved = useCallback(
     (list: Correction[]) => {
       savedHere.current = list;
-      setRead((prev) => (prev ? { ...prev, corrections: list } : prev));
+      setRead((prev) => {
+        if (prev?.ok) keepDerja({ corrections: list, words: prev.words, at: Date.now() });
+        return prev ? { ...prev, corrections: list } : prev;
+      });
       tellOthers();
     },
     [tellOthers],
@@ -202,8 +229,8 @@ export function useDerja({ speciesId = null, enabled = true }: { speciesId?: str
 
   return {
     status,
-    corrections: current?.corrections ?? [],
-    words: current?.words ?? [],
+    corrections: current?.ok ? current.corrections : (fallback?.corrections ?? current?.corrections ?? []),
+    words: current?.ok ? current.words : (fallback?.words ?? current?.words ?? []),
     species: current?.ok ? current.species : null,
     fetching,
     fetchError,

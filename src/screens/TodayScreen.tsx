@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, Camera, Check, RefreshCw } from "lucide-react";
+import { narrowSources } from "../lib/derja";
+import { namesOf, taskDerjaOn, taskSources, taskTexts } from "../lib/taskDerja";
+import { useDerja } from "../lib/useDerja";
 import { Banner } from "../components/Banner";
 import { GardenScene } from "../components/GardenScene";
 import { LeafFall } from "../components/LeafFall";
@@ -315,6 +318,16 @@ export function TodayScreen() {
   const [sendReport, setSendReport] = useState<SendReport | null>(null);
   const mountedRef = useRef(true);
   const [attempt, setAttempt] = useState(0);
+  // The derja words of the task cards (Phase 18): named things only, from what the app already
+  // knows and the species' own Arabic names; kept on the phone, so they show without a connection.
+  // They never delay the list: the cards draw with the kept words, or plain, until the read is in.
+  const [wordsOn] = useState(taskDerjaOn);
+  const derja = useDerja({ kept: true, reloadKey: attempt, enabled: wordsOn });
+  const listed = loaded?.tasks;
+  const taskWords = useMemo(
+    () => (wordsOn && listed ? narrowSources(taskTexts(listed), taskSources(derja.corrections, derja.words, namesOf(listed))) : []),
+    [wordsOn, listed, derja.corrections, derja.words],
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [leaving, setLeaving] = useState<Record<string, ActionKind>>({});
@@ -1026,6 +1039,7 @@ export function TodayScreen() {
         left={left}
         onLeaveOut={leaveOut}
         onAct={(ids, action) => void actAll(ids, action, item.batch)}
+        sources={taskWords}
       />
     ) : (
       <TaskCard
@@ -1033,6 +1047,7 @@ export function TodayScreen() {
         task={item.task}
         today={today}
         plant={item.task.plant}
+        sources={taskWords}
         leaving={leaving[item.task.id] ?? null}
         onAct={(action) => void act(item.task, action)}
       />

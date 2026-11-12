@@ -33,8 +33,8 @@ const ID = "5b1e9a20-1c2d-4e3f-8a9b-0c1d2e3f4a5b";
 const ASKED = "2026-11-12T08:00:00.000Z";
 const USAGE: Usage = { model: "claude-fable-5-1", input_tokens: 4100, output_tokens: 2600, thinking_tokens: 900, cache_read_input_tokens: 0, cache_creation_input_tokens: 700 };
 const TERMS = [
-  { term: "Kaolin", derja: "كاولان" },
-  { term: "pruning", derja: "زبيرة" },
+  { term: "Kaolin", derja: "كاولان", kind: "product" },
+  { term: "pruning", derja: "زبيرة", kind: "operation" },
 ];
 
 const olive = {

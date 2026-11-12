@@ -303,3 +303,28 @@ describe("sending the queue", () => {
   });
 });
 
+
+describe("the kept derja words (Phase 18)", () => {
+  const at = "2026-11-12T08:00:00Z";
+  it("come back as they were kept, cleaned", () => {
+    offline.keepDerja({
+      corrections: [{ term: "kaolin", word: "كاولان", at, kind: "product" }],
+      words: [{ term: "olive fly", word: "ذبانة", at, kind: "pest" }, { term: "saw", word: "", at, kind: "tool" }],
+      at: 1762934400000,
+    });
+    expect(offline.recallDerja()).toEqual({
+      corrections: [{ term: "kaolin", word: "كاولان", at, kind: "product" }],
+      words: [{ term: "olive fly", word: "ذبانة", at, kind: "pest" }, { term: "saw", word: "", at, kind: "tool" }],
+      at: 1762934400000,
+    });
+  });
+  it("are nothing when missing or unexpected, and lose an entry's invalid kind only", () => {
+    expect(offline.recallDerja()).toBeNull();
+    for (const bad of ['"x"', "[]", '{"corrections":3}', "{not json"]) {
+      localStorage.setItem("plantcare.derja", bad);
+      expect(offline.recallDerja()).toBeNull();
+    }
+    localStorage.setItem("plantcare.derja", JSON.stringify({ corrections: [], words: [{ term: "saw", word: "منشار", at, kind: "weapon" }], at: "soon" }));
+    expect(offline.recallDerja()).toEqual({ corrections: [], words: [{ term: "saw", word: "منشار", at }], at: 0 });
+  });
+});

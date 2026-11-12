@@ -101,9 +101,14 @@ export interface Diagnosis {
 }
 
 /** One key term of a diagnosis with the word said in Tunisian; derja is "" when Claude knows none. */
+/** What a term is (Phase 18): task cards show the word of a plant, a pest or disease, a product or a tool, and not of an operation. */
+export type DerjaKind = "plant" | "pest" | "product" | "tool" | "operation" | "other";
+
 export interface DerjaTerm {
   term: string;
   derja: string;
+  /** Absent on a list stored before 0.18.0. */
+  kind?: DerjaKind;
 }
 
 /** The grower's word for a term: the term in normal form, the word ("" for "no word"), the ISO time it was saved. */
@@ -111,6 +116,8 @@ export interface Correction {
   term: string;
   word: string;
   at: string;
+  /** The kind of the line the correction was saved from; absent before 0.18.0 or when unknown. */
+  kind?: DerjaKind;
 }
 
 /** Claude's first word for a term, app-wide (Phase 17): the term in normal form, the word never empty, the ISO time it was added. */
@@ -118,6 +125,8 @@ export interface AppWord {
   term: string;
   word: string;
   at: string;
+  /** With a kind, the word may be "": the entry then only tells what the term is (Phase 18). */
+  kind?: DerjaKind;
 }
 
 /** A species' fetched derja word list: the settings row `derja:species:<id>`. asked_at is the time the app sent the request, by which a lost reply is found. */
@@ -437,8 +446,18 @@ export interface Task {
 export type TaskInsert = Pick<Task, "plant_id" | "type" | "rule_key" | "due_on" | "window_end" | "title" | "instruction">;
 
 /** A task with the bits of its plant the Today screen shows; the quantity counts a group in a zone batch. */
+/** A species' common names as far as the task cards read them (Phase 18): the English names and the Arabic one. */
+export interface SpeciesNames {
+  en?: unknown;
+  ar?: unknown;
+}
+
 export interface TaskWithPlant extends Task {
-  plant: Pick<Plant, "id" | "tag" | "site" | "zone" | "quantity"> | null;
+  /**
+   * The plant, with its species' names since 0.18.0 (Today's list only): a task card marks a plant's
+   * name with the Arabic name of its profile. Absent on a list kept on the phone before that.
+   */
+  plant: (Pick<Plant, "id" | "tag" | "site" | "zone" | "quantity"> & { species?: { id: string; common_names: SpeciesNames | null } | null }) | null;
 }
 
 /** One row of the `journal` view: a photo, an acted task or a question, in one dated stream per plant. */

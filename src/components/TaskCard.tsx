@@ -2,10 +2,18 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { AlarmClock, CalendarCheck, CalendarDays, Check, Clock, MapPin, NotebookPen, TriangleAlert, X } from "lucide-react";
 import { t } from "../i18n";
+import type { WordSource } from "../lib/derja";
 import { dueLabel, type DueState } from "../lib/today";
+import { DerjaText } from "./derja";
 import { Spinner } from "./Spinner";
 import { TypeTile } from "./TypeIcon";
 import { TASK_MAX_NOTE_CHARS, type Task } from "../types";
+
+/**
+ * No words. Always passed when the card has none of its own, so the text never takes the words of
+ * a profile it happens to sit in (a plant's Calendar tab), which include the operations.
+ */
+const PLAIN: WordSource[] = [];
 
 /** Done carries an optional note ("12 kg"), written to the row like a skip's reason. */
 export type TaskAction = { kind: "done"; note?: string } | { kind: "skip"; reason: string } | { kind: "snooze"; days: number };
@@ -42,6 +50,8 @@ interface Props {
   /** Set while the action is being saved: the card ticks (done) or slides (skip, snooze), then folds away. */
   leaving?: TaskAction["kind"] | null;
   onAct: (action: TaskAction) => void;
+  /** The derja words for the title and the instruction (Phase 18): named things only. None by default. */
+  sources?: WordSource[];
 }
 
 /**
@@ -50,7 +60,7 @@ interface Props {
  * stays as it is. The link sits under the buttons, not beside Done: the three buttons already fill
  * a 360 px phone in French.
  */
-export function TaskCard({ task, today, plant, busy = false, leaving = null, onAct }: Props) {
+export function TaskCard({ task, today, plant, busy = false, leaving = null, onAct, sources }: Props) {
   const [mode, setMode] = useState<"idle" | "skip" | "snooze" | "note">("idle");
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
@@ -92,7 +102,9 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
         </span>
         <div className="grow">
           <div className={`task-type t-${task.type}`}>{t.enums.task_type[task.type]}</div>
-          <div className="task-title">{task.title}</div>
+          <div className="task-title">
+            <DerjaText text={task.title} sources={sources ?? PLAIN} />
+          </div>
           {plant && (
             <div className="task-meta">
               <span className="tag">{plant.tag}</span>
@@ -110,7 +122,11 @@ export function TaskCard({ task, today, plant, busy = false, leaving = null, onA
         <DueIcon state={due.state} />
         {due.text}
       </div>
-      {task.instruction && <p className="task-instruction">{task.instruction}</p>}
+      {task.instruction && (
+        <p className="task-instruction">
+          <DerjaText text={task.instruction} sources={sources ?? PLAIN} />
+        </p>
+      )}
     </>
   );
 

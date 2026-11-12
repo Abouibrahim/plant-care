@@ -108,3 +108,34 @@ describe("extendWords at the cap (review of the branch)", () => {
     expect(stored.some((w) => w.term === "t0x")).toBe(false);
   });
 });
+
+describe("extendWords and kinds (Phase 18)", () => {
+  it("fills a kind in one write, keeps the word, and writes nothing the second time", async () => {
+    const state = makeState();
+    state.settings.push({ key: "derja:words", value: [{ term: "kaolin", word: "كاولان", at }] });
+    let writes = 0;
+    const db = makeClient(state, {
+      onQuery: (q) => {
+        if (q.op !== "select") writes += 1;
+      },
+    });
+    const call = [{ term: "Kaolin", derja: "طين", kind: "product" as const }];
+    expect(await extendWords(db, call, [], now)).toBe(true);
+    expect(writes).toBe(1);
+    expect(words(state)).toEqual([{ term: "kaolin", word: "كاولان", at, kind: "product" }]);
+    expect(await extendWords(db, call, [], now)).toBe(true);
+    expect(writes).toBe(1);
+  });
+  it("remembers the kind of a term Claude had no word for, and of one the grower corrected", async () => {
+    const state = makeState();
+    const terms = [
+      { term: "yellow traps", derja: "", kind: "tool" as const },
+      { term: "mulch", derja: "تبن", kind: "product" as const },
+    ];
+    expect(await extendWords(makeClient(state), terms, [{ term: "mulch", word: "قش", at }], now)).toBe(true);
+    expect(words(state)).toEqual([
+      { term: "yellow traps", word: "", at, kind: "tool" },
+      { term: "mulch", word: "", at, kind: "product" },
+    ]);
+  });
+});

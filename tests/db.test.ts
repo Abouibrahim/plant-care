@@ -528,3 +528,30 @@ describe("the derja rows of a screen (Phase 17)", () => {
     expect(sharedState.settings.map((r) => r.key)).toEqual(["derja:species:s2"]);
   });
 });
+
+describe("what Today's rows and a correction carry (Phase 18)", () => {
+  beforeEach(() => {
+    resetState(sharedState);
+  });
+
+  it("keeps the kind a correction was saved with, and keeps it when the word is changed without one", async () => {
+    const { saveCorrection } = await import("../src/lib/db");
+    await saveCorrection("Kaolin", "كاولان", "2026-11-12T08:00:00Z", "product");
+    const list = await saveCorrection("kaolin", "الكاولان", "2026-11-12T09:00:00Z");
+    expect(list).toEqual([{ term: "kaolin", word: "الكاولان", at: "2026-11-12T09:00:00Z", kind: "product" }]);
+    expect(sharedState.settings.find((r) => r.key === "derja")?.value).toEqual(list);
+  });
+
+  it("brings each due task's species names, and nothing for a plant whose species is gone", async () => {
+    const { listDueTasks } = await import("../src/lib/db");
+    sharedState.species.push({ id: "s1", common_names: { en: "Olive", fr: "Olivier", ar: "زيتون", ar_latin: "zitoun" } });
+    sharedState.plants.push({ id: "p1", species_id: "s1", tag: "OL-1", site: "farm", zone: "", quantity: 1 }, { id: "p2", species_id: "gone", tag: "X-1", site: "farm", zone: "", quantity: 1 });
+    sharedState.tasks.push(
+      { id: "t1", plant_id: "p1", type: "prune", title: "Prune the olive", instruction: "", due_on: "2026-11-10", status: "pending", rule_key: "a", created_at: "2026-11-01T00:00:00Z" },
+      { id: "t2", plant_id: "p2", type: "prune", title: "Prune", instruction: "", due_on: "2026-11-11", status: "pending", rule_key: "b", created_at: "2026-11-01T00:00:00Z" },
+    );
+    const rows = await listDueTasks("2026-11-12");
+    expect(rows.map((r) => r.plant?.species?.common_names ?? null)).toEqual([{ en: "Olive", fr: "Olivier", ar: "زيتون", ar_latin: "zitoun" }, null]);
+    expect(rows[0].plant?.tag).toBe("OL-1");
+  });
+});

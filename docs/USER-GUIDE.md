@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.17.1, as of 12 November 2026.
+For version 0.18.0, as of 12 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -146,6 +146,18 @@ Each card shows the kind of task in its colour, the title, the plant's tag and z
 | "Thu 5 Nov" | Due on a coming day. You can still do it early. |
 
 A watering's litres are for each plant. A group's own card shows its tag without its count, so "Deep watering (8 L)" on POM-H, a record of 12, means 8 L for each of the 12, 96 L in all; its line in the morning notification reads the same. Only a zone's round of waterings adds the litres up ("216 L in all").
+
+### Derja words on a task card
+
+A task card shows the Tunisian word, in Arabic letters and in parentheses, beside the things its title and its instruction name: the plant, a pest or a disease, a product, a tool. "Spray kaolin (…) against olive fly (…)", "Pick the table olives (…)". The operation itself (pruning, watering, mulching as an action) carries none on a card, though it does on the profile tabs. A zone's card carries the words on its shared job and instruction; a watering round's "15 plants" has nothing to mark. The task cards on a plant's Calendar tab read the same.
+
+- **Nothing is asked of Claude for this.** The card uses the words the app already has: your own, and Claude's first word for a term from any diagnosis or any species' "Get derja words".
+- **A plant's name** takes the Arabic name of its species' profile, for every species at once. On Today the names of all the species with a task listed are marked, on any card that names them; on a plant's Calendar tab, that plant's own.
+- **What a term is** (a plant, a pest, a product, a tool, an operation) is told by Claude with each word since version 0.18.0. A word stored before that has no kind and does not show on a card until its species is refreshed or a diagnosis lists the term again; your own word shows once the app knows what its term is.
+- **A quantity keeps its parentheses**: "Deep watering, olive (…) (40 L)", "savon noir (…) (30 g per litre)". This holds on diagnoses and the profile tabs too.
+- **Without a connection** the cards keep their words: the phone keeps the last words it read, on any screen.
+- There is nothing to tap on a card: correct a word on the plant's tabs, the species page or a diagnosis, and Today shows it the next time it reads.
+- The words can be turned off for the task cards alone (Settings, chapter 10). The toasts, the journal's lines, the map, the morning notification and the shared lists never carry any.
 
 ### Done, Skip, Snooze and Undo
 
@@ -406,7 +418,7 @@ Below the treatment, the **Derja words** card lists the terms with their words. 
 
 ### Derja words on the profile
 
-The Needs, Calendar, Health and Guild tabs of a plant's page, and the species page in the library, show the same words: beside the pests and diseases, the products, the operations (pruning, mulching), the tools and the companion plants named in the text. Ratings and pills carry none, and neither do the task cards on the Calendar tab, the Past diagnoses list, Today, the notifications or the shared lists.
+The Needs, Calendar, Health and Guild tabs of a plant's page, and the species page in the library, show the same words: beside the pests and diseases, the products, the operations (pruning, mulching), the tools and the companion plants named in the text. Ratings and pills carry none, and neither do the Past diagnoses list, the notifications or the shared lists. The task cards, on the Calendar tab and on Today, carry the word of the things they name and not of the operation (chapter 4).
 
 - **Words that are already known show at once**, on any species, at no cost: your own, and those Claude gave on a diagnosis or on another species.
 - **Get derja words**, at the bottom of each tab's "Derja words" card (one card for the whole profile on the species page), asks Claude for this species' own list: up to 40 terms. It costs one call ("Asking Claude…", some seconds). The profile itself is not rewritten and stays confirmed.
@@ -416,7 +428,7 @@ The Needs, Calendar, Health and Guild tabs of a plant's page, and the species pa
 - "No derja words for this species yet." means nothing is known for this page and the list was never fetched; "No key term on this page." means the fetched list has nothing for it.
 - "The derja words could not be read. They will show when the connection is back." replaces the button when the words could not be read, so that a list already paid for is never asked twice; the card reads again by itself when the signal returns.
 
-Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term, and so do "mangos" and "mangoes"; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on an opened diagnosis, a plant's profile tabs and the species page only: task titles and instructions, notifications, shared lists and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
+Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term, and so do "mangos" and "mangoes"; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on an opened diagnosis, a plant's profile tabs, the species page and the task cards of Today and the Calendar tab (chapter 4): notifications, shared lists, toasts and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
 
 Reopen a diagnosis with **Open** on its journal entry, or from Past diagnoses on the Health tab. On a reopened diagnosis the "Re-photograph in … days" date counts from today; the reminder's real day is the "Reminder set for" line. **Set the reminder** appears when no follow-up exists. It also appears when the follow-up could not be read, for example on a weak signal: in that case reopen the diagnosis before tapping it, or you get a second reminder. The sheet takes one diagnosis per opening: close it and tap Diagnose again for the next.
 
@@ -634,6 +646,10 @@ The next line is the morning run's record: "Last morning run: Tue 4 Nov, 06:41 �
 - a check before planting keeps the language it was written in, and Ask Claude answers in the language of the question;
 - dates follow the phone's own regional format.
 
+### Derja words on task cards
+
+**On**, the default, or **Off**: whether task cards show the Tunisian word beside the plants, pests, products and tools they name (chapter 4). Kept on this phone. Off, Today and the Calendar tab's task cards are plain, and the profile tabs and the diagnoses keep their words. "The choice could not be kept on this phone" means the phone's storage refused it.
+
 ### Sites and zones
 
 A list of zones for each site, offered first on the plant record form and in the planting check, and named to Claude in every planting check. Type a name under **New zone** and tap **Add**, tap a suggestion under "Used on plants, not listed yet:", or tap **Remove** beside one. Removing a zone changes no plant: plants keep their zone text. Zones cannot be renamed or reordered, and no site can be added.
@@ -744,7 +760,7 @@ The model's rain is an estimate. After a skip, check that the soil really got we
 
 The app itself is stored on the phone, so it opens and moves between screens without a signal, even when the sign-in has run out (chapter 3): it then opens on what the phone kept, and the sign-in comes back with the signal. What the phone keeps, and what it does not:
 
-- Today keeps the last list it read, and shows it under today's date with "Shown as of …" (chapter 4); the weather card keeps its last rows; the Today badge counts the kept list;
+- Today keeps the last list it read, and shows it under today's date with "Shown as of …" (chapter 4); its task cards keep their derja words, which the phone keeps from the last read made on any screen; the weather card keeps its last rows; the Today badge counts the kept list;
 - Done and Skip on Today are kept on the phone and sent when the connection returns, with the time of the tap (chapter 4); Snooze is not;
 - every other list (Plants, Species, a plant's page) is read from the online database each time; without a connection it shows "Loading…" for a few seconds, then its error with **Retry**;
 - the other saves and the Claude calls fail, and nothing else waits to be sent later; only a species profile is slow to fail, since the app keeps looking for it for up to 5 minutes, so a check of a typed name stays that long on "Finding the species (a new one is profiled first)…" (leave the screen to stop it);

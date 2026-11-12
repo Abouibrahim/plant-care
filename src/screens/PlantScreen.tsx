@@ -449,10 +449,11 @@ export function PlantScreen() {
       </div>
 
       {/* The four profile tabs carry the derja word beside their key terms (Phase 17); each ends
-          with its own "Derja words" card. The task cards and the past diagnoses stay plain. */}
+          with its own "Derja words" card. The task cards carry the word of the things they name,
+          not of the operation (Phase 18); the past diagnoses stay plain. */}
       {tab !== "journal" && (
-        <ProfileDerja speciesId={species.id} species={species} disabled={busy}>
-          {({ card }) => (
+        <ProfileDerja speciesId={species.id} species={species} disabled={busy} tasks={tasks}>
+          {({ card, taskWords }) => (
             <>
       {tab === "needs" && (
         <>
@@ -472,6 +473,7 @@ export function PlantScreen() {
                 key={task.id}
                 task={task}
                 today={today}
+                sources={taskWords}
                 busy={busyTaskId === task.id}
                 onAct={(action) => void actOnTask(task, action)}
               />

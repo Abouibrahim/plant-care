@@ -769,9 +769,9 @@ export const en = {
     version: "Version",
     installTitle: "Install on the phone",
     installBody: "Open this page in Chrome, then menu → Add to Home screen.",
-    phaseTitle: "Phase 17",
+    phaseTitle: "Phase 18",
     phaseBody:
-      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, a log of care done by hand, a zone's waterings and shared window jobs in one card and one line of the morning push, Today's work by kind of task with a list to share, Today without a connection with Done and Skip kept on the phone until it returns, a question, check or diagnosis whose reply was lost found again instead of paid twice, the morning run on record, what the Claude calls cost this month, the notifications in the language chosen here, the app's own words for every failure, a lighter morning run and the functions beside the database, the derja word beside each key term of a diagnosis, to say to a worker or a supplier, with your own corrections remembered, and now the same words on a plant's Needs, Calendar, Health and Guild tabs and on the species page, fetched for a species when you ask, one word for a term everywhere.",
+      "Capture, identify, profile, the task calendar with the Today screen, push reminders, diagnosis of problem photos, the French interface, CSV exports, zone lists per site, hand editing of the care calendar and the pests, questions to Claude about a plant, a check before planting, the weather, the plant map and QR tags for the trees, the tables closed to every account but the owner's, photo thumbnails kept on the phone, a site's waterings done in one tap, a note on Done, a log of care done by hand, a zone's waterings and shared window jobs in one card and one line of the morning push, Today's work by kind of task with a list to share, Today without a connection with Done and Skip kept on the phone until it returns, a question, check or diagnosis whose reply was lost found again instead of paid twice, the morning run on record, what the Claude calls cost this month, the notifications in the language chosen here, the app's own words for every failure, a lighter morning run and the functions beside the database, the derja word beside each key term of a diagnosis, to say to a worker or a supplier, with your own corrections remembered, the same words on a plant's Needs, Calendar, Health and Guild tabs and on the species page, fetched for a species when you ask, one word for a term everywhere, and now the word beside the plants, pests, products and tools a task card names, without a connection too.",
     reminders: {
       title: "Reminders",
       body: "Every morning at 06:00, one notification per site with the tasks due today, the overdue ones, and the windows that open soon, and a weather notification when an alert or a rain skip applies.",
@@ -792,6 +792,13 @@ export const en = {
       denied: "Permission was not granted",
       failed: "Reminders could not be turned on",
       stopFailed: "Reminders could not be turned off",
+    },
+    taskDerja: {
+      title: "Derja words on task cards",
+      body: "Shows the Tunisian word beside the plants, pests, products and tools a task names. Kept on this phone.",
+      on: "On",
+      off: "Off",
+      saveFailed: "The choice could not be kept on this phone",
     },
     language: {
       title: "Language",

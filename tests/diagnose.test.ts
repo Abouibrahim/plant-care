@@ -14,12 +14,12 @@ describe("the diagnose schema", () => {
     required: string[];
     properties: Record<string, { items?: unknown }>;
   };
-  it("requires terms of { term, derja }, nothing else", () => {
+  it("requires terms of { term, derja, kind }, nothing else", () => {
     expect(schema.required).toContain("terms");
     expect(schema.properties.terms.items).toEqual({
       type: "object",
-      properties: { term: { type: "string" }, derja: { type: "string" } },
-      required: ["term", "derja"],
+      properties: { term: { type: "string" }, derja: { type: "string" }, kind: { type: "string", enum: ["plant", "pest", "product", "tool", "operation", "other"] } },
+      required: ["term", "derja", "kind"],
       additionalProperties: false,
     });
   });
@@ -92,5 +92,14 @@ describe("the grower's words are a glossary, not a list to include", () => {
     expect(prompt).toMatch(/never list .* only because it is in the grower's list/i);
     expect(correctionsBlock([aphid])).toContain("- aphid: no local word (if you list this term, give it an empty derja)");
     expect(correctionsBlock([aphid])!.split("\n")[0]).toBe("The grower's own derja words, a glossary for the terms that belong in this diagnosis; use these exactly:");
+  });
+});
+
+describe("the kinds in the prompts (Phase 18)", () => {
+  it("names all six in the diagnosis prompt and in the species words prompt", () => {
+    for (const file of ["prompts/diagnose.md", "prompts/derja.md"]) {
+      const prompt = readFileSync(file, "utf8");
+      for (const kind of ["plant", "pest", "product", "tool", "operation", "other"]) expect(prompt, `${file}: ${kind}`).toMatch(new RegExp(`kind[^\\n]*\\b${kind}\\b`));
+    }
   });
 });

@@ -3,7 +3,7 @@
 // /api/diagnose: cleaning a word, the normal form of a term, reading Claude's list and the grower's
 // corrections, and placing the words in a text. No word lives here: they come from Claude and
 // from the grower.
-import type { AppWord, Correction, DerjaTerm, SpeciesWords } from "../types.js";
+import type { AppWord, Correction, DerjaKind, DerjaTerm, SpeciesWords } from "../types.js";
 
 /** The settings row the grower's corrections live in. */
 export const DERJA_KEY = "derja";
@@ -55,6 +55,18 @@ export function sameTerm(a: string, b: string): boolean {
   return (a.endsWith("oes") && b === `${a.slice(0, -2)}s`) || (b.endsWith("oes") && a === `${b.slice(0, -2)}s`);
 }
 
+/** The kinds a term can have (Phase 18). */
+export const KINDS: DerjaKind[] = ["plant", "pest", "product", "tool", "operation", "other"];
+
+export function isKind(v: unknown): v is DerjaKind {
+  return typeof v === "string" && (KINDS as string[]).includes(v);
+}
+
+/** A valid kind as an object to spread, so an entry without one has no `kind` key at all. */
+function kindOf(v: unknown): { kind?: DerjaKind } {
+  return isKind(v) ? { kind: v } : {};
+}
+
 /** Claude's list as stored or received: well-formed entries, the word cleaned, one per term, at most `cap` (eight for a diagnosis). */
 export function cleanTerms(v: unknown, cap: number = MAX_TERMS): DerjaTerm[] {
   if (!Array.isArray(v)) return [];
@@ -68,7 +80,7 @@ export function cleanTerms(v: unknown, cap: number = MAX_TERMS): DerjaTerm[] {
     const key = normalTerm(term);
     if (key === "" || keys.some((k) => sameTerm(k, key))) continue;
     keys.push(key);
-    out.push({ term, derja: typeof e.derja === "string" ? cleanWord(e.derja) : "" });
+    out.push({ term, derja: typeof e.derja === "string" ? cleanWord(e.derja) : "", ...kindOf(e.kind) });
   }
   return out;
 }
@@ -83,7 +95,7 @@ export function readCorrections(v: unknown): Correction[] {
     const term = normalTerm(e.term);
     const word = cleanWord(e.word);
     if (term === "" || (e.word.trim() !== "" && word === "")) continue;
-    all.push({ term, word, at: e.at });
+    all.push({ term, word, at: e.at, ...kindOf(e.kind) });
   }
   all.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   const seen = new Set<string>();
@@ -163,7 +175,10 @@ export function withoutCorrected(terms: DerjaTerm[], corrections: Correction[] |
   return terms.map((t) => (corrections.some((c) => sameTerm(c.term, normalTerm(t.term))) ? { ...t, derja: "" } : t));
 }
 
-/** The `derja:words` row as a list, in its stored order: the word cleaned and never empty, the first entry of a term kept. */
+/**
+ * The `derja:words` row as a list, in its stored order: the word cleaned, the first entry of a term
+ * kept. An entry with no word is kept only when it has a kind, which is then all it tells.
+ */
 export function readWords(v: unknown): AppWord[] {
   if (!Array.isArray(v)) return [];
   const out: AppWord[] = [];
@@ -172,8 +187,8 @@ export function readWords(v: unknown): AppWord[] {
     if (!e || typeof e !== "object" || typeof e.term !== "string" || typeof e.word !== "string" || typeof e.at !== "string") continue;
     const term = normalTerm(e.term);
     const word = cleanWord(e.word);
-    if (term === "" || word === "" || out.some((w) => sameTerm(w.term, term))) continue;
-    out.push({ term, word, at: e.at });
+    if (term === "" || (word === "" && !isKind(e.kind)) || out.some((w) => sameTerm(w.term, term))) continue;
+    out.push({ term, word, at: e.at, ...kindOf(e.kind) });
   }
   return out;
 }
@@ -186,28 +201,46 @@ export function readSpeciesWords(v: unknown): SpeciesWords | null {
 }
 
 /**
- * The app-wide list after a call: each term that came with a word joins it, unless the term is
- * there already (the first word wins) or the grower corrected it (the word is then his, which
- * Claude was told to use). Past the cap the oldest go.
+ * The app-wide list after a call. A term that came with a word joins it, unless the term is there
+ * already (the first word wins) or the grower corrected it (the word is then his, which Claude was
+ * told to use). Since Phase 18 the list also remembers what each term is: a missing kind is filled
+ * in, and a term with a kind but no word of Claude's to keep (he gave none, or the grower corrected
+ * it) gets an entry with an empty word, which a later first word fills. An entry that changes is a
+ * new object and one that does not is the same one, so the caller can tell whether to write. Past
+ * the cap the oldest go.
  */
 export function withWords(list: AppWord[], terms: DerjaTerm[], corrections: Correction[], at: string): AppWord[] {
   const next = [...list];
   for (const t of terms) {
     const term = normalTerm(t.term);
-    const word = cleanWord(t.derja);
-    if (term === "" || word === "") continue;
-    if (corrections.some((c) => sameTerm(c.term, term)) || next.some((w) => sameTerm(w.term, term))) continue;
-    next.push({ term, word, at });
+    if (term === "") continue;
+    const kind = isKind(t.kind) ? t.kind : undefined;
+    const corrected = corrections.some((c) => sameTerm(c.term, term));
+    const word = corrected ? "" : cleanWord(t.derja);
+    const i = next.findIndex((w) => sameTerm(w.term, term));
+    if (i >= 0) {
+      const old = next[i];
+      const fillKind = !old.kind && kind !== undefined;
+      const fillWord = old.word === "" && word !== "";
+      if (fillKind || fillWord) next[i] = { ...old, ...(fillWord ? { word } : {}), ...(fillKind ? { kind } : {}) };
+      continue;
+    }
+    if (word === "" && kind === undefined) continue;
+    next.push({ term, word, at, ...kindOf(kind) });
   }
   if (next.length <= MAX_WORDS) return next;
-  const dropped = new Set([...next].sort(newestFirst).slice(MAX_WORDS));
+  // An entry that only tells a kind goes before any that holds a word of Claude's; then the oldest.
+  const wordless = (w: AppWord) => (w.word === "" ? 1 : 0);
+  const dropped = new Set([...next].sort((a, b) => wordless(a) - wordless(b) || newestFirst(a, b)).slice(MAX_WORDS));
   return next.filter((w) => !dropped.has(w));
 }
 
 /** The list with the term's word set ("" for no word), newest first, cut to the cap. */
-export function withCorrection(list: Correction[], term: string, word: string, at: string): Correction[] {
+export function withCorrection(list: Correction[], term: string, word: string, at: string, kind?: DerjaKind): Correction[] {
   const key = normalTerm(term);
-  const next = [{ term: key, word: cleanWord(word), at }, ...list.filter((c) => c.term !== key)];
+  // The kind of the line it is saved from, else the one the entry already had.
+  const kept = kind ?? list.find((c) => c.term === key)?.kind;
+  const next = [{ term: key, word: cleanWord(word), at, ...kindOf(kept) }, ...list.filter((c) => c.term !== key)];
   if (next.length <= MAX_CORRECTIONS) return next;
   return [...next].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_CORRECTIONS);
 }
@@ -233,6 +266,8 @@ export interface WordSource {
   claudeWord: string;
   /** In the diagnosis's own list. */
   listed: boolean;
+  /** What the term is: the listed term's kind, else the app-wide entry's, else the correction's; null when unknown. */
+  kind: DerjaKind | null;
 }
 
 /**
@@ -255,18 +290,21 @@ export function wordSources(terms: DerjaTerm[], corrections: Correction[], words
     const app = words.filter((w) => sameTerm(w.term, own));
     for (const w of app) usedWords.add(w);
     const claudeWord = app[0]?.word || t.derja;
-    if (!applied) return { key: own, label: t.term, word: claudeWord, state: claudeWord ? "claude" : "missing", claudeWord, listed: true };
-    return { key: applied.term, label: t.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord, listed: true };
+    const kind = t.kind ?? app.find((w) => w.kind)?.kind ?? applied?.kind ?? null;
+    if (!applied) return { key: own, label: t.term, word: claudeWord, state: claudeWord ? "claude" : "missing", claudeWord, listed: true, kind };
+    return { key: applied.term, label: t.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord, listed: true, kind };
   });
   for (const w of words) {
     if (usedWords.has(w)) continue;
     const applied = pick(w.term);
-    if (!applied) out.push({ key: w.term, label: w.term, word: w.word, state: "claude", claudeWord: w.word, listed: false });
-    else out.push({ key: applied.term, label: w.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord: w.word, listed: false });
+    const kind = w.kind ?? applied?.kind ?? null;
+    // An entry with no word only tells the kind: by itself it shows nothing and has no row.
+    if (!applied) out.push({ key: w.term, label: w.term, word: w.word, state: w.word ? "claude" : "missing", claudeWord: w.word, listed: false, kind });
+    else out.push({ key: applied.term, label: w.term, word: applied.word, state: applied.word ? "yours" : "none", claudeWord: w.word, listed: false, kind });
   }
   for (const c of corrections) {
     if (usedCorrections.has(c)) continue;
-    out.push({ key: c.term, label: c.term, word: c.word, state: c.word ? "yours" : "none", claudeWord: "", listed: false });
+    out.push({ key: c.term, label: c.term, word: c.word, state: c.word ? "yours" : "none", claudeWord: "", listed: false, kind: c.kind ?? null });
   }
   return out;
 }
@@ -330,13 +368,24 @@ export function annotate(text: string, sources: WordSource[]): Piece[] {
     const m = free.find((x) => normalTerm(x[0]) === s.key) ?? free[0];
     if (!m) continue;
     const end = m.index + m[0].length;
-    taken.push([m.index, end]);
+    // Every mention of the term holds its place, not only the one that takes the word: a shorter
+    // term must not land inside a later "olive fly" either.
+    for (const x of free) taken.push([x.index, x.index + x[0].length]);
     if (s.word === "") continue;
-    const open = /^\s*\(/.exec(text.slice(end));
-    if (open) inserts.push({ at: end + open[0].length, word: s.word, place: "lead" });
+    const rest = text.slice(end);
+    const open = /^\s*\(/.exec(rest);
+    // A parenthesis that holds a number is a quantity ("(40 L)", "(30 g per litre)"): it keeps to
+    // itself and the word goes before it. One that holds a name takes the word inside.
+    const quantity = open !== null && /[\d½¼¾]/.test(rest.slice(open[0].length).split(")")[0]);
+    if (open && !quantity) inserts.push({ at: end + open[0].length, word: s.word, place: "lead" });
     else if (text[end] === ")") inserts.push({ at: end, word: s.word, place: "trail" });
     else inserts.push({ at: end, word: s.word, place: "paren" });
   }
+  // One word is drawn once in a text, at its earliest place: the forms of one name ("fig tree",
+  // "fig", "common fig") share a word and would otherwise repeat it.
+  const earliest = new Map<string, number>();
+  for (const ins of inserts) earliest.set(ins.word, Math.min(earliest.get(ins.word) ?? Infinity, ins.at));
+  for (let i = inserts.length - 1; i >= 0; i--) if (earliest.get(inserts[i].word) !== inserts[i].at) inserts.splice(i, 1);
   if (inserts.length === 0) return [{ kind: "text", text }];
   inserts.sort((a, b) => a.at - b.at);
   const pieces: Piece[] = [];
