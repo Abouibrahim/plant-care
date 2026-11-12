@@ -2,7 +2,7 @@
 
 Single-user plant-care app for Mohamed: photograph a plant at the backyard (walled garden at home) or at the farm (borgdanet, Menzel Bouzelfa, Cap Bon, Tunisia), identify it with the Claude API, store a species profile written for Cap Bon conditions, and get reminders for water, pruning, feeding, mulching, harvest, pest scouting, propagation and protection.
 
-`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 17 are built (0.17.0). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE17.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, Phase 14 its items 2.1, 2.3, 3.5, 4.2 and 5.3, Phase 15 its items 2.5, 4.1 and 7.1 and the error-text part of 7.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
+`docs/SPEC.md` is the design agreed on 2026-10-23; this file turns it into working rules, and `docs/DECISIONS.md` records every deviation from either, with its reason (the few that had no entry before, such as the spec's email fallback and digest time, are gathered in its entry of 2026-11-01). Phases 1 to 17 are built (0.17.1). `docs/USER-GUIDE.md` describes the app as it is, and `PHASE17.md` is the latest milestone. `docs/REVIEW-2026-10-30.md` is the review of 0.9.0: Phase 10 built its items 1.2, 3.1 to 3.3, 4.3, 6.1 and 6.2, Phase 14 its items 2.1, 2.3, 3.5, 4.2 and 5.3, Phase 15 its items 2.5, 4.1 and 7.1 and the error-text part of 7.2, and the rest are still open, though the file itself still says nothing is implemented. Each phase has its `PHASE<n>.md`: the plan, the ★ setup steps Mohamed does, the build list and the acceptance tests.
 
 ## Decisions already made (do not reopen)
 
@@ -60,8 +60,8 @@ supabase/schema.sql  tables, enums, the journal view, owners and is_owner(), RLS
 tests/               vitest over the dates, the error reader, the task expansion, the digest, the Today reading, the zone batches, the kinds of work and their
                      folds, the shared list and its share, the token verdict, the owner check, the app's task writes, the planting check, the
                      weather, the map and tags, the photos and their cache, the keep-alive, the app's calls to the functions and their lost-reply
-                     recovery, the rows the routes write, the run record, the usage ledger, the server's language, the derja words (rules, server helpers, the route) and Today's offline copy and
-                     queue (mockdb.ts imitates the query builder; fixtures.ts builds rules, plants and tasks; data/ holds a real Open-Meteo answer
+                     recovery, the rows the routes write, the run record, the usage ledger, the server's language, the derja words (rules, server helpers, the route and its handler) and Today's offline copy and
+                     queue (mockdb.ts imitates the query builder; http.ts stands in for Vercel's response; fixtures.ts builds rules, plants and tasks; data/ holds a real Open-Meteo answer
                      and the spray texts)
 docs/                SPEC.md (the design), DECISIONS.md (the deviations), REVIEW-2026-10-30.md (the review of 0.9.0 behind Phase 10;
                      Phase 11 is item 1 of the feature review of 2026-10-25, Phases 12 and 13 Mohamed's requests of 2026-11-01 and

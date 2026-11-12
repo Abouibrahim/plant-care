@@ -41,4 +41,12 @@ describe("titles carry no Arabic", () => {
     const { title, instruction } = rephotoTask(problemResult(base)!, "OLV-1");
     expect(/\p{Script=Arabic}/u.test(title + instruction)).toBe(false);
   });
+  it("a re-photograph follow-up copies its check without the Arabic (0.17.1)", () => {
+    const d = problemResult({
+      ...base,
+      likely_causes: [{ cause: "Leaf scorch", kind: "salinity", likelihood: 0.7, evidence: "" }],
+      checks_to_do: ["تحقق", "Check the twigs for scale (النمرة)."],
+    })!;
+    expect(rephotoTask(d, "OLV-1").instruction).toBe("Check the twigs for scale. Take a new photo of the same part from the plant's screen (Diagnose) to judge the treatment.");
+  });
 });

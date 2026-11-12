@@ -50,6 +50,14 @@ describe("sameTerm", () => {
     expect(sameTerm("scale", "black scale")).toBe(false);
     expect(sameTerm("mould", "mold")).toBe(false);
   });
+  it("pairs the two plurals of a word in o, and no other two plurals (0.17.1)", () => {
+    expect(sameTerm("mangos", "mangoes")).toBe(true);
+    expect(sameTerm("potatoes", "potatos")).toBe(true);
+    expect(sameTerm("sweet potatos", "sweet potatoes")).toBe(true);
+    expect(sameTerm("pipes", "pips")).toBe(false);
+    expect(sameTerm("canes", "cans")).toBe(false);
+    expect(sameTerm("hopes", "hops")).toBe(false);
+  });
 });
 
 describe("cleanTerms", () => {

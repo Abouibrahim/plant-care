@@ -1,6 +1,6 @@
 # Plant Care user guide
 
-For version 0.17.0, as of 12 November 2026.
+For version 0.17.1, as of 12 November 2026.
 
 Plant Care is a phone app for one grower and two sites in Cap Bon: the walled backyard at home and the farm at borgdanet, Menzel Bouzelfa. You photograph a plant and Claude names it and writes a care profile for these sites. The app turns that profile into dated tasks, a morning notification and a daily round on the Today screen. Chapters 1 to 14 cover using the app, chapter 15 covers setup and administration for the owner, and chapter 16 lists what the app does not do.
 
@@ -41,7 +41,7 @@ In this guide, **bold** words are things you tap, named as the English screens n
 - **Settings.** English or French, a list of zones per site, the rain-skip threshold, and CSV exports of the plants and the tasks.
 - **Private.** Only the owner's account can read or write the data or use the Claude calls.
 
-Only Capture, a profile rewrite, Diagnose, Ask Claude and Check before planting call Claude. Everything else, the daily round, the morning run and the weather included, costs nothing (chapter 13).
+Only Capture, a profile rewrite, Diagnose, Ask Claude, Check before planting and Get derja words (or Refresh words) call Claude. Everything else, the daily round, the morning run and the weather included, costs nothing (chapter 13).
 
 ## 2. Words used in this guide
 
@@ -416,7 +416,7 @@ The Needs, Calendar, Health and Guild tabs of a plant's page, and the species pa
 - "No derja words for this species yet." means nothing is known for this page and the list was never fetched; "No key term on this page." means the fetched list has nothing for it.
 - "The derja words could not be read. They will show when the connection is back." replaces the button when the words could not be read, so that a list already paid for is never asked twice; the card reads again by itself when the signal returns.
 
-Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on the opened diagnosis only: task titles, notifications, shared lists and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
+Claude's knowledge of Cap Bon farm words is uneven: expect some standard Arabic where your workers say something else, and correct it. "Aphid" and "aphids" count as one term, and so do "mangos" and "mangoes"; two spellings ("mould", "mold") do not. Typing a word needs an Arabic keyboard on the phone (chapter 15) and a connection. The words show on the opened diagnosis only: task titles and instructions, notifications, shared lists and the journal's lines carry no Arabic, and a diagnosis made before 0.16.0 stays as it was.
 
 Reopen a diagnosis with **Open** on its journal entry, or from Past diagnoses on the Health tab. On a reopened diagnosis the "Re-photograph in … days" date counts from today; the reminder's real day is the "Reminder set for" line. **Set the reminder** appears when no follow-up exists. It also appears when the follow-up could not be read, for example on a weak signal: in that case reopen the diagnosis before tapping it, or you get a second reminder. The sheet takes one diagnosis per opening: close it and tap Diagnose again for the next.
 
@@ -499,7 +499,7 @@ The Species tab lists one card per profile, sorted by scientific name, with **Ch
 
 ### Reading and confirming a profile
 
-A profile shows, in order: the names and growth form, "Written by … on …", the "Before planting" card (chapter 9), Identity, Needs (fit for this site, water, sun and heat, salinity, climate), the Care calendar, Pests and diseases, and Guild (companions, uses, toxicity).
+A profile shows, in order: the names and growth form, "Written by … on …", the "Before planting" card (chapter 9), Identity, Needs (fit for this site, water, sun and heat, salinity, climate), the Care calendar, Pests and diseases, Guild (companions, uses, toxicity), and the Derja words card for the whole profile, whose words also stand beside the key terms in the text (chapter 6).
 
 A profile Claude wrote shows "AI-written profile. Read it through, then confirm." Read it, correct what is wrong, then tap **Confirm profile**. Confirming changes no task: the plants' tasks are written from the calendar as it stands, from Save plant on, confirmed or not, so read the Care calendar first, since it is what the reminders follow. Ask Claude and Check before planting are told whether the profile is confirmed and which parts you edited.
 
@@ -649,7 +649,7 @@ The exports cover the plants and the tasks only: not the profiles, diagnoses, qu
 
 ### Claude usage
 
-This month's Claude calls and last month's, added up by the functions as the calls are made: "November 2026: 23 calls, about $2.10", with the calls by kind beneath (identifications, profiles, diagnoses, questions, checks), the tokens in and out (thinking included), the calls that failed after Claude had spent tokens, and those a fallback model answered, counted at Fable prices. The last line gives the list prices the estimate uses: $10 per million tokens in, $50 out, $0.25 for a cache read, $12.50 for a cache write. The estimate is for Claude alone; Vercel and Supabase stay on their free tiers. A call that Vercel stops before it ends is the one thing the ledger misses; the Claude Console has the bill itself.
+This month's Claude calls and last month's, added up by the functions as the calls are made: "November 2026: 23 calls, about $2.10", with the calls by kind beneath (identifications, profiles, diagnoses, questions, checks, derja word lists), the tokens in and out (thinking included), the calls that failed after Claude had spent tokens, and those a fallback model answered, counted at Fable prices. The last line gives the list prices the estimate uses: $10 per million tokens in, $50 out, $0.25 for a cache read, $12.50 for a cache write. The estimate is for Claude alone; Vercel and Supabase stay on their free tiers. A call that Vercel stops before it ends is the one thing the ledger misses; the Claude Console has the bill itself.
 
 ### Account, install, phase and version
 
@@ -911,7 +911,7 @@ The key does not expire; TomTom ends the free agreement after 90 days without us
 
 ### Work on the app on a computer
 
-Copy `.env.example` to `.env.local` and fill in the same values; the file is git-ignored. Without the two `VITE_SUPABASE_` values the app opens on "Supabase keys are missing. …". Then, with Node 22.12 or newer:
+Copy `.env.example` to `.env.local` and fill in the same values; the file is git-ignored. Without the two `VITE_SUPABASE_` values the app opens on "Supabase keys are missing. …". Then, with Node 24 (as `engines` in `package.json` says):
 
 ```bash
 npm install

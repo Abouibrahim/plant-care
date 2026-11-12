@@ -45,9 +45,14 @@ export function normalTerm(term: string): string {
     .trim();
 }
 
-/** Two normal forms name one term: equal, or one is the other plus "s" or "es". */
+/**
+ * Two normal forms name one term: equal, one is the other plus "s" or "es", or both are plurals of
+ * a word in "o" ("mangos" and "mangoes"). Other plurals in "s" and "es" stay apart: "pipes" and
+ * "pips", "canes" and "cans" are different words.
+ */
 export function sameTerm(a: string, b: string): boolean {
-  return a === b || a === `${b}s` || a === `${b}es` || b === `${a}s` || b === `${a}es`;
+  if (a === b || a === `${b}s` || a === `${b}es` || b === `${a}s` || b === `${a}es`) return true;
+  return (a.endsWith("oes") && b === `${a.slice(0, -2)}s`) || (b.endsWith("oes") && a === `${b.slice(0, -2)}s`);
 }
 
 /** Claude's list as stored or received: well-formed entries, the word cleaned, one per term, at most `cap` (eight for a diagnosis). */
@@ -89,13 +94,39 @@ const cp = (code: number) => String.fromCharCode(code);
 /** The invisible direction marks and isolates, built from their code points so none sits in this file. */
 const DIRECTION_MARKS = new RegExp(`[${cp(0x200e)}${cp(0x200f)}${cp(0x202a)}-${cp(0x202e)}${cp(0x2066)}-${cp(0x2069)}]`, "g");
 
+/** The marks that set a word apart in a name: comma, semicolon, colon, middle dot, slash, bar, dashes. */
+const SET_APART = "[,،;:·/|–—-]";
+/**
+ * An Arabic run, or runs with only marks between them ("النمرة / الفحمة"), with the marks on either
+ * side (1: before, 2: after), so what stays is decided where it stood.
+ */
+const ARABIC_SEGMENT = new RegExp(
+  `((?:\\s*${SET_APART})*)\\s*(?:${ARABIC_RUN.source})(?:\\s*(?:${SET_APART}\\s*)*(?:${ARABIC_RUN.source}))*\\s*((?:${SET_APART}\\s*)*)`,
+  "gu",
+);
+
+/**
+ * What stays of an Arabic run and the marks around it. At the start or the end of the text, nothing.
+ * Between two words, a mark that only opened the run goes with it, and so does a pair around it
+ * ("– … –", ", … ,"); a mark of its own after the run belongs to the words after it and stays.
+ */
+function leftOf(segment: string, before: string, after: string, at: number, text: string): string {
+  if (text.slice(0, at).trim() === "" || text.slice(at + segment.length).trim() === "") return "";
+  const opening = before.replace(/\s/g, "").slice(-1);
+  const closing = after.replace(/\s/g, "").slice(0, 1);
+  if (closing === "" || closing === opening) return " ";
+  const mark = closing === "،" ? "," : closing;
+  return /[,;:]/.test(mark) ? `${mark} ` : ` ${mark} `;
+}
+
 /**
  * A text without its Arabic: for the titles and notes built from a cause's name. The marks, the
  * separators and the parentheses an Arabic run leaves behind go with it, so "Scale (… / …)" is
- * "Scale" and "Sooty mould (…, el-fahma)" is "Sooty mould (el-fahma)".
+ * "Scale", "Sooty mould (…, el-fahma)" is "Sooty mould (el-fahma)" and "Black scale – … – on
+ * twigs" is "Black scale on twigs".
  */
 export function stripArabic(text: string): string {
-  const bare = text.replace(DIRECTION_MARKS, "").replace(ARABIC_RUN, "");
+  const bare = text.replace(DIRECTION_MARKS, "").replace(ARABIC_SEGMENT, (segment: string, before: string, after: string, at: number, whole: string) => leftOf(segment, before, after, at, whole));
   // Nothing was removed: the text is the grower's or Claude's English as written, and a minus
   // sign or a slash inside its parentheses is content, not a leftover.
   if (bare === text) return text.replace(/\s+/g, " ").trim();
@@ -103,7 +134,10 @@ export function stripArabic(text: string): string {
     .replace(/\(\s*(?:[,،;·/|–—-]\s*)+/g, "(")
     .replace(/(?:\s*[,،;·/|–—-])+\s*\)/g, ")")
     .replace(/\(\s*\)/g, "")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
     .replace(/[\s,،;·/|–—-]+$/, "")
+    .replace(/\s+([.,])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -239,6 +273,16 @@ function escapeWord(word: string): string {
   return word.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&").replace(/'/g, APOSTROPHE);
 }
 
+/** The forms a term's last word stands under, before an "s" or "es" more: itself, and without the plural it may carry. */
+function stemsOf(last: string): string[] {
+  const stems = [last];
+  if (!/\p{L}$/u.test(last)) return stems;
+  // "es" comes off only where English adds it (bushes, boxes, tomatoes): "bees" must not find "be".
+  if (/(?:s|x|z|ch|sh|o)es$/.test(last)) stems.push(last.slice(0, -2));
+  if (last.length > 2 && last.endsWith("s")) stems.push(last.slice(0, -1));
+  return stems;
+}
+
 /**
  * The matcher of a term in its normal form: any case, spaces or hyphens between its words, either
  * apostrophe, a trailing "s" or "es" more or less on the last word; never inside a word (in the
@@ -249,14 +293,7 @@ function termPattern(key: string): RegExp {
   if (cached) return new RegExp(cached.source, cached.flags);
   const words = normalTerm(key).split(" ");
   const last = words[words.length - 1];
-  let tail = escapeWord(last);
-  if (/\p{L}$/u.test(last)) {
-    const stems = [last];
-    // "es" comes off only where English adds it (bushes, boxes, tomatoes): "bees" must not find "be".
-    if (/(?:s|x|z|ch|sh|o)es$/.test(last)) stems.push(last.slice(0, -2));
-    if (last.length > 2 && last.endsWith("s")) stems.push(last.slice(0, -1));
-    tail = `(?:${stems.map(escapeWord).join("|")})(?:e?s)?`;
-  }
+  const tail = /\p{L}$/u.test(last) ? `(?:${stemsOf(last).map(escapeWord).join("|")})(?:e?s)?` : escapeWord(last);
   const body = [...words.slice(0, -1).map(escapeWord), tail].join(SEPARATOR);
   const pattern = new RegExp(`(?<![\\p{L}\\p{N}])${body}(?![\\p{L}\\p{N}])(?![-‐‑'’]\\p{L})`, "giu");
   patterns.set(key, pattern);
@@ -305,13 +342,34 @@ export function annotate(text: string, sources: WordSource[]): Piece[] {
   return pieces;
 }
 
+/** Lower-cased the long way round, so the letters the matcher's case folding pairs (ſ and s, ς and σ) are equal here too. */
+function fold(text: string): string {
+  return text.toLowerCase().toUpperCase().toLowerCase();
+}
+
+/**
+ * Pieces of text every match of a term holds, folded: each word but the last as it is, and the
+ * last word's shortest form, cut at their apostrophes (the matcher takes any of four there).
+ */
+function piecesOf(key: string): string[] {
+  const words = normalTerm(key).split(" ");
+  const shortest = stemsOf(words.pop() ?? "").reduce((a, b) => (b.length < a.length ? b : a));
+  return [...words, shortest]
+    .flatMap((w) => w.split("'"))
+    .filter((p) => p !== "")
+    .map(fold);
+}
+
 /**
  * The sources a page needs: the listed ones, and the unlisted ones whose term stands in one of its
  * texts. Done once per page, so that hundreds of app-wide words are not tried on every text drawn.
+ * A plain search for the term's pieces comes first: building a matcher for each of 800 words took
+ * about half a second on the first page drawn, and most of them are not on the page at all.
  */
 export function narrowSources(texts: string[], sources: WordSource[]): WordSource[] {
   const all = texts.join("\n");
-  return sources.filter((s) => s.listed || occurs(all, s.key));
+  const folded = fold(all);
+  return sources.filter((s) => s.listed || (piecesOf(s.key).every((p) => folded.includes(p)) && occurs(all, s.key)));
 }
 
 /**

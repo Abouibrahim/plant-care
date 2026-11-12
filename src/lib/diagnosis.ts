@@ -95,6 +95,7 @@ export function rephotoTask(d: Diagnosis, tag: string): { title: string; instruc
   if (isPestScout(top)) {
     return { title: t.diagnose.scoutTitle(tag, cause), instruction: t.diagnose.scoutInstruction(cause) };
   }
-  const check = d.checks_to_do.find((c) => c.trim() !== "");
+  // The instruction goes into a task and a shared list, which carry no Arabic either.
+  const check = d.checks_to_do.map(stripArabic).find((c) => c !== "");
   return { title: t.diagnose.rephotoTitle(tag, cause), instruction: check ? `${check} ${t.diagnose.rephotoInstruction}` : t.diagnose.rephotoInstruction };
 }

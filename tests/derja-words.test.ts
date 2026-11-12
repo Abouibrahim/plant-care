@@ -17,6 +17,27 @@ describe("stripArabic, tidy (Phase 17)", () => {
   });
 });
 
+describe("stripArabic, Arabic in the middle of a name (0.17.1)", () => {
+  it("takes the marks that set the Arabic apart with it", () => {
+    expect(stripArabic("Black scale – النمرة – on twigs")).toBe("Black scale on twigs");
+    expect(stripArabic("Sooty mould, الفحمة, on leaves")).toBe("Sooty mould on leaves");
+    expect(stripArabic("Black scale – النمرة on twigs")).toBe("Black scale on twigs");
+  });
+  it("takes runs with only marks between them as one", () => {
+    expect(stripArabic("Sooty mould – الفحمة / النمرة – on leaves")).toBe("Sooty mould on leaves");
+    expect(stripArabic("Black scale, النمرة; ڨمل, on twigs")).toBe("Black scale on twigs");
+  });
+  it("keeps the mark that belongs to the words after it", () => {
+    expect(stripArabic("Olive fly / ذبابة الزيتون, larvae in fruit")).toBe("Olive fly, larvae in fruit");
+    expect(stripArabic("Sooty mould الفحمة – on leaves")).toBe("Sooty mould – on leaves");
+  });
+  it("leaves no mark at the start, no space before a full stop, none inside a parenthesis", () => {
+    expect(stripArabic("النمرة – Black scale")).toBe("Black scale");
+    expect(stripArabic("Check the twigs for scale (النمرة).")).toBe("Check the twigs for scale.");
+    expect(stripArabic("Sooty mould (el-fahma / الفحمة)")).toBe("Sooty mould (el-fahma)");
+  });
+});
+
 describe("the app-wide words (Phase 17)", () => {
   const old = { term: "pruning", word: "زبيرة", at: "2026-11-01T00:00:00Z" };
   it("adds a new term's first word and keeps an existing entry", () => {
@@ -60,6 +81,11 @@ describe("the app-wide words (Phase 17)", () => {
     expect(readWords([old, { term: "Prunings", word: "تقليم", at }, { term: "oil", word: "", at }, { term: "x", word: "latin", at }, 3])).toEqual([old]);
     expect(readWords({ a: 1 })).toEqual([]);
     expect(readWords(null)).toEqual([]);
+  });
+  it("takes mangos and mangoes for one term (0.17.1)", () => {
+    const mangos = { term: "mangos", word: "كلمة", at };
+    expect(withWords([mangos], [{ term: "Mangoes", derja: "جديد" }], [], at)).toEqual([mangos]);
+    expect(readWords([mangos, { term: "mangoes", word: "جديد", at }])).toEqual([mangos]);
   });
 });
 
@@ -143,6 +169,23 @@ describe("the rows of a card (Phase 17)", () => {
   });
   it("narrows the sources of a page to the listed ones and those that stand", () => {
     expect(narrowSources(texts, sources).map((r) => r.label)).toEqual(["copper", "sulphur", "kaolin", "neem oil", "ash"]);
+  });
+});
+
+describe("narrowSources at the caps (0.17.1)", () => {
+  it("keeps a term whatever its case, hyphen, apostrophe or plural on the page", () => {
+    const page = ["Spray NEEM-OIL at dusk on the Aphid colonies.", "Peacock’s eye spots the leaves; ſooty mould follows the scale.", "Mangos ripen in August."];
+    const words = ["neem oil", "aphids", "peacock's eye", "sooty mould", "mangoes", "black scale", "bushes"].map((term) => ({ term, word: "كلمة", at }));
+    expect(narrowSources(page, wordSources([], [], words)).map((s) => s.label)).toEqual(["neem oil", "aphids", "peacock's eye", "sooty mould", "mangoes"]);
+  });
+  it("tries 800 words on a page in milliseconds, without a matcher for each", () => {
+    const words = Array.from({ length: 600 }, (_, i) => ({ term: i % 2 ? `leaf${i} curl` : `rot${i}`, word: "كلمة", at }));
+    const corrections = Array.from({ length: 200 }, (_, i) => ({ term: `fruit borer${i}`, word: "", at }));
+    const sources = wordSources([], corrections, words);
+    const page = Array.from({ length: 60 }, () => "Water the young olive every ten days; prune in February and scout for olive fly from June.");
+    const start = performance.now();
+    expect(narrowSources(page, sources)).toEqual([]);
+    expect(performance.now() - start).toBeLessThan(100);
   });
 });
 
